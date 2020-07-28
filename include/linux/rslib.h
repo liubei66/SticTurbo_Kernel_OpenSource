@@ -1,25 +1,13 @@
 /*
- * include/linux/rslib.h
- *
- * Overview:
- *   Generic Reed Solomon encoder / decoder library
- *
- * Copyright (C) 2004 Thomas Gleixner (tglx@linutronix.de)
- *
- * RS code lifted from reed solomon library written by Phil Karn
- * Copyright 2002 Phil Karn, KA9Q
- *
- * $Id: rslib.h,v 1.4 2005/11/07 11:14:52 gleixner Exp $
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 as
- * published by the Free Software Foundation.
+ * Generic Reed Solomon encoder / decoder library
  */
 
 #ifndef _RSLIB_H_
 #define _RSLIB_H_
 
 #include <linux/list.h>
+#include <linux/types.h>
+#include <linux/gfp.h>
 
 /**
  * struct rs_control - rs control structure
@@ -38,20 +26,25 @@
  * @users:	Users of this structure
  * @list:	List entry for the rs control list
 */
-struct rs_control {
-	int 		mm;
-	int 		nn;
+struct rs_codec {
+	int		mm;
+	int		nn;
 	uint16_t	*alpha_to;
 	uint16_t	*index_of;
 	uint16_t	*genpoly;
-	int 		nroots;
-	int 		fcr;
-	int 		prim;
-	int 		iprim;
+	int		nroots;
+	int		fcr;
+	int		prim;
+	int		iprim;
 	int		gfpoly;
 	int		(*gffunc)(int);
 	int		users;
 	struct list_head list;
+};
+
+struct rs_control {
+	struct rs_codec	*codec;
+	uint16_t	buffers[0];
 };
 
 /* General purpose RS codec, 8-bit data width, symbol width 1-15 bit  */
@@ -76,11 +69,16 @@ int decode_rs16(struct rs_control *rs, uint16_t *data, uint16_t *par, int len,
 		uint16_t *corr);
 #endif
 
-/* Create or get a matching rs control structure */
-struct rs_control *init_rs(int symsize, int gfpoly, int fcr, int prim,
-			   int nroots);
+struct rs_control *init_rs_gfp(int symsize, int gfpoly, int fcr, int prim,
+			       int nroots, gfp_t gfp);
+
+static inline struct rs_control *init_rs(int symsize, int gfpoly, int fcr,
+					 int prim, int nroots)
+{
+	return init_rs_gfp(symsize, gfpoly, fcr, prim, nroots, GFP_KERNEL);
+}
 struct rs_control *init_rs_non_canonical(int symsize, int (*func)(int),
-                                         int fcr, int prim, int nroots);
+					int fcr, int prim, int nroots);
 
 /* Release a rs control structure */
 void free_rs(struct rs_control *rs);
@@ -97,7 +95,7 @@ void free_rs(struct rs_control *rs);
  *  Simple arithmetic modulo would return a wrong result for values
  *  >= 3 * rs->nn
 */
-static inline int rs_modnn(struct rs_control *rs, int x)
+static inline int rs_modnn(struct rs_codec *rs, int x)
 {
 	while (x >= rs->nn) {
 		x -= rs->nn;

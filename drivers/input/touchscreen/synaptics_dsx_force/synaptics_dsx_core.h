@@ -5,6 +5,7 @@
  *
  * Copyright (C) 2012 Alexandra Chin <alexandra.chin@tw.synaptics.com>
  * Copyright (C) 2012 Scott Lin <scott.lin@tw.synaptics.com>
+ * Copyright (C) 2018 XiaoMi, Inc.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -52,6 +53,7 @@
 #include <linux/atomic.h>
 #include <linux/clk.h>
 #endif
+#include <linux/pm_qos.h>
 
 #if (LINUX_VERSION_CODE > KERNEL_VERSION(2, 6, 38))
 #define KERNEL_ABOVE_2_6_38
@@ -349,6 +351,7 @@ struct synaptics_rmi4_data {
 	struct delayed_work rb_work;
 	struct workqueue_struct *rb_workqueue;
 	struct synaptics_dsx_panel_power_seq panel_power_seq;
+	struct pm_qos_request pm_qos_req;
 #ifdef CONFIG_DRM
 	struct notifier_block drm_notifier;
 	struct work_struct reset_work;
@@ -421,8 +424,12 @@ struct synaptics_rmi4_data {
 	bool chip_is_tddi;
 	bool open_test_b7;
 	bool short_test_extend;
+	
+#ifdef CONFIG_TOUCHSCREEN_SYNAPTICS_DSX_TEST_REPORTING_FORCE
 	bool disable_data_dump;
 	bool dump_flags;
+#endif
+
 	int (*reset_device)(struct synaptics_rmi4_data *rmi4_data,
 			bool rebuild);
 	int (*irq_enable)(struct synaptics_rmi4_data *rmi4_data, bool enable,
@@ -436,7 +443,10 @@ struct synaptics_rmi4_data {
 	struct pinctrl_state *pinctrl_state_suspend;
 	struct synaptics_dsx_factory_param *factory_param;
 
+#ifdef CONFIG_TOUCHSCREEN_SYNAPTICS_DSX_TEST_REPORTING_FORCE
 	struct completion dump_completion;
+#endif
+
 #ifdef CONFIG_TOUCH_DEBUG_FS
 	struct dentry *debugfs;
 #endif
@@ -453,6 +463,7 @@ struct synaptics_rmi4_data {
 	struct clk *iface_clk;
 #endif
 	bool palm_sensor_changed;
+	struct proc_dir_entry *input_proc;
 };
 
 struct synaptics_dsx_bus_access {

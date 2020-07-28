@@ -1,4 +1,4 @@
-/* Copyright (c) 2008-2018, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2008-2019, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -19,6 +19,8 @@
 #include <linux/stringify.h>
 #include <linux/types.h>
 #include <linux/debugfs.h>
+#include <linux/module.h>
+#include <linux/moduleparam.h>
 
 #define KHZ_TO_HZ 1000
 
@@ -34,8 +36,8 @@ enum fps_resolution {
 	FPS_RESOLUTION_KHZ,
 };
 
-#define DEFAULT_FRAME_RATE	60
-#define DEFAULT_ROTATOR_FRAME_RATE 120
+#define DEFAULT_FRAME_RATE	62
+#define DEFAULT_ROTATOR_FRAME_RATE 135
 #define ROTATOR_LOW_FRAME_RATE 30
 #define MDSS_DSI_RST_SEQ_LEN	10
 /* worst case prefill lines for all chipsets including all vertical blank */
@@ -690,6 +692,8 @@ struct mdss_panel_info {
 	bool esd_rdy;
 	bool partial_update_supported; /* value from dts if pu is supported */
 	bool partial_update_enabled; /* is pu currently allowed */
+	u32 partial_update_col_addr_offset; /* panel column addr offset */
+	u32 partial_update_row_addr_offset; /* panel row addr offset */
 	u32 dcs_cmd_by_left;
 	u32 partial_update_roi_merge;
 	struct ion_handle *splash_ihdl;

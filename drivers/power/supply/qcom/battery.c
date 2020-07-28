@@ -109,13 +109,8 @@ enum {
 static int debug_mask;
 module_param_named(debug_mask, debug_mask, int, 0600);
 
-#define pl_dbg(chip, reason, fmt, ...)				\
-	do {								\
-		if (debug_mask & (reason))				\
-			pr_info(fmt, ##__VA_ARGS__);	\
-		else							\
-			pr_debug(fmt, ##__VA_ARGS__);		\
-	} while (0)
+#define pl_dbg(chip, reason, fmt, ...)		\
+	pr_debug(fmt, ##__VA_ARGS__);		\
 
 #define IS_USBIN(mode)	((mode == POWER_SUPPLY_PL_USBIN_USBIN) \
 			|| (mode == POWER_SUPPLY_PL_USBIN_USBIN_EXT))
@@ -1237,7 +1232,7 @@ static int pl_awake_vote_callback(struct votable *votable,
 	struct pl_data *chip = data;
 
 	if (awake)
-		__pm_stay_awake(chip->pl_ws);
+		__pm_wakeup_event(chip->pl_ws, 500);
 	else
 		__pm_relax(chip->pl_ws);
 

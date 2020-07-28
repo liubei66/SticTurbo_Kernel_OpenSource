@@ -55,6 +55,7 @@
 #include <linux/pm_runtime.h>
 #include <linux/clk.h>
 #endif
+#include <linux/pm_qos.h>
 
 #if (LINUX_VERSION_CODE > KERNEL_VERSION(2, 6, 38))
 #define KERNEL_ABOVE_2_6_38
@@ -334,6 +335,7 @@ struct synaptics_rmi4_data {
 	struct mutex rmi4_exp_init_mutex;
 	struct delayed_work rb_work;
 	struct workqueue_struct *rb_workqueue;
+	struct pm_qos_request pm_qos_req;
 #ifdef CONFIG_FB
 	struct work_struct fb_notify_work;
 	struct notifier_block fb_notifier;

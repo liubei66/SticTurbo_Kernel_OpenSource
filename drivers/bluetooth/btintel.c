@@ -571,7 +571,6 @@ EXPORT_SYMBOL_GPL(btintel_regmap_init);
 
 MODULE_AUTHOR("Marcel Holtmann <marcel@holtmann.org>");
 MODULE_DESCRIPTION("Bluetooth support for Intel devices ver " VERSION);
-MODULE_VERSION(VERSION);
 MODULE_LICENSE("GPL");
 MODULE_FIRMWARE("intel/ibt-11-5.sfi");
 MODULE_FIRMWARE("intel/ibt-11-5.ddc");

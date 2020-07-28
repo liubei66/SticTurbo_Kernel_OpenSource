@@ -7,6 +7,7 @@
  * Copyright (c) 2004 Jon Smirl <jonsmirl@gmail.com>
  * Copyright (c) 2003-2004 Greg Kroah-Hartman <greg@kroah.com>
  * Copyright (c) 2003-2004 IBM Corp.
+ * Copyright (C) 2018 XiaoMi, Inc.
  *
  * This file is released under the GPLv2
  *
@@ -30,6 +31,7 @@ static struct device_type drm_sysfs_device_minor = {
 };
 
 struct class *drm_class;
+
 static char *drm_devnode(struct device *dev, umode_t *mode)
 {
 	return kasprintf(GFP_KERNEL, "dri/%s", dev_name(dev));
@@ -47,7 +49,6 @@ static CLASS_ATTR_STRING(version, S_IRUGO, "drm 1.1.0 20060810");
  *
  * Return: 0 on success, negative error code on failure.
  */
-
 int drm_sysfs_init(void)
 {
 	int err;
@@ -313,77 +314,14 @@ static ssize_t disp_param_show(struct device *device,
 	return ret;
 }
 
-void drm_bridge_disp_count_set(struct drm_bridge *bridge, const char *buf);
-static ssize_t disp_count_store(struct device *device,
-			   struct device_attribute *attr,
-			   const char *buf, size_t count)
-{
-	struct drm_connector *connector = NULL;
-	struct drm_encoder *encoder = NULL;
-	struct drm_bridge *bridge = NULL;
-
-	connector = to_drm_connector(device);
-	if (!connector)
-		return count;
-
-	encoder = connector->encoder;
-	if (!encoder)
-		return count;
-
-	bridge = encoder->bridge;
-	if (!bridge)
-		return count;
-
-	drm_bridge_disp_count_set(bridge, buf);
-
-	return count;
-}
-
-ssize_t drm_bridge_disp_count_get(struct drm_bridge *bridge, char *buf);
-static ssize_t disp_count_show(struct device *device,
+static ssize_t hbm_status_show(struct device *device,
 			   struct device_attribute *attr,
 			   char *buf)
 {
-	ssize_t ret = 0;
-	struct drm_connector *connector = NULL;
-	struct drm_encoder *encoder = NULL;
-	struct drm_bridge *bridge = NULL;
+	struct drm_connector *connector = to_drm_connector(device);
+	struct drm_device *dev = connector->dev;
 
-	connector = to_drm_connector(device);
-	if (!connector)
-		return ret;
-
-	encoder = connector->encoder;
-	if (!encoder)
-		return ret;
-
-	bridge = encoder->bridge;
-	if (!bridge)
-		return ret;
-
-	ret = drm_bridge_disp_count_get(bridge, buf);
-
-	return ret;
-}
-
-extern ssize_t mipi_reg_write(char *buf, size_t count);
-extern ssize_t mipi_reg_read(char *buf);
-
-static ssize_t mipi_reg_show(struct device *device,
-			    struct device_attribute *attr,
-			   char *buf)
-{
-	return mipi_reg_read(buf);
-}
-
-static ssize_t mipi_reg_store(struct device *device,
-			   struct device_attribute *attr,
-			   const char *buf, size_t count)
-{
-	int rc = 0;
-
-	rc = mipi_reg_write((char *)buf, count);
-	return rc;
+	return snprintf(buf, PAGE_SIZE, "%d\n", dev->hbm_status);
 }
 
 static DEVICE_ATTR_RW(status);
@@ -393,8 +331,7 @@ static DEVICE_ATTR_RO(modes);
 static DEVICE_ATTR_RO(panel_info);
 static DEVICE_ATTR_RW(disp_param);
 static DEVICE_ATTR_RO(doze_brightness);
-static DEVICE_ATTR_RW(disp_count);
-static DEVICE_ATTR_RW(mipi_reg);
+static DEVICE_ATTR_RO(hbm_status);
 
 static struct attribute *connector_dev_attrs[] = {
 	&dev_attr_status.attr,
@@ -404,8 +341,7 @@ static struct attribute *connector_dev_attrs[] = {
 	&dev_attr_panel_info.attr,
 	&dev_attr_disp_param.attr,
 	&dev_attr_doze_brightness.attr,
-	&dev_attr_disp_count.attr,
-	&dev_attr_mipi_reg.attr,
+	&dev_attr_hbm_status.attr,
 	NULL
 };
 
@@ -430,6 +366,7 @@ static const struct attribute_group *connector_dev_groups[] = {
 	&connector_dev_group,
 	NULL
 };
+
 /**
  * drm_sysfs_connector_add - add a connector to sysfs
  * @connector: connector to add
@@ -442,6 +379,7 @@ static const struct attribute_group *connector_dev_groups[] = {
 int drm_sysfs_connector_add(struct drm_connector *connector)
 {
 	struct drm_device *dev = connector->dev;
+
 	if (connector->kdev)
 		return 0;
 
@@ -452,6 +390,7 @@ int drm_sysfs_connector_add(struct drm_connector *connector)
 					  connector->name);
 	DRM_DEBUG("adding \"%s\" to sysfs\n",
 		  connector->name);
+
 	if (IS_ERR(connector->kdev)) {
 		DRM_ERROR("failed to register connector device: %ld\n", PTR_ERR(connector->kdev));
 		return PTR_ERR(connector->kdev);

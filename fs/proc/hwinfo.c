@@ -8,7 +8,6 @@
 #include <soc/qcom/socinfo.h>
 #include <soc/qcom/smem.h>
 
-/* Raw data of DDR manufacturer id(MR5) */
 #define HWINFO_DDRID_SAMSUNG	0x01
 #define HWINFO_DDRID_HYNIX	0x06
 #define HWINFO_DDRID_ELPIDA	0x03
@@ -32,118 +31,88 @@ static int hwinfo_proc_show(struct seq_file *m, void *v)
 {
 	switch (hw_info.emmc_info) {
 	case 0x0198:
-		seq_printf(m, "UFS: Toshiba\n");
+		seq_printf(m, "UFS: Toshiba");
 		break;
 	case 0x01ce:
-		seq_printf(m, "UFS: Samsung\n");
+		seq_printf(m, "UFS: Samsung");
 		break;
 	case 0x01ad:
-		seq_printf(m, "UFS: Hynix\n");
-		break;
-	case 0x0145:
-		seq_printf(m, "UFS: Sandisk\n");
-		break;
-	default:
-		seq_printf(m, "UFS: Unknown %x\n", hw_info.emmc_info);
+		seq_printf(m, "UFS: Hynix");
 		break;
 	}
 
 	switch (hw_info.ddr_info) {
 	case HWINFO_DDRID_SAMSUNG:
-		seq_printf(m, "DDR: Samsung\n"); /* 0000 0001B */
+		seq_printf(m, "DDR: Samsung");
 		break;
 	case HWINFO_DDRID_HYNIX:
-		seq_printf(m, "DDR: Hynix\n"); /* 0000 0110B */
+		seq_printf(m, "DDR: Hynix");
 		break;
 	case HWINFO_DDRID_ELPIDA:
-		seq_printf(m, "DDR: Elpida\n"); /* 0000 0011B */
+		seq_printf(m, "DDR: Elpida");
 		break;
 	case HWINFO_DDRID_NANYA:
-		seq_printf(m, "DDR: Nanya\n"); /* 0000 0101B */
-		break;
-	case HWINFO_DDRID_INTEL:
-		seq_printf(m, "DDR: Intel\n"); /* 0000 1110B */
-		break;
-	default:
-		seq_printf(m, "DDR: Unknown %x\n", hw_info.ddr_info);
+		seq_printf(m, "DDR: Nanya");
 		break;
 	}
 
 	switch (hw_info.touch_info) {
 	case 1:
-		seq_printf(m, "TOUCH IC: Synaptics\n");
+		seq_printf(m, "Touch: Synaptics");
 		break;
 	case 2:
-		seq_printf(m, "TOUCH IC: Solomon\n");
+		seq_printf(m, "Touch: Philips");
 		break;
 	case 3:
-		seq_printf(m, "TOUCH IC: Focaltech\n");
-		break;
-	case 4:
-		seq_printf(m, "TOUCH IC: FTS\n");
-		break;
-	case 5:
-		seq_printf(m, "TOUCH IC: Novatek\n");
-		break;
-	default:
-		seq_printf(m, "TOUCH IC: Unknown %x\n", hw_info.touch_info);
+		seq_printf(m, "Touch: Fts");
 		break;
 	}
 
 	switch (hw_info.tp_maker_info) {
 	case 1:
-		seq_printf(m, "TP Maker: Biel\n");
+		seq_printf(m, "TP: Biel");
 		break;
 	case 2:
-		seq_printf(m, "TP Maker: Lens\n");
+		seq_printf(m, "TP: Lens");
 		break;
 	case 4:
-		seq_printf(m, "TP Maker: Ofilm\n");
+		seq_printf(m, "TP: Ofilm");
 		break;
 	case 8:
-		seq_printf(m, "TP Maker: Sharp\n");
+		seq_printf(m, "TP: Sharp");
 		break;
 	case 17:
-		seq_printf(m, "TP Maker: Ebbg\n");
+		seq_printf(m, "TP: Ebbg");
 		break;
 	case 18:
-		seq_printf(m, "TP Maker: Lg\n");
+		seq_printf(m, "TP: LG");
 		break;
 	case 22:
-		seq_printf(m, "TP Maker: Tianma\n");
+		seq_printf(m, "TP: Tianma");
 		break;
 	case 24:
-		seq_printf(m, "TP Maker: Sdc\n");
+		seq_printf(m, "TP: Sdc");
 		break;
 	case 33:
-		seq_printf(m, "TP Maker: Gvo\n");
-		break;
-	default:
-		seq_printf(m, "TP Maker: Unknown %x\n", hw_info.tp_maker_info);
+		seq_printf(m, "TP: N");
 		break;
 	}
 
 	switch (hw_info.panel_info) {
 	case 0:
-		seq_printf(m, "LCD: JDI FHD CMD INCELL\n");
+		seq_printf(m, "LCD: JDI Panel");
 		break;
 	case 4:
-		seq_printf(m, "LCD: LGD SW43401 WQHD DSC CMD\n");
-		break;
-	default:
-		seq_printf(m, "LCD: UNKNOWN %x\n", hw_info.panel_info);
+		seq_printf(m, "LCD: LG Panel");
 		break;
 	}
 
 	switch (hw_info.fp_info) {
 	case 0:
-		seq_printf(m, "Fingerprint: Goodix\n");
+		seq_printf(m, "Fingerprint: Goodix");
 		break;
 	case 1:
-		seq_printf(m, "Fingerprint: FPC\n");
-		break;
-	default:
-		seq_printf(m, "Fingerprint: Unknown %x\n", hw_info.fp_info);
+		seq_printf(m, "Fingerprint: FPC");
 		break;
 	}
 
@@ -233,7 +202,6 @@ static int hwinfo_get_ddr_info_from_smem(void)
 	ddr_table_ptr = smem_get_entry(SMEM_ID_VENDOR2, &size, 0,
 			SMEM_ANY_HOST_FLAG);
 	if (IS_ERR(ddr_table_ptr)) {
-		pr_err("Error fetching DDR manufacturer id from SMEM!\n");
 		hw_info.ddr_info = 0;
 		return PTR_ERR(ddr_table_ptr);
 	}
@@ -256,15 +224,14 @@ static const struct file_operations hwinfo_proc_fops = {
 
 static int cpumaxfreq_show(struct seq_file *m, void *v)
 {
-	/* E1 with one big core will use SDM845 with maxfreq */
-	seq_printf(m, "2.8\n");
+	seq_printf(m, "2.83");
 
 	return 0;
 }
 
 static int cpumaxfreq_open(struct inode *inode, struct file *file)
 {
-	return single_open(file, &cpumaxfreq_show, NULL);
+	return single_open(file, cpumaxfreq_show, NULL);
 }
 
 static const struct file_operations proc_cpumaxfreq_operations = {
