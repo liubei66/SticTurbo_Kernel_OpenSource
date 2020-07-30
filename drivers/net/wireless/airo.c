@@ -5484,7 +5484,7 @@ static int proc_BSSList_open( struct inode *inode, struct file *file ) {
            we have to add a spin lock... */
 	rc = readBSSListRid(ai, doLoseSync, &BSSList_rid);
 	while(rc == 0 && BSSList_rid.index != cpu_to_le16(0xffff)) {
-		ptr += sprintf(ptr, "%pM %*s rssi = %d",
+		ptr += sprintf(ptr, "%pM %.*s rssi = %d",
 			       BSSList_rid.bssid,
 				(int)BSSList_rid.ssidLen,
 				BSSList_rid.ssid,
@@ -5848,7 +5848,7 @@ static int airo_get_freq(struct net_device *dev,
 	ch = le16_to_cpu(status_rid.channel);
 	if((ch > 0) && (ch < 15)) {
 		fwrq->m = 100000 *
-			ieee80211_channel_to_frequency(ch, IEEE80211_BAND_2GHZ);
+			ieee80211_channel_to_frequency(ch, NL80211_BAND_2GHZ);
 		fwrq->e = 1;
 	} else {
 		fwrq->m = ch;
@@ -6906,7 +6906,7 @@ static int airo_get_range(struct net_device *dev,
 	for(i = 0; i < 14; i++) {
 		range->freq[k].i = i + 1; /* List index */
 		range->freq[k].m = 100000 *
-		     ieee80211_channel_to_frequency(i + 1, IEEE80211_BAND_2GHZ);
+		     ieee80211_channel_to_frequency(i + 1, NL80211_BAND_2GHZ);
 		range->freq[k++].e = 1;	/* Values in MHz -> * 10^5 * 10 */
 	}
 	range->num_frequency = k;
@@ -7314,7 +7314,7 @@ static inline char *airo_translate_scan(struct net_device *dev,
 	iwe.cmd = SIOCGIWFREQ;
 	iwe.u.freq.m = le16_to_cpu(bss->dsChannel);
 	iwe.u.freq.m = 100000 *
-	      ieee80211_channel_to_frequency(iwe.u.freq.m, IEEE80211_BAND_2GHZ);
+	      ieee80211_channel_to_frequency(iwe.u.freq.m, NL80211_BAND_2GHZ);
 	iwe.u.freq.e = 1;
 	current_ev = iwe_stream_add_event(info, current_ev, end_buf,
 					  &iwe, IW_EV_FREQ_LEN);

@@ -1,6 +1,6 @@
 /*
 * Copyright (C) 2014  Peel Technologies Inc
-* Copyright (C) 2019 XiaoMi, Inc.
+ * Copyright (C) 2018 XiaoMi, Inc.
 */
 
 #include <linux/init.h>
@@ -62,7 +62,7 @@ u32 is_gpio_used;
 #ifndef CONFIG_OF
 static int mode = 0, bpw = 32, spi_clk_freq = 960000;
 #endif
-static int lr_en, in_use , rcount;
+static int lr_en, in_use, rcount;
 static int prev_tx_status;  /* Status of previous transaction */
 static u32 field;
 u8 *p_buf;
@@ -228,7 +228,7 @@ peelir_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 		id->u32ID2 = 0x3c03d40;
 		id->u32ID3 = 0xb5300000;
 
-		if (__copy_to_user((void __user *)arg , id,
+		if (__copy_to_user((void __user *)arg, id,
 				sizeof(struct strIds))) {
 			kfree(id);
 			retval = -EFAULT;

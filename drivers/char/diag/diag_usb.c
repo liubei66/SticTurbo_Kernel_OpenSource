@@ -1,5 +1,4 @@
-/* Copyright (c) 2014-2016, 2018-2019 The Linux Foundation. All rights reserved.
- * Copyright (C) 2019 XiaoMi, Inc.
+/* Copyright (c) 2014-2016, 2018 The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -140,8 +139,11 @@ static void diag_usb_buf_tbl_remove(struct diag_usb_info *usb_info,
 			 * Remove reference from the table if it is the
 			 * only instance of the buffer
 			 */
-			if (atomic_read(&entry->ref_count) == 0)
+			if (atomic_read(&entry->ref_count) == 0) {
 				list_del(&entry->track);
+				kfree(entry);
+				entry = NULL;
+			}
 			break;
 		}
 	}
@@ -217,13 +219,6 @@ static void usb_connect_work_fn(struct work_struct *work)
  */
 static void usb_disconnect(struct diag_usb_info *ch)
 {
-	if (!ch)
-		return;
-
-	if (!atomic_read(&ch->connected) &&
-		driver->usb_connected && diag_mask_param())
-		diag_clear_masks(0);
-
 	if (ch && ch->ops && ch->ops->close)
 		ch->ops->close(ch->ctxt, DIAG_USB_MODE);
 }
@@ -232,6 +227,14 @@ static void usb_disconnect_work_fn(struct work_struct *work)
 {
 	struct diag_usb_info *ch = container_of(work, struct diag_usb_info,
 						disconnect_work);
+
+	if (!ch)
+		return;
+
+	if (!atomic_read(&ch->connected) &&
+		driver->usb_connected && diag_mask_param())
+		diag_clear_masks(0);
+
 	usb_disconnect(ch);
 }
 
@@ -322,8 +325,8 @@ static void diag_usb_write_done(struct diag_usb_info *ch,
 		DIAG_LOG(DIAG_DEBUG_MUX, "partial write_done ref %d\n",
 			 atomic_read(&entry->ref_count));
 		diag_ws_on_copy_complete(DIAG_WS_MUX);
-		diagmem_free(driver, req, ch->mempool);
 		spin_unlock_irqrestore(&ch->write_lock, flags);
+		diagmem_free(driver, req, ch->mempool);
 		return;
 	}
 	DIAG_LOG(DIAG_DEBUG_MUX, "full write_done, ctxt: %d\n",
@@ -333,6 +336,7 @@ static void diag_usb_write_done(struct diag_usb_info *ch,
 	buf = entry->buf;
 	len = entry->len;
 	kfree(entry);
+	entry = NULL;
 	diag_ws_on_copy_complete(DIAG_WS_MUX);
 
 	if (ch->ops && ch->ops->write_done)
@@ -340,8 +344,8 @@ static void diag_usb_write_done(struct diag_usb_info *ch,
 	buf = NULL;
 	len = 0;
 	ctxt = 0;
-	diagmem_free(driver, req, ch->mempool);
 	spin_unlock_irqrestore(&ch->write_lock, flags);
+	diagmem_free(driver, req, ch->mempool);
 }
 
 static void diag_usb_notifier(void *priv, unsigned event,

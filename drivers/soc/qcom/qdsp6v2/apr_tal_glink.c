@@ -1,5 +1,4 @@
-/* Copyright (c) 2016-2017 The Linux Foundation.
- * Copyright (C) 2019 XiaoMi, Inc.
+/* Copyright (c) 2016-2017, 2019 The Linux Foundation.
  * All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
@@ -275,7 +274,6 @@ struct apr_svc_ch_dev *apr_tal_open(uint32_t clnt, uint32_t dest, uint32_t dl,
 	}
 
 	apr_ch = &apr_svc_ch[dl][dest][clnt];
-	pr_err("%s: enter. apr_ch->handle = %p\n", __func__, apr_ch->handle);
 	mutex_lock(&apr_ch->m_lock);
 	if (apr_ch->handle) {
 		pr_err("%s: This channel is already opened\n", __func__);
@@ -313,7 +311,6 @@ struct apr_svc_ch_dev *apr_tal_open(uint32_t clnt, uint32_t dest, uint32_t dl,
 	open_cfg.transport = "smem";
 
 	apr_ch->channel_state = GLINK_REMOTE_DISCONNECTED;
-	pr_err("%s: calling glink_open. apr_ch->handle = %p\n", __func__, apr_ch->handle);
 	apr_ch->handle = glink_open(&open_cfg);
 	if (IS_ERR_OR_NULL(apr_ch->handle)) {
 		pr_err("%s: glink_open failed %s\n", __func__,
@@ -322,7 +319,6 @@ struct apr_svc_ch_dev *apr_tal_open(uint32_t clnt, uint32_t dest, uint32_t dl,
 		rc = -EINVAL;
 		goto unlock;
 	}
-	pr_err("%s: glink_open done. apr_ch->handle = %p\n", __func__, apr_ch->handle);
 
 	rc = wait_event_timeout(apr_ch->wait,
 		(apr_ch->channel_state == GLINK_CONNECTED), 5 * HZ);
@@ -332,7 +328,6 @@ struct apr_svc_ch_dev *apr_tal_open(uint32_t clnt, uint32_t dest, uint32_t dl,
 		goto close_link;
 	}
 
-	pr_err("%s: glink ch now connected\n", __func__);
 	/*
 	 * Remote intent is not required for GLINK <--> SMD IPC, so this is
 	 * designed not to fail the open call.
@@ -363,6 +358,38 @@ unlock:
 	return rc ? NULL : apr_ch;
 }
 
+int apr_tal_start_rx_rt(struct apr_svc_ch_dev *apr_ch)
+{
+	int rc = 0;
+
+	if (!apr_ch || !apr_ch->handle) {
+		rc = -EINVAL;
+		goto exit;
+	}
+
+	mutex_lock(&apr_ch->m_lock);
+	rc = glink_start_rx_rt(apr_ch->handle);
+	mutex_unlock(&apr_ch->m_lock);
+exit:
+	return rc;
+}
+
+int apr_tal_end_rx_rt(struct apr_svc_ch_dev *apr_ch)
+{
+	int rc = 0;
+
+	if (!apr_ch || !apr_ch->handle) {
+		rc = -EINVAL;
+		goto exit;
+	}
+
+	mutex_lock(&apr_ch->m_lock);
+	rc = glink_end_rx_rt(apr_ch->handle);
+	mutex_unlock(&apr_ch->m_lock);
+exit:
+	return rc;
+}
+
 int apr_tal_close(struct apr_svc_ch_dev *apr_ch)
 {
 	int rc;
@@ -372,7 +399,6 @@ int apr_tal_close(struct apr_svc_ch_dev *apr_ch)
 		goto exit;
 	}
 
-	pr_err("%s: calling glink_close. apr_ch->handle = %p\n", __func__, apr_ch->handle);
 	mutex_lock(&apr_ch->m_lock);
 	rc = glink_close(apr_ch->handle);
 	apr_ch->handle = NULL;
@@ -380,7 +406,6 @@ int apr_tal_close(struct apr_svc_ch_dev *apr_ch)
 	apr_ch->priv = NULL;
 	apr_ch->if_remote_intent_ready = false;
 	mutex_unlock(&apr_ch->m_lock);
-	pr_err("%s: glink_close done. apr_ch->handle = %p\n", __func__, apr_ch->handle);
 exit:
 	return rc;
 }

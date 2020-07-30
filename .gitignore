@@ -114,5 +114,51 @@ all.config
 # Kdevelop4
 *.kdev4
 
+# kernel-out-files
+out
+
+# stic-server-files
+迅雷下载
+
+# stic-kernel-modules
+drivers/stickernel
+
+# stic-server-files2
+优雅的舔逼ALL-迅雷下载
+
+# stic-server-files3
+drivers/迅雷下载/Papapa
+
+# stic-server-video
+download/pornhub-video/1080p
+download/pornhub-video/1440p
+download/pornhub-video/720p
+download/pornhub-video/1080p60fps
+download/pornhub-video/1440p60fps
+
+# stic-baidupan-video
+pandownloads
+
+# stic-build-tools
+sticbuild-kernel/build.sh
+
+# stic-server-kernel
+server_build.sh
+
+# stic-phone-kernel
+phone_build.sh
+
+# xiaomi-msm8998-audio
+techpack
+
+# xiaomi-msm8998-clang
+stic-clang/
+
+# xiaomi-msm8998-gcc
+stic-gcc/
+
+# xiaomi-stic-blacklist
+drivers/sticblacklist/
+
 # fetched Android config fragments
 android/configs/android-*.cfg

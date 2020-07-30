@@ -1,5 +1,4 @@
 /* Copyright (c) 2011-2017, The Linux Foundation. All rights reserved.
- * Copyright (C) 2019 XiaoMi, Inc.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -25,8 +24,10 @@
 static struct msm_camera_i2c_fn_t msm_sensor_cci_func_tbl;
 static struct msm_camera_i2c_fn_t msm_sensor_secure_func_tbl;
 
+#ifdef CONFIG_MACH_XIAOMI_MSM8998
 static uint8_t fusion_id[16];
 static uint8_t fuse_id_len;
+#endif
 
 static void msm_sensor_adjust_mclk(struct msm_camera_power_ctrl_t *ctrl)
 {
@@ -272,7 +273,7 @@ int msm_sensor_match_id(struct msm_sensor_ctrl_t *s_ctrl)
 		return rc;
 	}
 
-	pr_info("%s: read id: 0x%x expected id 0x%x:\n",
+	pr_debug("%s: read id: 0x%x expected id 0x%x:\n",
 			__func__, chipid, slave_info->sensor_id);
 	if (msm_sensor_id_by_mask(s_ctrl, chipid) != slave_info->sensor_id) {
 		pr_err("%s chip id %x does not match %x\n",
@@ -328,6 +329,7 @@ static int msm_sensor_get_af_status(struct msm_sensor_ctrl_t *s_ctrl,
 	return 0;
 }
 
+#ifdef CONFIG_MACH_XIAOMI_MSM8998
 static int msm_sensor_read_fusion_id_len(struct msm_sensor_ctrl_t *s_ctrl, void __user *argp)
 {
 	uint8_t *len = (uint8_t *)argp;
@@ -356,6 +358,7 @@ static int msm_sensor_read_fusion_id(struct msm_sensor_ctrl_t *s_ctrl, void __us
 
 	return rc;
 }
+#endif
 
 static long msm_sensor_subdev_ioctl(struct v4l2_subdev *sd,
 			unsigned int cmd, void *arg)
@@ -376,10 +379,12 @@ static long msm_sensor_subdev_ioctl(struct v4l2_subdev *sd,
 #endif
 			rc = s_ctrl->func_tbl->sensor_config(s_ctrl, argp);
 		return rc;
+#ifdef CONFIG_MACH_XIAOMI_MSM8998
 	case VIDIOC_MSM_READ_FUSION_ID_LEN:
 		return msm_sensor_read_fusion_id_len(s_ctrl, argp);
 	case VIDIOC_MSM_READ_FUSION_ID:
 		return msm_sensor_read_fusion_id(s_ctrl, argp);
+#endif
 	case VIDIOC_MSM_SENSOR_GET_AF_STATUS:
 		return msm_sensor_get_af_status(s_ctrl, argp);
 	case VIDIOC_MSM_SENSOR_RELEASE:
@@ -402,9 +407,11 @@ static long msm_sensor_subdev_do_ioctl(
 	struct video_device *vdev = video_devdata(file);
 	struct v4l2_subdev *sd = vdev_to_v4l2_subdev(vdev);
 	switch (cmd) {
+#ifdef CONFIG_MACH_XIAOMI_MSM8998
 	case VIDIOC_MSM_READ_FUSION_ID32:
 		cmd = VIDIOC_MSM_READ_FUSION_ID;
 		return msm_sensor_subdev_ioctl(sd, cmd, arg);
+#endif
 	case VIDIOC_MSM_SENSOR_CFG32:
 		cmd = VIDIOC_MSM_SENSOR_CFG;
 	default:
@@ -418,6 +425,7 @@ long msm_sensor_subdev_fops_ioctl(struct file *file,
 	return video_usercopy(file, cmd, arg, msm_sensor_subdev_do_ioctl);
 }
 
+#ifdef CONFIG_MACH_XIAOMI_MSM8998
 int msm_sensor_get_fuseid(struct msm_sensor_ctrl_t *s_ctrl, struct msm_camera_i2c_reg_setting *conf_array)
 {
 	int rc = 0;
@@ -496,6 +504,7 @@ int msm_sensor_get_fuseid(struct msm_sensor_ctrl_t *s_ctrl, struct msm_camera_i2
 	}
 	return rc;
 }
+#endif
 
 static int msm_sensor_config32(struct msm_sensor_ctrl_t *s_ctrl,
 	void __user *argp)
@@ -507,6 +516,7 @@ static int msm_sensor_config32(struct msm_sensor_ctrl_t *s_ctrl,
 	CDBG("%s:%d %s cfgtype = %d\n", __func__, __LINE__,
 		s_ctrl->sensordata->sensor_name, cdata->cfgtype);
 	switch (cdata->cfgtype) {
+#ifdef CONFIG_MACH_XIAOMI_MSM8998
 	case CFG_GET_SENSOR_FUSION_ID: {
 		struct msm_camera_i2c_reg_setting32 f_conf_array32;
 		struct msm_camera_i2c_reg_setting f_conf_array;
@@ -562,6 +572,7 @@ static int msm_sensor_config32(struct msm_sensor_ctrl_t *s_ctrl,
 		rc = msm_sensor_get_fuseid(s_ctrl, &f_conf_array);
 		break;
 	}
+#endif
 	case CFG_GET_SENSOR_INFO:
 		memcpy(cdata->cfg.sensor_info.sensor_name,
 			s_ctrl->sensordata->sensor_name,

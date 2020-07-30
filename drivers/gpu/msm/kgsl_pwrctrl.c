@@ -1,4 +1,4 @@
-/* Copyright (c) 2010-2018, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2010-2019, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -61,7 +61,7 @@ static const char * const clocks[] = {
 	"iref_clk"
 };
 
-static unsigned int ib_votes[KGSL_MAX_BUSLEVELS];
+static unsigned long ib_votes[KGSL_MAX_BUSLEVELS];
 static int last_vote_buslevel;
 static int max_vote_buslevel;
 
@@ -123,7 +123,7 @@ static void _record_pwrevent(struct kgsl_device *device,
 /**
  * kgsl_get_bw() - Return latest msm bus IB vote
  */
-static unsigned int kgsl_get_bw(void)
+static unsigned long kgsl_get_bw(void)
 {
 	return ib_votes[last_vote_buslevel];
 }
@@ -137,8 +137,9 @@ static unsigned int kgsl_get_bw(void)
 static void _ab_buslevel_update(struct kgsl_pwrctrl *pwr,
 				unsigned long *ab)
 {
-	unsigned int ib = ib_votes[last_vote_buslevel];
-	unsigned int max_bw = ib_votes[max_vote_buslevel];
+	unsigned long ib = ib_votes[last_vote_buslevel];
+	unsigned long max_bw = ib_votes[max_vote_buslevel];
+
 	if (!ab)
 		return;
 	if (ib == 0)
@@ -761,6 +762,7 @@ static ssize_t kgsl_pwrctrl_max_gpuclk_store(struct device *dev,
 					 struct device_attribute *attr,
 					 const char *buf, size_t count)
 {
+#if 0
 	struct kgsl_device *device = kgsl_device_from_dev(dev);
 	unsigned int val = 0;
 	int ret;
@@ -773,6 +775,7 @@ static ssize_t kgsl_pwrctrl_max_gpuclk_store(struct device *dev,
 		return ret;
 
 	kgsl_pwrctrl_max_clock_set(device, val);
+#endif
 
 	return count;
 }
@@ -2414,24 +2417,9 @@ void kgsl_idle_check(struct work_struct *work)
 		   || device->state ==  KGSL_STATE_NAP) {
 
 		if (!atomic_read(&device->active_cnt)) {
-			spin_lock(&device->submit_lock);
-			if (device->submit_now) {
-				spin_unlock(&device->submit_lock);
-				goto done;
-			}
-			/* Don't allow GPU inline submission in SLUMBER */
-			if (requested_state == KGSL_STATE_SLUMBER)
-				device->slumber = true;
-			spin_unlock(&device->submit_lock);
-
 			ret = kgsl_pwrctrl_change_state(device,
 					device->requested_state);
 			if (ret == -EBUSY) {
-				if (requested_state == KGSL_STATE_SLUMBER) {
-					spin_lock(&device->submit_lock);
-					device->slumber = false;
-					spin_unlock(&device->submit_lock);
-				}
 				/*
 				 * If the GPU is currently busy, restore
 				 * the requested state and reschedule
@@ -2442,7 +2430,7 @@ void kgsl_idle_check(struct work_struct *work)
 				kgsl_schedule_work(&device->idle_check_ws);
 			}
 		}
-done:
+
 		if (!ret)
 			kgsl_pwrctrl_request_state(device, KGSL_STATE_NONE);
 
@@ -2873,13 +2861,6 @@ static void kgsl_pwrctrl_set_state(struct kgsl_device *device,
 	trace_kgsl_pwr_set_state(device, state);
 	device->state = state;
 	device->requested_state = KGSL_STATE_NONE;
-
-	spin_lock(&device->submit_lock);
-	if (state == KGSL_STATE_SLUMBER || state == KGSL_STATE_SUSPEND)
-		device->slumber = true;
-	else
-		device->slumber = false;
-	spin_unlock(&device->submit_lock);
 }
 
 static void kgsl_pwrctrl_request_state(struct kgsl_device *device,
@@ -3009,7 +2990,7 @@ int kgsl_active_count_wait(struct kgsl_device *device, int count)
 	while (atomic_read(&device->active_cnt) > count) {
 		long ret;
 		mutex_unlock(&device->mutex);
-		ret = wait_event_timeout(device->active_cnt_wq,
+		ret = wait_event_interruptible_timeout(device->active_cnt_wq,
 			_check_active_count(device, count), wait_jiffies);
 		mutex_lock(&device->mutex);
 		result = ret == 0 ? -ETIMEDOUT : 0;

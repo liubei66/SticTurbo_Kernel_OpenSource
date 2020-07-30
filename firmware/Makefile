@@ -105,12 +105,14 @@ fw-shipped-$(CONFIG_USB_KAWETH) += kaweth/new_code.bin kaweth/trigger_code.bin \
 				   kaweth/new_code_fix.bin \
 				   kaweth/trigger_code_fix.bin
 
-fw-shipped-$(CONFIG_TOUCHSCREEN_SYNAPTICS_DSX_FORCE) += synaptics_jdi_3331_c1.fw \
-							synaptics_jdi_3330_c1.fw \
-							synaptics_lgd_4322_c1.fw \
-							synaptics_jdi_3330_d5.fw
-
-fw-shipped-$(CONFIG_TOUCHSCREEN_FT5X46) += ft8716_ebbg_incell_ebbg_d5.fw
+ifdef CONFIG_MACH_SAGIT
+fw-shipped-$(CONFIG_TOUCHSCREEN_SYNAPTICS_DSX_FORCE) += synaptics_jdi_3331_sagit.fw \
+				synaptics_jdi_3330_sagit.fw synaptics_lgd_4322_sagit.fw
+fw-shipped-$(CONFIG_TOUCHSCREEN_SYNAPTICS_DSX_FORCE) += synaptics_jdi_3330_chiron.fw
+endif
+ifdef CONFIG_MACH_CHIRON
+fw-shipped-$(CONFIG_TOUCHSCREEN_SYNAPTICS_DSX_FORCE) += synaptics_jdi_3330_chiron.fw
+endif
 
 ifdef CONFIG_FIRMWARE_IN_KERNEL
 fw-shipped-$(CONFIG_USB_SERIAL_KEYSPAN_MPR) += keyspan/mpr.fw

@@ -1,5 +1,4 @@
 /* Copyright (c) 2013-2017, The Linux Foundation. All rights reserved.
- * Copyright (C) 2019 XiaoMi, Inc.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -1566,7 +1565,7 @@ void ufsdbg_add_debugfs(struct ufs_hba *hba)
 	}
 
 	hba->debugfs_files.dump_dev_desc =
-		debugfs_create_file("dump_device_desc", S_IRUGO,
+		debugfs_create_file("dump_device_desc", S_IRUSR,
 				    hba->debugfs_files.debugfs_root, hba,
 				    &ufsdbg_dump_device_desc);
 	if (!hba->debugfs_files.dump_dev_desc) {

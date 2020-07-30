@@ -1,4 +1,4 @@
-/* Copyright (c) 2014-2017, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2014-2017, 2019, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -756,8 +756,10 @@ static struct mdss_rot_hw_resource *mdss_rotator_hw_alloc(
 	if (ret)
 		goto error;
 
-	if (pipe_id >= mdata->ndma_pipes)
+	if (pipe_id >= mdata->ndma_pipes) {
+		ret = -EINVAL;
 		goto error;
+	}
 
 	pipe_ndx = mdata->dma_pipes[pipe_id].ndx;
 	hw->pipe = mdss_mdp_pipe_assign(mdata, hw->mixer,
@@ -1051,11 +1053,13 @@ static int mdss_rotator_calc_perf(struct mdss_rot_perf *perf)
 	if (!config->input.width ||
 		(0xffffffff/config->input.width < config->input.height))
 		return -EINVAL;
+
+	perf->clk_rate = config->input.width * config->input.height;
+
 	if (!perf->clk_rate ||
 		(0xffffffff/perf->clk_rate < config->frame_rate))
 		return -EINVAL;
 
-	perf->clk_rate = config->input.width * config->input.height;
 	perf->clk_rate *= config->frame_rate;
 	/* rotator processes 4 pixels per clock */
 	perf->clk_rate /= 4;
@@ -2732,7 +2736,7 @@ static int mdss_rotator_get_dt_vreg_data(struct device *dev,
 			mp->vreg_config[i].enable_load,
 			mp->vreg_config[i].disable_load);
 	}
-	return rc;
+	return 0;
 
 error:
 	if (mp->vreg_config) {

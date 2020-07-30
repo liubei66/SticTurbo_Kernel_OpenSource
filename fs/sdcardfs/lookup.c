@@ -18,6 +18,8 @@
  * General Public License.
  */
 
+#define __FS_HAS_ENCRYPTION IS_ENABLED(CONFIG_FS_ENCRYPTION)
+#include <linux/fscrypt.h>
 #include "sdcardfs.h"
 #include "linux/delay.h"
 
@@ -173,7 +175,6 @@ static struct dentry *__sdcardfs_interpose(struct dentry *dentry,
 	struct inode *lower_inode;
 	struct super_block *lower_sb;
 	struct dentry *ret_dentry;
-	struct dentry *alias = NULL;
 
 	lower_inode = d_inode(lower_path->dentry);
 	lower_sb = sdcardfs_lower_super(sb);
@@ -196,21 +197,8 @@ static struct dentry *__sdcardfs_interpose(struct dentry *dentry,
 		goto out;
 	}
 
-	alias = d_find_any_alias(inode);
-	if (IS_ERR(alias)) {
-		ret_dentry = alias;
-		goto out;
-	}
-
-    /* Allow to 'obb' inode have multiple dentry */
-	if (need_graft_path(dentry) ||
-			(alias && alias->d_parent != dentry->d_parent)) {
-		d_add(dentry, inode);
-	} else {
-		ret_dentry = d_splice_alias(inode, dentry);
-		dentry = ret_dentry ?: dentry;
-    	}
-
+	ret_dentry = d_splice_alias(inode, dentry);
+	dentry = ret_dentry ?: dentry;
 	if (!IS_ERR(dentry))
 		update_derived_permission_lock(dentry);
 out:
@@ -288,6 +276,7 @@ static struct dentry *__sdcardfs_lookup(struct dentry *dentry,
 	lower_dir_dentry = lower_parent_path->dentry;
 	lower_dir_mnt = lower_parent_path->mnt;
 
+retry_lookup:
 	/* Use vfs_path_lookup to check if the dentry exists or not */
 	err = vfs_path_lookup(lower_dir_dentry, lower_dir_mnt, name->name, 0,
 				&lower_path);
@@ -391,8 +380,14 @@ put_name:
 		 * dentry then. Don't confuse the lower filesystem by forcing
 		 * one on it now...
 		 */
-		err = -ENOENT;
-		goto out;
+		struct inode *lower_dir = d_inode(lower_dir_dentry);
+
+		if (IS_ENCRYPTED(lower_dir) &&
+				!fscrypt_has_encryption_key(lower_dir)) {
+			err = -ENOENT;
+			goto out;
+		}
+		goto retry_lookup;
 	}
 
 	lower_path.dentry = lower_dentry;
