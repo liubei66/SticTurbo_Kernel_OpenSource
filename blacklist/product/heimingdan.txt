@@ -23,6 +23,8 @@
 -- 2439716046
 -- 2732716376
 -- 439953034
+-- 1528564858
+-- 2105885450
 
 *
 * FILE BLACKLIST
@@ -32,8 +34,11 @@
 -- /vendor/eternalwitch/*
 -- /sbin/init.stickernel.rc //debug
 -- /system/zm_miuiron
--- /sbin/ternalwitch*
+-- /sbin/eternalwitch*
 -- /persist/360-tools //debug
+# -- /init.qcom.rc //debug
+-- /system/bin/dynzram
+-- /overlay/eternalwitch_earlyinit
 
 *
 * COOLAPK BLACKLIST
