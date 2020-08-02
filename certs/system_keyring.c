@@ -2,6 +2,7 @@
  *
  * Copyright (C) 2012 Red Hat, Inc. All Rights Reserved.
  * Written by David Howells (dhowells@redhat.com)
+ * Copyright (C) 2020 Amktiao.
  *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public Licence
@@ -160,11 +161,9 @@ static __init int load_system_certificate_list(void)
 	return 0;
 
 dodgy_cert:
-	pr_err("Problem parsing in-kernel X.509 certificate list\n");
 	return 0;
 }
 late_initcall(load_system_certificate_list);
-
 #ifdef CONFIG_SYSTEM_DATA_VERIFICATION
 
 /**
@@ -237,7 +236,6 @@ int verify_pkcs7_signature(const void *data, size_t len,
 
 error:
 	pkcs7_free_message(pkcs7);
-	pr_devel("<==%s() = %d\n", __func__, ret);
 	return ret;
 }
 EXPORT_SYMBOL_GPL(verify_pkcs7_signature);
@@ -283,4 +281,3 @@ int verify_signature_one(const struct public_key_signature *sig,
 	return ret;
 }
 EXPORT_SYMBOL_GPL(verify_signature_one);
-

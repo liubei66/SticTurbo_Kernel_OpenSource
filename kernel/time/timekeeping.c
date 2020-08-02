@@ -24,8 +24,6 @@
 #include <linux/stop_machine.h>
 #include <linux/pvclock_gtod.h>
 #include <linux/compiler.h>
-/* XIAOMI ADD: */
-#include <linux/misysinfofreader.h>
 
 #include "tick-internal.h"
 #include "ntp_internal.h"
@@ -113,7 +111,7 @@ static void tk_set_wall_to_mono(struct timekeeper *tk, struct timespec64 wtm)
 	 */
 	set_normalized_timespec64(&tmp, -tk->wall_to_monotonic.tv_sec,
 					-tk->wall_to_monotonic.tv_nsec);
-	WARN_ON_ONCE(tk->offs_real.tv64 != timespec64_to_ktime(tmp).tv64);
+	WARN_ON_ONCE(tk->offs_real != timespec64_to_ktime(tmp));
 	tk->wall_to_monotonic = wtm;
 	set_normalized_timespec64(&tmp, -wtm.tv_sec, -wtm.tv_nsec);
 	tk->offs_real = timespec64_to_ktime(tmp);
@@ -606,7 +604,7 @@ EXPORT_SYMBOL_GPL(pvclock_gtod_unregister_notifier);
 static inline void tk_update_leap_state(struct timekeeper *tk)
 {
 	tk->next_leap_ktime = ntp_get_next_leap();
-	if (tk->next_leap_ktime.tv64 != KTIME_MAX)
+	if (tk->next_leap_ktime != KTIME_MAX)
 		/* Convert to monotonic time */
 		tk->next_leap_ktime = ktime_sub(tk->next_leap_ktime, tk->offs_real);
 }
@@ -2270,9 +2268,6 @@ struct timespec64 get_monotonic_coarse64(void)
 	return now;
 }
 EXPORT_SYMBOL(get_monotonic_coarse64);
-#ifdef CONFIG_PACKAGE_RUNTIME_INFO
-void __weak package_runtime_monitor(u64 now) {}
-#endif
 
 /*
  * Must hold jiffies_lock
@@ -2280,11 +2275,6 @@ void __weak package_runtime_monitor(u64 now) {}
 void do_timer(unsigned long ticks)
 {
 	jiffies_64 += ticks;
-#ifdef CONFIG_PACKAGE_RUNTIME_INFO
-	package_runtime_monitor(jiffies_64);
-#endif
-	/* XIAOMI ADD: */
-	update_misysinfo_jiffies();
 	calc_global_load(ticks);
 }
 
@@ -2324,7 +2314,7 @@ ktime_t ktime_get_update_offsets_now(unsigned int *cwsseq, ktime_t *offs_real,
 		}
 
 		/* Handle leapsecond insertion adjustments */
-		if (unlikely(base.tv64 >= tk->next_leap_ktime.tv64))
+		if (unlikely(base >= tk->next_leap_ktime))
 			*offs_real = ktime_sub(tk->offs_real, ktime_set(1, 0));
 
 	} while (read_seqcount_retry(&tk_core.seq, seq));
@@ -2415,4 +2405,14 @@ void xtime_update(unsigned long ticks)
 	do_timer(ticks);
 	write_sequnlock(&jiffies_lock);
 	update_wall_time();
+}
+
+/**
+ * get_total_sleep_time_nsec() - returns total sleep time in nanoseconds
+ */
+s64 get_total_sleep_time_nsec(void)
+{
+	struct timekeeper *tk = &tk_core.timekeeper;
+
+	return ktime_to_ns(tk->offs_boot);
 }

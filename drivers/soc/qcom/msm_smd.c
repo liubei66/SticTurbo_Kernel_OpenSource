@@ -135,57 +135,32 @@ struct interrupt_stat interrupt_stats[NUM_SMD_SUBSYSTEMS];
 					  entry * SMSM_NUM_HOSTS + host)
 #define SMSM_INTR_MUX_ADDR(entry)        (smsm_info.intr_mux + entry)
 
-int msm_smd_debug_mask = MSM_SMD_POWER_INFO | MSM_SMD_INFO |
-							MSM_SMSM_POWER_INFO;
+int msm_smd_debug_mask = 0;
 module_param_named(debug_mask, msm_smd_debug_mask, int, 0664);
 void *smd_log_ctx;
 void *smsm_log_ctx;
 #define NUM_LOG_PAGES 4
 
 #define IPC_LOG_SMD(level, x...) do { \
-	if (smd_log_ctx) \
-		ipc_log_string(smd_log_ctx, x); \
-	else \
-		printk(level x); \
+	printk(level x); \
 	} while (0)
 
 #define IPC_LOG_SMSM(level, x...) do { \
-	if (smsm_log_ctx) \
-		ipc_log_string(smsm_log_ctx, x); \
-	else \
-		printk(level x); \
+	printk(level x); \
 	} while (0)
 
 #if defined(CONFIG_MSM_SMD_DEBUG)
-#define SMD_DBG(x...) do {				\
-		if (msm_smd_debug_mask & MSM_SMD_DEBUG) \
-			IPC_LOG_SMD(KERN_DEBUG, x);	\
-	} while (0)
+#define SMD_DBG(x...) ((void)0)
 
-#define SMSM_DBG(x...) do {					\
-		if (msm_smd_debug_mask & MSM_SMSM_DEBUG)	\
-			IPC_LOG_SMSM(KERN_DEBUG, x);		\
-	} while (0)
+#define SMSM_DBG(x...) ((void)0)
 
-#define SMD_INFO(x...) do {				\
-		if (msm_smd_debug_mask & MSM_SMD_INFO)	\
-			IPC_LOG_SMD(KERN_INFO, x);	\
-	} while (0)
+#define SMD_INFO(x...) ((void)0)
 
-#define SMSM_INFO(x...) do {				\
-		if (msm_smd_debug_mask & MSM_SMSM_INFO) \
-			IPC_LOG_SMSM(KERN_INFO, x);	\
-	} while (0)
+#define SMSM_INFO(x...) ((void)0)
 
-#define SMD_POWER_INFO(x...) do {				\
-		if (msm_smd_debug_mask & MSM_SMD_POWER_INFO)	\
-			IPC_LOG_SMD(KERN_INFO, x);		\
-	} while (0)
+#define SMD_POWER_INFO(x...) ((void)0)
 
-#define SMSM_POWER_INFO(x...) do {				\
-		if (msm_smd_debug_mask & MSM_SMSM_POWER_INFO)	\
-			IPC_LOG_SMSM(KERN_INFO, x);		\
-	} while (0)
+#define SMSM_POWER_INFO(x...) ((void)0)
 #else
 #define SMD_DBG(x...) do { } while (0)
 #define SMSM_DBG(x...) do { } while (0)
@@ -3213,6 +3188,7 @@ int __init msm_smd_init(void)
 	if (registered)
 		return 0;
 
+#ifdef CONFIG_IPC_LOGGING
 	smd_log_ctx = ipc_log_context_create(NUM_LOG_PAGES, "smd", 0);
 	if (!smd_log_ctx) {
 		pr_err("%s: unable to create SMD logging context\n", __func__);
@@ -3224,6 +3200,10 @@ int __init msm_smd_init(void)
 		pr_err("%s: unable to create SMSM logging context\n", __func__);
 		msm_smd_debug_mask = 0;
 	}
+#else
+	pr_debug("IPC Logging creation skipped.\n");
+	msm_smd_debug_mask = 0;
+#endif
 
 	registered = true;
 

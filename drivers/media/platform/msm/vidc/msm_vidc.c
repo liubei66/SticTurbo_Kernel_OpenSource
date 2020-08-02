@@ -946,59 +946,6 @@ static int msm_vidc_create_tile_info_table(struct msm_vidc_inst *inst)
 	return 0;
 }
 
-static int msm_vidc_set_rotation(struct msm_vidc_inst *inst)
-{
-	int rc = 0;
-	int value = 0;
-	struct hfi_device *hdev;
-	struct hal_vpe_rotation vpe_rotation;
-	struct hal_frame_size frame_sz;
-
-	hdev = inst->core->device;
-
-	/* Set rotation and flip first */
-	value = msm_comm_g_ctrl_for_id(inst, V4L2_CID_MPEG_VIDC_VIDEO_ROTATION);
-	if (value < 0) {
-		dprintk(VIDC_ERR, "Get control for rotation failed\n");
-		return value;
-	}
-	vpe_rotation.rotate = value;
-	value = msm_comm_g_ctrl_for_id(inst, V4L2_CID_MPEG_VIDC_VIDEO_FLIP);
-	if (value < 0) {
-		dprintk(VIDC_ERR, "Get control for flip failed\n");
-		return value;
-	}
-	vpe_rotation.flip = value;
-	dprintk(VIDC_DBG, "Set rotation = %d, flip = %d for capture port.\n",
-		vpe_rotation.rotate, vpe_rotation.flip);
-	rc = call_hfi_op(hdev, session_set_property,
-		(void *)inst->session,
-		HAL_PARAM_VPE_ROTATION, &vpe_rotation);
-	if (rc) {
-		dprintk(VIDC_ERR, "Set rotation/flip at start stream failed\n");
-		return rc;
-	}
-
-	/* flip the output resolution if required */
-	value = vpe_rotation.rotate;
-	if (value == V4L2_CID_MPEG_VIDC_VIDEO_ROTATION_90 ||
-			value == V4L2_CID_MPEG_VIDC_VIDEO_ROTATION_270) {
-		frame_sz.buffer_type = HAL_BUFFER_OUTPUT;
-		frame_sz.width = inst->prop.height[CAPTURE_PORT];
-		frame_sz.height = inst->prop.width[CAPTURE_PORT];
-		dprintk(VIDC_DBG, "CAPTURE port width = %d, height = %d\n",
-			frame_sz.width, frame_sz.height);
-		rc = call_hfi_op(hdev, session_set_property, (void *)
-			inst->session, HAL_PARAM_FRAME_SIZE, &frame_sz);
-		if (rc) {
-			dprintk(VIDC_ERR,
-				"Failed to set framesize for CAPTURE port\n");
-			return rc;
-		}
-	}
-	return rc;
-}
-
 static inline int start_streaming(struct msm_vidc_inst *inst)
 {
 	int rc = 0;
@@ -1006,15 +953,6 @@ static inline int start_streaming(struct msm_vidc_inst *inst)
 	struct hal_buffer_size_minimum b;
 
 	hdev = inst->core->device;
-
-	if (inst->session_type == MSM_VIDC_ENCODER) {
-		rc = msm_vidc_set_rotation(inst);
-		if (rc) {
-			dprintk(VIDC_ERR,
-				"Set rotation for encoder failed\n");
-			goto fail_start;
-		}
-	}
 
 	/* Create tile info table */
 	rc = msm_vidc_create_tile_info_table(inst);
@@ -1743,7 +1681,7 @@ void *msm_vidc_open(int core_id, int session_type)
 		goto err_invalid_core;
 	}
 
-	pr_info(VIDC_DBG_TAG "Opening video instance: %pK, %d\n",
+	pr_debug(VIDC_DBG_TAG "Opening video instance: %pK, %d\n",
 		VIDC_MSG_PRIO2STRING(VIDC_INFO), inst, session_type);
 	mutex_init(&inst->sync_lock);
 	mutex_init(&inst->bufq[CAPTURE_PORT].lock);
@@ -1839,8 +1777,10 @@ void *msm_vidc_open(int core_id, int session_type)
 
 	msm_comm_scale_clocks_and_bus(inst);
 
+#ifdef CONFIG_DEBUG_FS
 	inst->debugfs_root =
 		msm_vidc_debugfs_init_inst(inst, core->debugfs_root);
+#endif
 
 	return inst;
 fail_init:
@@ -1992,7 +1932,7 @@ int msm_vidc_destroy(struct msm_vidc_inst *inst)
 
 	msm_vidc_debugfs_deinit_inst(inst);
 
-	pr_info(VIDC_DBG_TAG "Closed video instance: %pK\n",
+	pr_debug(VIDC_DBG_TAG "Closed video instance: %pK\n",
 			VIDC_MSG_PRIO2STRING(VIDC_INFO), inst);
 	kfree(inst);
 	return 0;

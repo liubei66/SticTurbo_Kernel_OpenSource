@@ -120,14 +120,20 @@ obj-$(CONFIG_MEMBARRIER) += membarrier.o
 
 obj-$(CONFIG_HAS_IOMEM) += memremap.o
 
-obj-y += mi_io.o
-
 $(obj)/configs.o: $(obj)/config_data.h
 
 # config_data.h contains the same information as ikconfig.h but gzipped.
 # Info from config_data can be extracted from /proc/config*
 targets += config_data.gz
+ifeq ($(CONFIG_MACH_XIAOMI_D5X),y)
+$(obj)/config_data.gz: arch/arm64/configs/polaris-stock_defconfig FORCE
+else ifeq ($(CONFIG_MACH_XIAOMI_E1N),y)
+$(obj)/config_data.gz: arch/arm64/configs/dipper-stock_defconfig FORCE
+else ifeq ($(CONFIG_MACH_XIAOMI_E10),y)
+$(obj)/config_data.gz: arch/arm64/configs/beryllium-stock_defconfig FORCE
+else
 $(obj)/config_data.gz: $(KCONFIG_CONFIG) FORCE
+endif
 	$(call if_changed,gzip)
 
       filechk_ikconfiggz = (echo "static const char kernel_config_data[] __used = MAGIC_START"; cat $< | scripts/basic/bin2c; echo "MAGIC_END;")
@@ -143,3 +149,8 @@ $(obj)/kheaders_data.tar.xz: FORCE
 	$(call cmd,genikh)
 
 clean-files := kheaders_data.tar.xz kheaders.md5
+
+# Squeeze a little bit more juice
+ccflags-y := -O3
+ccflags-y += $(call cc-option, -g0)
+ccflags-y += $(call cc-option, -Os)

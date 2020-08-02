@@ -34,6 +34,15 @@
 #include "dsi_pwr.h"
 #include "sde_dbg.h"
 
+static short backlight_max = 4095;
+module_param(backlight_max, short, 0644);
+
+static short backlight_min = 0;
+module_param(backlight_min, short, 0644);
+
+bool backlight_dimmer = true;
+module_param(backlight_dimmer, bool, 0644);
+
 #define to_dsi_display(x) container_of(x, struct dsi_display, host)
 #define INT_BASE_10 10
 #define NO_OVERRIDE -1
@@ -165,8 +174,8 @@ int dsi_display_set_backlight(void *display, u32 bl_lvl)
 	drm_dev = dsi_display->drm_dev;
 
 	if (!dsi_panel_initialized(panel)) {
-		pr_info("[%s] set backlight before panel initialized, caching value: %d\n",
-		dsi_display->name, bl_lvl);
+		pr_debug("[%s] set backlight before panel initialized, caching value: %d\n",
+				dsi_display->name, bl_lvl);
 		return -EINVAL;
 	}
 
@@ -892,7 +901,7 @@ int dsi_display_read_panel(struct dsi_panel *panel, struct dsi_read_config *read
 		goto exit;
 	}
 
-	for (i = 0; i < read_config->cmds_rlen; i++) //debug
+	for (i = 0; i < read_config->cmds_rlen; i++)
 		pr_info("0x%x ", read_config->rbuf[i]);
 	pr_info("\n");
 
@@ -1187,6 +1196,7 @@ int dsi_display_set_power(struct drm_connector *connector,
 	struct drm_notify_data g_notify_data;
 	int rc = 0;
 	int event = 0;
+
 	if (!display || !display->panel) {
 		pr_err("invalid display/panel\n");
 		return -EINVAL;
@@ -1624,7 +1634,7 @@ static int dsi_display_debugfs_init(struct dsi_display *display)
 	dir = debugfs_create_dir(display->name, NULL);
 	if (IS_ERR_OR_NULL(dir)) {
 		rc = PTR_ERR(dir);
-		pr_err("[%s] debugfs create dir failed, rc = %d\n",
+		pr_debug("[%s] debugfs create dir failed, rc = %d\n",
 		       display->name, rc);
 		goto error;
 	}
@@ -4989,11 +4999,7 @@ static int dsi_display_bind(struct device *dev,
 
 	mutex_lock(&display->display_lock);
 
-	rc = dsi_display_debugfs_init(display);
-	if (rc) {
-		pr_err("[%s] debugfs init failed, rc=%d\n", display->name, rc);
-		goto error;
-	}
+	dsi_display_debugfs_init(display);
 
 	atomic_set(&display->clkrate_change_pending, 0);
 	display->cached_clk_rate = 0;
@@ -5316,9 +5322,7 @@ int dsi_display_dev_probe(struct platform_device *pdev)
 				secondary_active_node = NULL;
 				pr_debug("removed the existing comp ops\n");
 			}
-
 			display->is_active = true;
-
 			dsi_display_parse_cmdline_topology(display,
 					DSI_SECONDARY);
 			secondary_np = pdev->dev.of_node;

@@ -75,11 +75,6 @@ struct tzbsp_video_set_state_req {
 	u32 spare; /* reserved for future, should be zero */
 };
 
-const struct msm_vidc_gov_data DEFAULT_BUS_VOTE = {
-	.data = NULL,
-	.data_count = 0,
-};
-
 const int max_packets = 1000;
 
 static void venus_hfi_pm_handler(struct work_struct *work);
@@ -142,7 +137,7 @@ static void __dump_packet(u8 *packet, enum vidc_msg_prio log_level)
 	 * row must contain enough for 0xdeadbaad * 8 to be converted into
 	 * "de ad ba ab " * 8 + '\0'
 	 */
-	char row[3 * row_size];
+	char row[3 * 32];
 
 	for (c = 0; c * row_size < packet_size; ++c) {
 		int bytes_to_read = ((c + 1) * row_size > packet_size) ?
@@ -849,8 +844,6 @@ static int __unvote_buses(struct venus_hfi_device *device)
 	int rc = 0;
 	struct bus_info *bus = NULL;
 
-	kfree(device->bus_vote.data);
-	device->bus_vote.data = NULL;
 	device->bus_vote.data_count = 0;
 
 	venus_hfi_for_each_bus(device, bus) {
@@ -874,7 +867,6 @@ static int __vote_buses(struct venus_hfi_device *device,
 {
 	int rc = 0;
 	struct bus_info *bus = NULL;
-	struct vidc_bus_vote_data *new_data = NULL;
 
 	if (!num_data) {
 		dprintk(VIDC_DBG, "No vote data available\n");
@@ -884,16 +876,7 @@ static int __vote_buses(struct venus_hfi_device *device,
 		return -EINVAL;
 	}
 
-	new_data = kmemdup(data, num_data * sizeof(*new_data), GFP_KERNEL);
-	if (!new_data) {
-		dprintk(VIDC_ERR, "Can't alloc memory to cache bus votes\n");
-		rc = -ENOMEM;
-		goto err_no_mem;
-	}
-
 no_data_count:
-	kfree(device->bus_vote.data);
-	device->bus_vote.data = new_data;
 	device->bus_vote.data_count = num_data;
 
 	venus_hfi_for_each_bus(device, bus) {
@@ -1729,16 +1712,8 @@ static int venus_hfi_core_init(void *device)
 
 	mutex_lock(&dev->lock);
 
-	dev->bus_vote.data =
-		kzalloc(sizeof(struct vidc_bus_vote_data), GFP_KERNEL);
-	if (!dev->bus_vote.data) {
-		dprintk(VIDC_ERR, "Bus vote data memory is not allocated\n");
-		rc = -ENOMEM;
-		goto err_no_mem;
-	}
-
 	dev->bus_vote.data_count = 1;
-	dev->bus_vote.data->power_mode = VIDC_POWER_TURBO;
+	dev->bus_vote.data[0].power_mode = VIDC_POWER_TURBO;
 
 	rc = __load_fw(dev);
 	if (rc) {
@@ -1813,7 +1788,6 @@ err_core_init:
 	__set_state(dev, VENUS_STATE_DEINIT);
 	__unload_fw(dev);
 err_load_fw:
-err_no_mem:
 	dprintk(VIDC_ERR, "Core init failed\n");
 	mutex_unlock(&dev->lock);
 	return rc;
@@ -1848,34 +1822,6 @@ static int venus_hfi_core_release(void *dev)
 	mutex_unlock(&device->lock);
 
 	return rc;
-}
-
-static int __get_q_size(struct venus_hfi_device *dev, unsigned int q_index)
-{
-	struct hfi_queue_header *queue;
-	struct vidc_iface_q_info *q_info;
-	u32 write_ptr, read_ptr;
-
-	if (q_index >= VIDC_IFACEQ_NUMQ) {
-		dprintk(VIDC_ERR, "Invalid q index: %d\n", q_index);
-		return -ENOENT;
-	}
-
-	q_info = &dev->iface_queues[q_index];
-	if (!q_info) {
-		dprintk(VIDC_ERR, "cannot read shared Q's\n");
-		return -ENOENT;
-	}
-
-	queue = (struct hfi_queue_header *)q_info->q_hdr;
-	if (!queue) {
-		dprintk(VIDC_ERR, "queue not present\n");
-		return -ENOENT;
-	}
-
-	write_ptr = (u32)queue->qhdr_write_idx;
-	read_ptr = (u32)queue->qhdr_read_idx;
-	return read_ptr - write_ptr;
 }
 
 static void __core_clear_interrupt(struct venus_hfi_device *device)
@@ -3206,8 +3152,7 @@ static int __response_handler(struct venus_hfi_device *device)
 			*session_id = session->session_id;
 		}
 
-		if (packet_count >= max_packets &&
-				__get_q_size(device, VIDC_IFACEQ_MSGQ_IDX)) {
+		if (packet_count >= max_packets) {
 			dprintk(VIDC_WARN,
 					"Too many packets in message queue to handle at once, deferring read\n");
 			break;
@@ -3520,8 +3465,7 @@ static void __deinit_bus(struct venus_hfi_device *device)
 	if (!device)
 		return;
 
-	kfree(device->bus_vote.data);
-	device->bus_vote = DEFAULT_BUS_VOTE;
+	device->bus_vote.data_count = 0;
 
 	venus_hfi_for_each_bus_reverse(device, bus) {
 		devfreq_remove_device(bus->devfreq);
@@ -3598,6 +3542,7 @@ static int __init_bus(struct venus_hfi_device *device)
 		devfreq_suspend_device(bus->devfreq);
 	}
 
+	device->bus_vote.data_count = 0;
 	return 0;
 
 err_add_dev:
@@ -3805,9 +3750,9 @@ static int __protect_cp_mem(struct venus_hfi_device *device)
 				rc, resp);
 	}
 
-	trace_venus_hfi_var_done(
-		memprot.cp_start, memprot.cp_size,
-		memprot.cp_nonpixel_start, memprot.cp_nonpixel_size);
+//	trace_venus_hfi_var_done(
+//		memprot.cp_start, memprot.cp_size,
+//		memprot.cp_nonpixel_start, memprot.cp_nonpixel_size);
 	return rc;
 }
 
@@ -4283,7 +4228,7 @@ static int __load_fw(struct venus_hfi_device *device)
 		dprintk(VIDC_ERR, "Failed to initialize packetization\n");
 		goto fail_init_pkt;
 	}
-	trace_msm_v4l2_vidc_fw_load_start("msm_v4l2_vidc venus_fw load start");
+//	trace_msm_v4l2_vidc_fw_load_start("msm_v4l2_vidc venus_fw load start");
 
 	rc = __venus_power_on(device);
 	if (rc) {
@@ -4313,7 +4258,7 @@ static int __load_fw(struct venus_hfi_device *device)
 			goto fail_protect_mem;
 		}
 	}
-	trace_msm_v4l2_vidc_fw_load_end("msm_v4l2_vidc venus_fw load end");
+//	trace_msm_v4l2_vidc_fw_load_end("msm_v4l2_vidc venus_fw load end");
 	return rc;
 fail_protect_mem:
 	if (device->resources.fw.cookie)
@@ -4325,7 +4270,7 @@ fail_venus_power_on:
 fail_init_pkt:
 	__deinit_resources(device);
 fail_init_res:
-	trace_msm_v4l2_vidc_fw_load_end("msm_v4l2_vidc venus_fw load end");
+//	trace_msm_v4l2_vidc_fw_load_end("msm_v4l2_vidc venus_fw load end");
 	return rc;
 }
 

@@ -18,8 +18,6 @@ source "drivers/pnp/Kconfig"
 
 source "drivers/block/Kconfig"
 
-source "drivers/nvme/Kconfig"
-
 # misc before ide - BLK_DEV_SGIIOC4 depends on SGI_IOC4
 
 source "drivers/misc/Kconfig"
@@ -35,8 +33,6 @@ source "drivers/md/Kconfig"
 source "drivers/target/Kconfig"
 
 source "drivers/message/fusion/Kconfig"
-
-source "drivers/firewire/Kconfig"
 
 source "drivers/macintosh/Kconfig"
 
@@ -99,8 +95,6 @@ source "drivers/hid/Kconfig"
 source "drivers/usb/Kconfig"
 
 source "drivers/uwb/Kconfig"
-
-source "drivers/mmc/Kconfig"
 
 source "drivers/memstick/Kconfig"
 
@@ -204,15 +198,13 @@ source "drivers/nvmem/Kconfig"
 
 source "drivers/hwtracing/stm/Kconfig"
 
-source "drivers/hwtracing/intel_th/Kconfig"
-
 source "drivers/fpga/Kconfig"
 
 source "drivers/sensors/Kconfig"
 
-source "drivers/gps/Kconfig"
-
 source "drivers/tee/Kconfig"
+
+source "drivers/gps/Kconfig"
 
 source "drivers/halls/Kconfig"
 

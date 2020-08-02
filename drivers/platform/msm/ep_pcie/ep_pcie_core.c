@@ -37,7 +37,7 @@
 #include "ep_pcie_com.h"
 
 /* debug mask sys interface */
-static int ep_pcie_debug_mask;
+static int ep_pcie_debug_mask = 0;
 static int ep_pcie_debug_keep_resource;
 static u32 ep_pcie_bar0_address;
 module_param_named(debug_mask, ep_pcie_debug_mask,
@@ -2789,6 +2789,7 @@ static int __init ep_pcie_init(void)
 	pr_debug("%s\n", __func__);
 
 	snprintf(logname, MAX_NAME_LEN, "ep-pcie-long");
+#ifdef CONFIG_IPC_LOGGING
 	ep_pcie_dev.ipc_log_sel =
 		ipc_log_context_create(EP_PCIE_LOG_PAGES, logname, 0);
 	if (ep_pcie_dev.ipc_log_sel == NULL)
@@ -2798,7 +2799,6 @@ static int __init ep_pcie_init(void)
 		EP_PCIE_DBG(&ep_pcie_dev,
 			"PCIe V%d: IPC selected logging is enable for %s\n",
 			ep_pcie_dev.rev, logname);
-
 	snprintf(logname, MAX_NAME_LEN, "ep-pcie-short");
 	ep_pcie_dev.ipc_log_ful =
 		ipc_log_context_create(EP_PCIE_LOG_PAGES * 2, logname, 0);
@@ -2820,6 +2820,7 @@ static int __init ep_pcie_init(void)
 		EP_PCIE_DBG(&ep_pcie_dev,
 			"PCIe V%d: IPC dump logging is enable for %s\n",
 			ep_pcie_dev.rev, logname);
+#endif
 
 	mutex_init(&ep_pcie_dev.setup_mtx);
 	mutex_init(&ep_pcie_dev.ext_mtx);

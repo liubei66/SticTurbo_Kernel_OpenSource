@@ -1,5 +1,5 @@
 /* Copyright (c) 2015-2017 The Linux Foundation. All rights reserved.
- * Copyright (C) 2019 XiaoMi, Inc.
+ * Copyright (C) 2018 XiaoMi, Inc.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -10,6 +10,7 @@
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  */
+
 #include <linux/debugfs.h>
 #include <linux/spinlock.h>
 #include <linux/errno.h>
@@ -179,7 +180,7 @@ static char *get_client_str(struct votable *votable, int client_id)
 	if (client_id == -EINVAL)
 		return NULL;
 
-	 return votable->client_strs[client_id];
+	return votable->client_strs[client_id];
 }
 
 void lock_votable(struct votable *votable)
@@ -415,6 +416,7 @@ int vote(struct votable *votable, const char *client_str, bool enabled, int val)
 	default:
 		return -EINVAL;
 	}
+
 	/*
 	 * Note that the callback is called with a NULL string and -EINVAL
 	 * result when there are no enabled votes
@@ -640,7 +642,7 @@ struct votable *create_votable(const char *name,
 		return ERR_PTR(-ENOMEM);
 	}
 
-	votable->status_ent = debugfs_create_file("status", S_IFREG | S_IRUGO,
+	votable->status_ent = debugfs_create_file("status", S_IFREG | 0444,
 				  votable->root, votable,
 				  &votable_status_ops);
 	if (!votable->status_ent) {
@@ -652,7 +654,7 @@ struct votable *create_votable(const char *name,
 	}
 
 	votable->force_val_ent = debugfs_create_u32("force_val",
-					S_IFREG | S_IWUSR | S_IRUGO,
+					S_IFREG | 0644,
 					votable->root,
 					&(votable->force_val));
 
@@ -665,7 +667,7 @@ struct votable *create_votable(const char *name,
 	}
 
 	votable->force_active_ent = debugfs_create_file("force_active",
-					S_IFREG | S_IRUGO,
+					S_IFREG | 0444,
 					votable->root, votable,
 					&votable_force_ops);
 	if (!votable->force_active_ent) {

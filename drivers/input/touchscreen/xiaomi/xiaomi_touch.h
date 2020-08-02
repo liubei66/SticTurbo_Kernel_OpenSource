@@ -20,8 +20,6 @@
 #include <linux/poll.h>
 #include <linux/slab.h>
 
-
-/*CUR,DEFAULT,MIN,MAX*/
 #define VALUE_TYPE_SIZE 6
 #define VALUE_GRIP_SIZE 9
 enum MODE_CMD {

@@ -38,9 +38,6 @@
 
 /* disable LPM by default */
 static bool disable_l1_for_hs;
-module_param(disable_l1_for_hs, bool, 0644);
-MODULE_PARM_DESC(disable_l1_for_hs,
-	"Disable support for L1 LPM for HS devices");
 
 /**
  * struct usb_os_string - represents OS String to be reported by a gadget
@@ -2197,6 +2194,7 @@ void composite_disconnect(struct usb_gadget *gadget)
 	 * disconnect callbacks?
 	 */
 	spin_lock_irqsave(&cdev->lock, flags);
+	cdev->suspended = 0;
 	if (cdev->config) {
 		if (gadget->is_chipidea && !cdev->suspended) {
 			spin_unlock_irqrestore(&cdev->lock, flags);

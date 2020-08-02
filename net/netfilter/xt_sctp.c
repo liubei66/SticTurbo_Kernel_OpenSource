@@ -122,7 +122,6 @@ sctp_mt(const struct sk_buff *skb, struct xt_action_param *par)
 	sctp_sctphdr_t _sh;
 
 	if (par->fragoff != 0) {
-		pr_debug("Dropping non-first fragment.. FIXME\n");
 		return false;
 	}
 

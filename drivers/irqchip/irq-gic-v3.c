@@ -1,6 +1,5 @@
 /*
  * Copyright (C) 2013, 2014 ARM Limited, All Rights Reserved.
- * Copyright (C) 2019 XiaoMi, Inc.
  * Author: Marc Zyngier <marc.zyngier@arm.com>
  *
  * This program is free software; you can redistribute it and/or modify
@@ -35,12 +34,13 @@
 #include <linux/irqchip/arm-gic-common.h>
 #include <linux/irqchip/arm-gic-v3.h>
 #include <linux/irqchip/irq-partition-percpu.h>
+#include <linux/wakeup_reason.h>
 
 #include <asm/cputype.h>
 #include <asm/exception.h>
 #include <asm/smp_plat.h>
 #include <asm/virt.h>
-#include <linux/wakeup_reason.h>
+
 #include <linux/syscore_ops.h>
 
 #include "irq-gic-common.h"
@@ -732,13 +732,6 @@ static void gic_show_resume_irq(struct gic_chip_data *gic)
 			name = desc->action->name;
 
 		pr_warn("%s: %d triggered %s\n", __func__, irq, name);
-
-		if (irq == 15)
-			continue;
-		if (irq == 414)
-			continue;
-
-		log_wakeup_reason(irq);
 	}
 }
 
@@ -795,6 +788,8 @@ static asmlinkage void __exception_irq_entry gic_handle_irq(struct pt_regs *regs
 			err = handle_domain_irq(gic_data.domain, irqnr, regs);
 			if (err) {
 				WARN_ONCE(true, "Unexpected interrupt received!\n");
+				log_bad_wake_reason("unmapped HW IRQ %u",
+						    irqnr);
 				if (static_key_true(&supports_deactivate)) {
 					if (irqnr < 8192)
 						gic_write_dir(irqnr);
@@ -1069,7 +1064,7 @@ static void gic_raise_softirq(const struct cpumask *mask, unsigned int irq)
 static void gic_smp_init(void)
 {
 	set_smp_cross_call(gic_raise_softirq);
-	cpuhp_setup_state_nocalls(CPUHP_AP_IRQ_GICV3_STARTING,
+	cpuhp_setup_state_nocalls(CPUHP_AP_IRQ_GIC_STARTING,
 				  "AP_IRQ_GICV3_STARTING", gic_starting_cpu,
 				  NULL);
 }
@@ -1106,6 +1101,8 @@ static int gic_set_affinity(struct irq_data *d, const struct cpumask *mask_val,
 		gic_unmask_irq(d);
 	else
 		gic_dist_wait_for_rwp();
+
+	irq_data_update_effective_affinity(d, cpumask_of(cpu));
 
 	return IRQ_SET_MASK_OK_DONE;
 }
@@ -1208,6 +1205,7 @@ static int gic_irq_domain_map(struct irq_domain *d, unsigned int irq,
 		irq_domain_set_info(d, irq, hw, chip, d->host_data,
 				    handle_fasteoi_irq, NULL, NULL);
 		irq_set_probe(irq);
+		irqd_set_single_target(irq_desc_get_irq_data(irq_to_desc(irq)));
 	}
 	/* LPIs */
 	if (hw >= 8192 && hw < GIC_ID_NR) {

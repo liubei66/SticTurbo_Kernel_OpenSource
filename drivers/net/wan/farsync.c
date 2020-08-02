@@ -508,7 +508,7 @@ struct fst_card_info {
  */
 #if FST_DEBUG
 
-static int fst_debug_mask = { FST_DEBUG };
+static int fst_debug_mask = 0;
 
 /* Most common debug activity is to print something if the corresponding bit
  * is set in the debug mask. Note: this uses a non-ANSI extension in GCC to

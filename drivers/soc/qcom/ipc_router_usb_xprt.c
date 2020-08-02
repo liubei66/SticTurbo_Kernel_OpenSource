@@ -27,7 +27,7 @@
 
 #include <linux/usb/ipc_bridge.h>
 
-static int msm_ipc_router_usb_xprt_debug_mask;
+static int msm_ipc_router_usb_xprt_debug_mask = 0;
 module_param_named(debug_mask, msm_ipc_router_usb_xprt_debug_mask,
 		   int, 0664);
 

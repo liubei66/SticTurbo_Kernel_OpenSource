@@ -167,7 +167,7 @@ static struct mutex apps_data_mutex;
 #define DIAGPKT_MAX_DELAYED_RSP 0xFFFF
 
 #ifdef CONFIG_IPC_LOGGING
-uint16_t diag_debug_mask;
+uint16_t diag_debug_mask = 0;
 void *diag_ipc_log;
 #endif
 
@@ -4264,9 +4264,6 @@ static int __init diagchar_init(void)
 	ret = diag_real_time_info_init();
 	if (ret)
 		goto fail;
-	ret = diag_debugfs_init();
-	if (ret)
-		goto fail;
 	ret = diag_masks_init();
 	if (ret)
 		goto fail;
@@ -4292,7 +4289,7 @@ static int __init diagchar_init(void)
 	pr_debug("diagchar initializing ..\n");
 	driver->num = 1;
 	driver->name = ((void *)driver) + sizeof(struct diagchar_dev);
-	strlcpy(driver->name, "diag", 4);
+	strlcpy(driver->name, "diag", 5);
 	/* Get major number from kernel and initialize */
 	ret = alloc_chrdev_region(&dev, driver->minor_start,
 				    driver->num, driver->name);
@@ -4317,8 +4314,6 @@ static int __init diagchar_init(void)
 	return 0;
 
 fail:
-	pr_err("diagchar is not initialized, ret: %d\n", ret);
-	diag_debugfs_cleanup();
 	diagchar_cleanup();
 	diag_mux_exit();
 	diagfwd_peripheral_exit();
@@ -4344,9 +4339,7 @@ static void diagchar_exit(void)
 	diag_masks_exit();
 	diag_md_session_exit();
 	diag_remote_exit();
-	diag_debugfs_cleanup();
 	diagchar_cleanup();
-	pr_info("done diagchar exit\n");
 }
 
 module_init(diagchar_init);

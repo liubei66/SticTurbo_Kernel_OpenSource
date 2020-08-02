@@ -1,4 +1,4 @@
-/* Copyright (c) 2011-2018, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2011-2019, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -27,7 +27,7 @@ enum {
 	MSM_SPM_DEBUG_VCTL = 1U << 1,
 };
 
-static int msm_spm_debug_mask;
+static int msm_spm_debug_mask = 0;
 module_param_named(
 	debug_mask, msm_spm_debug_mask, int, 0664
 );
@@ -151,7 +151,7 @@ static uint32_t num_pmic_data;
 static void msm_spm_drv_flush_shadow(struct msm_spm_driver_data *dev,
 		unsigned int reg_index)
 {
-	if (!dev || !dev->reg_shadow)
+	if (!dev)
 		return;
 
 	__raw_writel(dev->reg_shadow[reg_index],

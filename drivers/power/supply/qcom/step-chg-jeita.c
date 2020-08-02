@@ -317,7 +317,7 @@ static int get_step_chg_jeita_setting_from_profile(struct step_chg_info *chip)
 					rc);
 		chip->sw_jeita_cfg_valid = false;
 	}
-
+	
 	chip->dynamic_fv_cfg_valid = true;
 	rc = read_range_data_from_node(profile_node,
 			"qcom,dynamic-fv-ranges",
@@ -345,7 +345,7 @@ static void get_config_work(struct work_struct *work)
 		if (rc == -ENODEV || rc == -EBUSY) {
 			if (chip->get_config_retry_count++
 					< GET_CONFIG_RETRY_COUNT) {
-				pr_info("bms_psy is not ready, retry: %d\n",
+				pr_debug("bms_psy is not ready, retry: %d\n",
 						chip->get_config_retry_count);
 				goto reschedule;
 			}
@@ -430,12 +430,11 @@ static int get_val(struct range_data *range, int hysteresis, int current_index,
 	}
 
 	if (threshold < range[0].low_threshold) {
-			*new_index = 0;
-			*val = range[*new_index].value;
-	}
-	else if (threshold > range[MAX_STEP_CHG_ENTRIES - 1].low_threshold) {
-			*new_index = MAX_STEP_CHG_ENTRIES - 1;
-			*val = range[*new_index].value;
+		*new_index = 0;
+		*val = range[*new_index].value;
+	} else if (threshold > range[MAX_STEP_CHG_ENTRIES - 1].low_threshold) {
+		*new_index = MAX_STEP_CHG_ENTRIES - 1;
+		*val = range[*new_index].value;
 	}
 
 	/*
@@ -615,7 +614,6 @@ reschedule:
 	/* reschedule 1000uS after the remaining time */
 	return (STEP_CHG_HYSTERISIS_DELAY_US - elapsed_us + 1000);
 }
-
 
 static int handle_jeita(struct step_chg_info *chip)
 {
@@ -914,7 +912,7 @@ int qcom_step_chg_init(struct device *dev,
 	chip->jeita_fv_config->psy_prop = POWER_SUPPLY_PROP_TEMP;
 	chip->jeita_fv_config->prop_name = "BATT_TEMP";
 	chip->jeita_fv_config->hysteresis = 5;
-
+	
 	chip->dynamic_fv_config->prop_name = "BATT_CYCLE_COUNT";
 
 	INIT_DELAYED_WORK(&chip->status_change_work, status_change_work);

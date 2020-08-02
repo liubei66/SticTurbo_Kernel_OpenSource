@@ -114,9 +114,6 @@ static DEFINE_MUTEX(rfkill_global_mutex);
 static LIST_HEAD(rfkill_fds);	/* list of open fds of /dev/rfkill */
 
 static unsigned int rfkill_default_state = 1;
-module_param_named(default_state, rfkill_default_state, uint, 0444);
-MODULE_PARM_DESC(default_state,
-		 "Default initial state for all radio types, 0 = radio off");
 
 static struct {
 	bool cur, sav;
@@ -935,10 +932,13 @@ static void rfkill_sync_work(struct work_struct *work)
 int __must_check rfkill_register(struct rfkill *rfkill)
 {
 	static unsigned long rfkill_no;
-	struct device *dev = &rfkill->dev;
+	struct device *dev;
 	int error;
 
-	BUG_ON(!rfkill);
+	if (!rfkill)
+		return -EINVAL;
+
+	dev = &rfkill->dev;
 
 	mutex_lock(&rfkill_global_mutex);
 

@@ -90,5 +90,4 @@
 		gpio = <&tlmm 32 0>;
 		enable-active-high;
 		};
-
 };
