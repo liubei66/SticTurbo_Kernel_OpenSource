@@ -3,7 +3,7 @@
  *
  * Copyright Matt Mackall <mpm@selenic.com>, 2003, 2004, 2005
  *
- * Copyright Theodore Ts'o, 1994, 1995, 1996, 1997, 1998, 1999.  All
+ * Copyright Theodore Ts'o, 1994, 1995, 1996, 1997, 1998, 1999, 2020.  All
  * rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -285,6 +285,7 @@
 #define OUTPUT_POOL_WORDS	(1 << (OUTPUT_POOL_SHIFT-5))
 #define SEC_XFER_SIZE		512
 #define EXTRACT_SIZE		10
+#define WRITE_SIZE		896
 
 #define DEBUG_RANDOM_BOOT 0
 
@@ -311,7 +312,7 @@ static int random_read_wakeup_bits = 64;
  * should wake up processes which are selecting or polling on write
  * access to /dev/random.
  */
-static int random_write_wakeup_bits = 28 * OUTPUT_POOL_WORDS;
+static int random_write_wakeup_bits = WRITE_SIZE;
 
 /*
  * Variable is currently unused by left for user space compatibility.
