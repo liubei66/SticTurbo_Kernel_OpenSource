@@ -4320,8 +4320,6 @@ static inline void show_cfq_info(struct cfq_group *cfqg)
 		}
 }
 
-
-
 static inline void mi_io_cfq_monitor(struct request *rq)
 {
 	struct cfq_queue *cfqq = RQ_CFQQ(rq);
@@ -4332,7 +4330,7 @@ static inline void mi_io_cfq_monitor(struct request *rq)
 	request_delta_time = jiffies_to_msecs(jiffies - rq->start_time);
 	if ((rq_is_sync(rq) || IO_SHOW_DETAIL) && request_delta_time > IO_ELV_LEVEL) {
 		#ifdef CONFIG_BLK_CGROUP
-		pr_info("Slow IO CFQ|%s: cfq[pid:%d rq(async:%d sync:%d) driver_rq:%d sectors:%lu io_prio:(%d %d) rw:%d] cfqg[q(BE:%d RT:%d IDLE:%d)] cfqd[rq:%d driver_rq:%d] rq_time:%d(s:%llu w:%llu)ms\n",
+		pr_debug("Slow IO CFQ|%s: cfq[pid:%d rq(async:%d sync:%d) driver_rq:%d sectors:%lu io_prio:(%d %d) rw:%d] cfqg[q(BE:%d RT:%d IDLE:%d)] cfqd[rq:%d driver_rq:%d] rq_time:%d(s:%llu w:%llu)ms\n",
 			rq_is_sync(rq) ? "Sync Request" : "Async Request",
 			cfqq->pid, cfqq->queued[0], cfqq->queued[1],
 			cfqq->dispatched, cfqq->nr_sectors,
@@ -4344,7 +4342,7 @@ static inline void mi_io_cfq_monitor(struct request *rq)
 			request_delta_time, (sched_clock() - rq_io_start_time_ns(rq)) / NSEC_PER_MSEC,
 			(rq_io_start_time_ns(rq) - rq_start_time_ns(rq)) / NSEC_PER_MSEC);
 		#else
-		pr_info("Slow IO CFQ|%s: cfq[pid:%d rq(async:%d sync:%d) driver_rq:%d sectors:%lu io_prio:(%d %d) rw:%d] cfqg[q(BE:%d RT:%d IDLE:%d)] cfqd[rq:%d driver_rq:%d] rq_time:%dms\n",
+		pr_debug("Slow IO CFQ|%s: cfq[pid:%d rq(async:%d sync:%d) driver_rq:%d sectors:%lu io_prio:(%d %d) rw:%d] cfqg[q(BE:%d RT:%d IDLE:%d)] cfqd[rq:%d driver_rq:%d] rq_time:%dms\n",
 			rq_is_sync(rq) ? "Sync Request" : "Async Request",
 			cfqq->pid, cfqq->queued[0], cfqq->queued[1],
 			cfqq->dispatched, cfqq->nr_sectors,
