@@ -2473,8 +2473,9 @@ void kgsl_idle_check(struct work_struct *work)
 
 	requested_state = device->requested_state;
 
-	if (device->state == KGSL_STATE_ACTIVE
-		   || device->state ==  KGSL_STATE_NAP) {
+	if ((requested_state != KGSL_STATE_NONE) &&
+		(device->state == KGSL_STATE_ACTIVE
+			|| device->state ==  KGSL_STATE_NAP)) {
 
 		if (!atomic_read(&device->active_cnt)) {
 			spin_lock(&device->submit_lock);
@@ -3182,7 +3183,7 @@ int kgsl_active_count_wait(struct kgsl_device *device, int count)
 		long ret;
 
 		mutex_unlock(&device->mutex);
-		ret = wait_event_timeout(device->active_cnt_wq,
+		ret = wait_event_interruptible_timeout(device->active_cnt_wq,
 			_check_active_count(device, count), wait_jiffies);
 		mutex_lock(&device->mutex);
 		result = ret == 0 ? -ETIMEDOUT : 0;

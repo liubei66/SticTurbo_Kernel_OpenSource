@@ -55,15 +55,6 @@ config DEVFREQ_GOV_POWERSAVE
 	  the DEVFREQ framework returns the lowest frequency available
 	  at any time.
 
-config DEVFREQ_GOV_USERSPACE
-	tristate "Userspace"
-	help
-	  Sets the frequency at the user specified one.
-	  This governor returns the user configured frequency if there
-	  has been an input to /sys/devices/.../power/devfreq_set_freq.
-	  Otherwise, the governor does not change the frequency
-	  given at the initialization.
-
 config DEVFREQ_GOV_PASSIVE
 	tristate "Passive"
 	help
@@ -79,6 +70,11 @@ config DEVFREQ_GOV_CPUFREQ
 	  Chooses frequency based on the online CPUs' current frequency and a
 	  CPU frequency to device frequency mapping table(s). This governor
 	  can be useful for controlling devices such as DDR, cache, CCI, etc.
+	  
+config SIMPLE_GPU_ALGORITHM
+	bool "Simple GPU algorithm"
+	help
+	  Simple user configurable GPU controlling algorithm
 
 config QCOM_BIMC_BWMON
 	tristate "QCOM BIMC Bandwidth monitor hardware"
@@ -216,7 +212,6 @@ config DEVFREQ_SIMPLE_DEV
 	tristate "Device driver for simple clock device with no status info"
 	select DEVFREQ_GOV_PERFORMANCE
 	select DEVFREQ_GOV_POWERSAVE
-	select DEVFREQ_GOV_USERSPACE
 	select DEVFREQ_GOV_CPUFREQ
 	help
 	  Device driver for simple devices that control their frequency using
@@ -227,7 +222,6 @@ config QCOM_DEVFREQ_DEVBW
 	depends on ARCH_QCOM
 	select DEVFREQ_GOV_PERFORMANCE
 	select DEVFREQ_GOV_POWERSAVE
-	select DEVFREQ_GOV_USERSPACE
 	select DEVFREQ_GOV_CPUFREQ
 	default n
 	help

@@ -18,6 +18,7 @@
 #include <linux/string.h>
 #include <linux/mm.h>
 #include <linux/fs.h>
+#include <linux/fscrypt.h>
 #include <linux/fsnotify.h>
 #include <linux/slab.h>
 #include <linux/init.h>
@@ -791,7 +792,6 @@ void dput(struct dentry *dentry)
 		return;
 
 repeat:
-	might_sleep();
 
 	rcu_read_lock();
 	if (likely(fast_dput(dentry))) {
@@ -2878,6 +2878,7 @@ static void __d_move(struct dentry *dentry, struct dentry *target,
 			fsnotify_update_flags(target);
 		fsnotify_update_flags(dentry);
 	}
+	fscrypt_handle_d_move(dentry);
 
 	write_seqcount_end(&target->d_seq);
 	write_seqcount_end(&dentry->d_seq);

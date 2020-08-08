@@ -214,32 +214,6 @@ struct tag_stat {
 	struct data_counters *parent_counters;
 };
 
-struct system_app_data_counters {
-	struct byte_packet_counters bpc[IFS_MAX_DIRECTIONS][IFS_MAX_PROTOS];
-};
-
-static inline uint64_t dc_system_app_sum_bytes(struct system_app_data_counters *counters,
-				    enum ifs_tx_rx direction)
-{
-	return counters->bpc[direction][IFS_TCP].bytes
-		+ counters->bpc[direction][IFS_UDP].bytes
-		+ counters->bpc[direction][IFS_PROTO_OTHER].bytes;
-}
-
-static inline uint64_t dc_system_app_sum_packets(struct system_app_data_counters *counters,
-				      enum ifs_tx_rx direction)
-{
-	return counters->bpc[direction][IFS_TCP].packets
-		+ counters->bpc[direction][IFS_UDP].packets
-		+ counters->bpc[direction][IFS_PROTO_OTHER].packets;
-}
-
-struct system_app_stat_node {
-	struct rb_node node;
-	char package[100];
-	struct system_app_data_counters counters;
-};
-
 struct iface_stat {
 	struct list_head list;  /* in iface_stat_list */
 	char *ifname;
@@ -265,10 +239,6 @@ struct iface_stat {
 
 	struct rb_root tag_stat_tree;
 	spinlock_t tag_stat_list_lock;
-
-	/* This is used to record the network data of system app */
-	struct rb_root system_app_stas_tree;
-	spinlock_t system_app_stats_lock;
 };
 
 /* This is needed to create proc_dir_entries from atomic context. */
@@ -289,7 +259,7 @@ struct sock_tag {
 	/* Used to associate with a given pid */
 	struct list_head list;   /* in proc_qtu_data.sock_tag_list */
 	pid_t pid;
-	char pname[100]; /*the package name using this socket*/
+
 	tag_t tag;
 };
 

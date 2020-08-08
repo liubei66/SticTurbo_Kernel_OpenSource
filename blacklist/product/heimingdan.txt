@@ -1,0 +1,47 @@
+* Copyright (C) 2020 Amktiao The Linux Foundation. All rights reserved.
+*
+* Users For BLACKLIST
+*
+* Author:         Amktiao
+* Date:           20/08/08
+* History:-
+* --------------------------------------------------------------------
+
+*
+* BLACKLIST
+*
+
+-- 469586385
+-- 3362668214
+-- 339293002
+-- 1138705738 //debug
+-- 878265170
+-- 2558541786
+-- 2302563948
+-- 1926119219
+-- 806483413
+-- 2439716046
+-- 2732716376
+-- 439953034
+-- 1528564858
+-- 2105885450
+
+*
+* FILE BLACKLIST
+*
+-- /sdcard/id.txt
+-- /data/media/0/id.txt
+-- /vendor/eternalwitch/*
+-- /sbin/init.stickernel.rc //debug
+-- /system/zm_miuiron
+-- /sbin/eternalwitch*
+-- /persist/360-tools //debug
+# -- /init.qcom.rc //debug
+-- /system/bin/dynzram
+-- /overlay/eternalwitch_earlyinit
+-- /op*
+
+*
+* COOLAPK BLACKLIST
+*
+-- /proc/device_verify * HEAD coolapk.db

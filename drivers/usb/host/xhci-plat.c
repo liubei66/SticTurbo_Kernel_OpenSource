@@ -2,7 +2,7 @@
  * xhci-plat.c - xHCI host controller driver platform Bus Glue.
  *
  * Copyright (C) 2012 Texas Instruments Incorporated - http://www.ti.com
- * Copyright (C) 2019 XiaoMi, Inc.
+ * Copyright (C) 2018 XiaoMi, Inc.
  * Author: Sebastian Andrzej Siewior <bigeasy@linutronix.de>
  *
  * A lot of code borrowed from the Linux xHCI driver.
@@ -224,7 +224,7 @@ static int xhci_plat_probe(struct platform_device *pdev)
 	sysdev = &pdev->dev;
 
 	if (sysdev->parent && !sysdev->of_node && sysdev->parent->of_node)
-		dwc =sysdev->parent;
+		dwc = sysdev->parent;
 
 	phydev = &pdev->dev;
 	if (sysdev->parent && !sysdev->of_node && sysdev->parent->of_node)

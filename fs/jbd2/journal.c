@@ -4,7 +4,6 @@
  * Written by Stephen C. Tweedie <sct@redhat.com>, 1998
  *
  * Copyright 1998 Red Hat corp --- All Rights Reserved
- * Copyright (C) 2019 XiaoMi, Inc.
  *
  * This file is part of the Linux kernel and is made available under
  * the terms of the GNU General Public License, version 2, or at your
@@ -44,7 +43,6 @@
 #include <linux/backing-dev.h>
 #include <linux/bitops.h>
 #include <linux/ratelimit.h>
-#include <linux/mi_io.h>
 
 #define CREATE_TRACE_POINTS
 #include <trace/events/jbd2.h>
@@ -741,9 +739,6 @@ int jbd2_log_wait_commit(journal_t *journal, tid_t tid)
 int jbd2_complete_transaction(journal_t *journal, tid_t tid)
 {
 	int	need_to_wait = 1;
-	int 	ret;
-	unsigned long start_time;
-	unsigned int  delta;
 
 	read_lock(&journal->j_state_lock);
 	if (journal->j_running_transaction &&
@@ -761,19 +756,7 @@ int jbd2_complete_transaction(journal_t *journal, tid_t tid)
 	if (!need_to_wait)
 		return 0;
 wait_commit:
-	start_time = jiffies;
-	ret = jbd2_log_wait_commit(journal, tid);
-	if (IO_SHOW_LOG) {
-		delta = jiffies_to_msecs(jiffies - start_time);
-		if (delta > IO_JBD2_LEVEL) {
-			pr_info("Slow IO Jbd2|jbd2_log_wait_commit: %d(%s) prio(%d|%d) time(%dms)\n",
-				current->pid, current->comm,
-				current->policy, current->prio,
-				delta);
-		}
-	}
-
-	return ret;
+	return jbd2_log_wait_commit(journal, tid);
 }
 EXPORT_SYMBOL(jbd2_complete_transaction);
 
@@ -2572,10 +2555,6 @@ void jbd2_journal_init_jbd_inode(struct jbd2_inode *jinode, struct inode *inode)
 	jinode->i_next_transaction = NULL;
 	jinode->i_vfs_inode = inode;
 	jinode->i_flags = 0;
-	jinode->i_dirty_start = 0;
-	jinode->i_dirty_end = 0;
-	jinode->i_next_dirty_start = 0;
-	jinode->i_next_dirty_end = 0;
 	INIT_LIST_HEAD(&jinode->i_list);
 }
 

@@ -1,4 +1,4 @@
-/* Copyright (c) 2008-2018, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2008-2019, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -163,7 +163,9 @@ struct kgsl_driver {
 	struct workqueue_struct *workqueue;
 	struct workqueue_struct *mem_workqueue;
 	struct kthread_worker worker;
+	struct kthread_worker low_prio_worker;
 	struct task_struct *worker_thread;
+	struct task_struct *low_prio_worker_thread;
 };
 
 extern struct kgsl_driver kgsl_driver;
@@ -197,6 +199,8 @@ struct kgsl_memdesc_ops {
 #define KGSL_MEMDESC_TZ_LOCKED BIT(7)
 /* The memdesc is allocated through contiguous memory */
 #define KGSL_MEMDESC_CONTIG BIT(8)
+/* For global buffers, randomly assign an address from the region */
+#define KGSL_MEMDESC_RANDOM BIT(9)
 
 /**
  * struct kgsl_memdesc - GPU memory object descriptor
@@ -289,6 +293,14 @@ struct kgsl_mem_entry {
 struct kgsl_device_private;
 struct kgsl_event_group;
 
+enum kgsl_priority {
+	KGSL_EVENT_REGULAR_PRIORITY = 0,
+	KGSL_EVENT_LOW_PRIORITY,
+	KGSL_EVENT_NUM_PRIORITIES
+};
+
+const char *prio_to_string(enum kgsl_priority prio);
+
 typedef void (*kgsl_event_func)(struct kgsl_device *, struct kgsl_event_group *,
 		void *, int);
 
@@ -315,6 +327,7 @@ struct kgsl_event {
 	unsigned int created;
 	struct kthread_work work;
 	int result;
+	enum kgsl_priority prio;
 	struct kgsl_event_group *group;
 };
 

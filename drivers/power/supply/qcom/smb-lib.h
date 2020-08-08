@@ -85,15 +85,16 @@ enum hvdcp3_type {
 #define DCIN_ADAPTER_VOTER		"DCIN_ADAPTER_VOTER"
 #define CHG_AWAKE_VOTER			"CHG_AWAKE_VOTER"
 #define DC_AWAKE_VOTER			"DC_AWAKE_VOTER"
-#define CC_FLOAT_VOTER         "CC_FLOAT_VOTER"
+#define CC_FLOAT_VOTER			"CC_FLOAT_VOTER"
 #define WBC_VOTER			"WBC_VOTER"
 #define MOISTURE_VOTER			"MOISTURE_VOTER"
 #define HVDCP2_ICL_VOTER		"HVDCP2_ICL_VOTER"
 #define OV_VOTER			"OV_VOTER"
 #define FG_ESR_VOTER			"FG_ESR_VOTER"
 #define FCC_STEPPER_VOTER		"FCC_STEPPER_VOTER"
-#define DCIN_USER_VOTER                "DCIN_USER_VOTER"
-#define UNSTANDARD_QC2_VOTER			"UNSTANDARD_QC2_VOTER"
+#define PD_NOT_SUPPORTED_VOTER		"PD_NOT_SUPPORTED_VOTER"
+#define DCIN_USER_VOTER			"DCIN_USER_VOTER"
+#define UNSTANDARD_QC2_VOTER		"UNSTANDARD_QC2_VOTER"
 #define PD_NOT_SUPPORTED_VOTER		"PD_NOT_SUPPORTED_VOTER"
 
 #define VCONN_MAX_ATTEMPTS	3
@@ -104,7 +105,7 @@ enum hvdcp3_type {
 #define CC_FLOAT_WORK_START_DELAY_MS   700
 #define BATT_TEMP_CRITICAL_LOW     50
 #define BATT_TEMP_COOL_THR     150
-#define CUTOFF_VOL_THR			3400000  //Cutoff voltage threshold
+#define CUTOFF_VOL_THR			3400000
 
 /* QC2.0 voltage UV threshold 7.8V */
 #define QC2_HVDCP_VOL_UV_THR		7800000
@@ -364,11 +365,11 @@ struct smb_charger {
 	struct delayed_work	reg_work;
 	struct delayed_work	uusb_otg_work;
 	struct delayed_work	bb_removal_work;
-	struct delayed_work     monitor_low_temp_work;
+	struct delayed_work	monitor_low_temp_work;
 	struct delayed_work	cc_float_charge_work;
 	struct delayed_work	typec_reenable_work;
-	struct delayed_work     charger_type_recheck;
-	struct delayed_work     connector_health_work;
+	struct delayed_work	charger_type_recheck;
+	struct delayed_work	connector_health_work;
 	struct delayed_work	dc_input_current_work;
 	struct delayed_work	check_vbus_work;
 
@@ -399,7 +400,7 @@ struct smb_charger {
 	int			fake_batt_status;
 	bool			step_chg_enabled;
 	bool			sw_jeita_enabled;
-	bool                    dynamic_fv_enabled;
+	bool			dynamic_fv_enabled;
 	bool			wireless_charging_flag;
 	bool			wireless_support;
 	bool			is_hdc;
@@ -473,6 +474,7 @@ struct smb_charger {
 	int                     precheck_charger_type;
 
 };
+
 enum quick_charge_type {
 	QUICK_CHARGE_NORMAL = 0,
 	QUICK_CHARGE_FAST,
@@ -485,6 +487,7 @@ struct quick_charge {
 	enum power_supply_type adap_type;
 	enum quick_charge_type adap_cap;
 };
+
 int smblib_read(struct smb_charger *chg, u16 addr, u8 *val);
 int smblib_masked_write(struct smb_charger *chg, u16 addr, u8 mask, u8 val);
 int smblib_write(struct smb_charger *chg, u16 addr, u8 val);
