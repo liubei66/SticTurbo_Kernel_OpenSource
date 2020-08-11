@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012-2014, 2016, 2018 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2012-2014, 2016 The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -411,47 +411,31 @@ static int pmic_gpio_config_get(struct pinctrl_dev *pctldev,
 
 	switch (param) {
 	case PIN_CONFIG_DRIVE_PUSH_PULL:
-		if (pad->buffer_type != PMIC_GPIO_OUT_BUF_CMOS)
-			return -EINVAL;
-		arg = 1;
+		arg = pad->buffer_type == PMIC_GPIO_OUT_BUF_CMOS;
 		break;
 	case PIN_CONFIG_DRIVE_OPEN_DRAIN:
-		if (pad->buffer_type != PMIC_GPIO_OUT_BUF_OPEN_DRAIN_NMOS)
-			return -EINVAL;
-		arg = 1;
+		arg = pad->buffer_type == PMIC_GPIO_OUT_BUF_OPEN_DRAIN_NMOS;
 		break;
 	case PIN_CONFIG_DRIVE_OPEN_SOURCE:
-		if (pad->buffer_type != PMIC_GPIO_OUT_BUF_OPEN_DRAIN_PMOS)
-			return -EINVAL;
-		arg = 1;
+		arg = pad->buffer_type == PMIC_GPIO_OUT_BUF_OPEN_DRAIN_PMOS;
 		break;
 	case PIN_CONFIG_BIAS_PULL_DOWN:
-		if (pad->pullup != PMIC_GPIO_PULL_DOWN)
-			return -EINVAL;
-		arg = 1;
+		arg = pad->pullup == PMIC_GPIO_PULL_DOWN;
 		break;
 	case PIN_CONFIG_BIAS_DISABLE:
-		if (pad->pullup != PMIC_GPIO_PULL_DISABLE)
-			return -EINVAL;
-		arg = 1;
+		arg = pad->pullup = PMIC_GPIO_PULL_DISABLE;
 		break;
 	case PIN_CONFIG_BIAS_PULL_UP:
-		if (pad->pullup != PMIC_GPIO_PULL_UP_30)
-			return -EINVAL;
-		arg = 1;
+		arg = pad->pullup == PMIC_GPIO_PULL_UP_30;
 		break;
 	case PIN_CONFIG_BIAS_HIGH_IMPEDANCE:
-		if (pad->is_enabled)
-			return -EINVAL;
-		arg = 1;
+		arg = !pad->is_enabled;
 		break;
 	case PIN_CONFIG_POWER_SOURCE:
 		arg = pad->power_source;
 		break;
 	case PIN_CONFIG_INPUT_ENABLE:
-		if (!pad->input_enabled)
-			return -EINVAL;
-		arg = 1;
+		arg = pad->input_enabled;
 		break;
 	case PIN_CONFIG_OUTPUT:
 		arg = pad->out_value;
@@ -538,7 +522,7 @@ static int pmic_gpio_config_set(struct pinctrl_dev *pctldev, unsigned int pin,
 			pad->pullup = arg;
 			break;
 		case PMIC_GPIO_CONF_STRENGTH:
-			if (arg > PMIC_GPIO_STRENGTH_HIGH)
+			if (arg > PMIC_GPIO_STRENGTH_LOW)
 				return -EINVAL;
 			pad->strength = arg;
 			break;
@@ -1041,23 +1025,10 @@ static int pmic_gpio_probe(struct platform_device *pdev)
 		goto err_chip;
 	}
 
-	/*
-	 * For DeviceTree-supported systems, the gpio core checks the
-	 * pinctrl's device node for the "gpio-ranges" property.
-	 * If it is present, it takes care of adding the pin ranges
-	 * for the driver. In this case the driver can skip ahead.
-	 *
-	 * In order to remain compatible with older, existing DeviceTree
-	 * files which don't set the "gpio-ranges" property or systems that
-	 * utilize ACPI the driver has to call gpiochip_add_pin_range().
-	 */
-	if (!of_property_read_bool(dev->of_node, "gpio-ranges")) {
-		ret = gpiochip_add_pin_range(&state->chip, dev_name(dev), 0, 0,
-					     npins);
-		if (ret) {
-			dev_err(dev, "failed to add pin range\n");
-			goto err_range;
-		}
+	ret = gpiochip_add_pin_range(&state->chip, dev_name(dev), 0, 0, npins);
+	if (ret) {
+		dev_err(dev, "failed to add pin range\n");
+		goto err_range;
 	}
 
 	return 0;

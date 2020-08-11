@@ -103,7 +103,7 @@ static void bump_cpu_timer(struct k_itimer *timer,
 			continue;
 
 		timer->it.cpu.expires += incr;
-		timer->it_overrun += 1LL << i;
+		timer->it_overrun += 1 << i;
 		delta -= incr;
 	}
 }
@@ -1253,8 +1253,7 @@ void set_process_cpu_timer(struct task_struct *tsk, unsigned int clock_idx,
 	unsigned long long now = 0;
 
 	WARN_ON_ONCE(clock_idx == CPUCLOCK_SCHED);
-	if (cpu_timer_sample_group(clock_idx, tsk, &now))
-		return;
+	cpu_timer_sample_group(clock_idx, tsk, &now);
 
 	if (oldval) {
 		/*

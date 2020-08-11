@@ -114,7 +114,7 @@ static int vss_handle_handshake(struct hv_vss_msg *vss_msg)
 	default:
 		return -EINVAL;
 	}
-	hv_poll_channel(vss_transaction.recv_channel, vss_poll_wrapper);
+	vss_transaction.state = HVUTIL_READY;
 	pr_debug("VSS: userspace daemon ver. %d registered\n", dm_reg_value);
 	return 0;
 }
@@ -264,6 +264,7 @@ void hv_vss_onchannelcallback(void *context)
 			 */
 
 			vss_transaction.recv_len = recvlen;
+			vss_transaction.recv_channel = channel;
 			vss_transaction.recv_req_id = requestid;
 			vss_transaction.msg = (struct hv_vss_msg *)vss_msg;
 
@@ -339,7 +340,6 @@ hv_vss_init(struct hv_util_service *srv)
 		return -ENOTSUPP;
 	}
 	recv_buffer = srv->recv_buffer;
-	vss_transaction.recv_channel = srv->channel;
 
 	/*
 	 * When this driver loads, the user level daemon that

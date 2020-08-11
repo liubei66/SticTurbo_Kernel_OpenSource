@@ -17,7 +17,6 @@
 #include <asm/entry.h>
 #include <asm/arcregs.h>
 #include <asm/cache.h>
-#include <asm/irqflags.h>
 
 .macro CPU_EARLY_SETUP
 
@@ -48,15 +47,6 @@
 	sr	r5, [ARC_REG_DC_CTRL]
 
 1:
-
-#ifdef CONFIG_ISA_ARCV2
-	; Unaligned access is disabled at reset, so re-enable early as
-	; gcc 7.3.1 (ARC GNU 2018.03) onwards generates unaligned access
-	; by default
-	lr	r5, [status32]
-	bset	r5, r5, STATUS_AD_BIT
-	kflag	r5
-#endif
 .endm
 
 	.section .init.text, "ax",@progbits

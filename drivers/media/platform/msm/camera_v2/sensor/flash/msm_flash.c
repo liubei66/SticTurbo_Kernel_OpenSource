@@ -1,5 +1,5 @@
 /* Copyright (c) 2009-2017, The Linux Foundation. All rights reserved.
- * Copyright (C) 2018 XiaoMi, Inc.
+ * Copyright (C) 2019 XiaoMi, Inc.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -132,15 +132,15 @@ static enum led_brightness msm_flashlight_brightness_get(struct led_classdev *le
 }
 
 static struct led_classdev msm_pmic_flashlight_led = {
-	.name           = "flashlight",
-	.brightness_set = msm_pmic_flashlight_brightness_set,
-	.brightness_get = msm_flashlight_brightness_get,
-	.brightness     = LED_OFF,
+       .name           = "flashlight",
+       .brightness_set = msm_pmic_flashlight_brightness_set,
+       .brightness_get = msm_flashlight_brightness_get,
+       .brightness     = LED_OFF,
 };
 int32_t msm_flashlight_create_classdev(struct platform_device *pdev,
 		void *data)
 {
-	int32_t rc = 0;
+	int32_t i, rc = 0;
 	struct msm_flash_ctrl_t *fctrl =
 		(struct msm_flash_ctrl_t *)data;
 
@@ -153,8 +153,7 @@ int32_t msm_flashlight_create_classdev(struct platform_device *pdev,
 
 	rc = led_classdev_register(&pdev->dev, &msm_pmic_flashlight_led);
 	if (rc) {
-		pr_err("Failed to register %s led dev. rc = %d\n",
-		       msm_pmic_flashlight_led.name, rc);
+		pr_err("Failed to register %d led dev. rc = %d\n", i, rc);
 		return rc;
 	}
 	return 0;
@@ -437,7 +436,15 @@ static int32_t msm_flash_gpio_init(
 static int32_t msm_flash_i2c_release(
 	struct msm_flash_ctrl_t *flash_ctrl)
 {
-	int32_t rc;
+	int32_t rc = 0;
+
+	if (!(&flash_ctrl->power_info) || !(&flash_ctrl->flash_i2c_client)) {
+		pr_err("%s:%d failed: %pK %pK\n",
+			__func__, __LINE__, &flash_ctrl->power_info,
+			&flash_ctrl->flash_i2c_client);
+		flash_ctrl->flash_state = MSM_CAMERA_FLASH_RELEASE;
+		return -EINVAL;
+	}
 
 	rc = msm_camera_power_down(&flash_ctrl->power_info,
 		flash_ctrl->flash_device_type,
@@ -844,6 +851,7 @@ static int32_t msm_flash_config(struct msm_flash_ctrl_t *flash_ctrl,
 			(flash_ctrl->flash_state == MSM_CAMERA_FLASH_INIT)) {
 			rc = flash_ctrl->func_tbl->camera_flash_high(
 				flash_ctrl, flash_data);
+
 			g_flashlight_brightness  = 100;
 			if (!rc)
 				flash_ctrl->flash_state = MSM_CAMERA_FLASH_HIGH;

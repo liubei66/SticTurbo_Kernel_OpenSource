@@ -256,6 +256,7 @@ void hv_fcopy_onchannelcallback(void *context)
 		 */
 
 		fcopy_transaction.recv_len = recvlen;
+		fcopy_transaction.recv_channel = channel;
 		fcopy_transaction.recv_req_id = requestid;
 		fcopy_transaction.fcopy_msg = fcopy_msg;
 
@@ -322,7 +323,6 @@ static void fcopy_on_reset(void)
 int hv_fcopy_init(struct hv_util_service *srv)
 {
 	recv_buffer = srv->recv_buffer;
-	fcopy_transaction.recv_channel = srv->channel;
 
 	init_completion(&release_event);
 	/*

@@ -1275,13 +1275,9 @@ static struct page **__iommu_alloc_buffer(struct device *dev, size_t size,
 	while (count) {
 		int j, order = __fls(count);
 
-		pages[i] = alloc_pages(order ? (gfp | __GFP_NORETRY) &
-					~__GFP_RECLAIM : gfp, order);
-		while (!pages[i] && order) {
-			order--;
-			pages[i] = alloc_pages(order ? (gfp | __GFP_NORETRY) &
-					~__GFP_RECLAIM : gfp, order);
-		}
+		pages[i] = alloc_pages(gfp, order);
+		while (!pages[i] && order)
+			pages[i] = alloc_pages(gfp, --order);
 		if (!pages[i])
 			goto error;
 
@@ -2039,7 +2035,8 @@ void arm_iommu_detach_device(struct device *dev)
 	iommu_domain_get_attr(mapping->domain, DOMAIN_ATTR_S1_BYPASS,
 					&s1_bypass);
 
-	msm_dma_unmap_all_for_dev(dev);
+	if (msm_dma_unmap_all_for_dev(dev))
+		dev_warn(dev, "IOMMU detach with outstanding mappings\n");
 
 	iommu_detach_device(mapping->domain, dev);
 	kref_put(&mapping->kref, release_iommu_mapping);

@@ -392,7 +392,7 @@ static struct fg_alg_flag pmi8998_v2_alg_flags[] = {
 	},
 };
 
-static int fg_gen3_debug_mask;
+static int fg_gen3_debug_mask = FG_IRQ | FG_STATUS;
 module_param_named(
 	debug_mask, fg_gen3_debug_mask, int, S_IRUSR | S_IWUSR
 );
@@ -409,8 +409,6 @@ module_param_named(
 
 static int fg_restart;
 static bool fg_sram_dump;
-
-#define FG_RATE_LIM_MS (2 * MSEC_PER_SEC)
 
 /* All getters HERE */
 
@@ -1027,6 +1025,13 @@ static int fg_get_batt_profile(struct fg_chip *chip)
 	if (rc < 0) {
 		pr_err("battery cc_cv threshold unavailable, rc:%d\n", rc);
 		chip->bp.vbatt_full_mv = -EINVAL;
+	}
+
+	rc = of_property_read_u32(profile_node, "qcom,nom-batt-capacity-mah",
+			&chip->bp.nom_cap_uah);
+	if (rc < 0) {
+		pr_err("battery nominal capacity unavailable, rc:%d\n", rc);
+		chip->bp.nom_cap_uah = -EINVAL;
 	}
 
 	data = of_get_property(profile_node, "qcom,fg-profile-data", &len);
@@ -2581,7 +2586,7 @@ static void fg_ttf_update(struct fg_chip *chip)
 	chip->ttf.last_ttf = 0;
 	chip->ttf.last_ms = 0;
 	mutex_unlock(&chip->ttf.lock);
-	queue_delayed_work(system_power_efficient_wq, &chip->ttf_work, msecs_to_jiffies(delay_ms));
+	schedule_delayed_work(&chip->ttf_work, msecs_to_jiffies(delay_ms));
 }
 
 static void restore_cycle_counter(struct fg_chip *chip)
@@ -2620,7 +2625,7 @@ static void clear_cycle_counter(struct fg_chip *chip)
 	}
 	rc = fg_sram_write(chip, CYCLE_COUNT_WORD, CYCLE_COUNT_OFFSET,
 			(u8 *)&chip->cyc_ctr.count,
-			sizeof(chip->cyc_ctr.count) / (sizeof(u8 *)),
+			sizeof(chip->cyc_ctr.count) / sizeof(u8 *),
 			FG_IMA_DEFAULT);
 	if (rc < 0)
 		pr_err("failed to clear cycle counter rc=%d\n", rc);
@@ -3161,7 +3166,7 @@ static void sram_dump_work(struct work_struct *work)
 	fg_dbg(chip, FG_STATUS, "SRAM Dump done at %lld.%d\n",
 		quotient, remainder);
 resched:
-	queue_delayed_work(system_power_efficient_wq, &chip->sram_dump_work,
+	schedule_delayed_work(&chip->sram_dump_work,
 			msecs_to_jiffies(fg_sram_dump_period_ms));
 }
 
@@ -3189,7 +3194,7 @@ static int fg_sram_dump_sysfs(const char *val, const struct kernel_param *kp)
 
 	chip = power_supply_get_drvdata(bms_psy);
 	if (fg_sram_dump)
-		queue_delayed_work(system_power_efficient_wq, &chip->sram_dump_work,
+		schedule_delayed_work(&chip->sram_dump_work,
 				msecs_to_jiffies(fg_sram_dump_period_ms));
 	else
 		cancel_delayed_work_sync(&chip->sram_dump_work);
@@ -3253,7 +3258,7 @@ module_param_cb(restart, &fg_restart_ops, &fg_restart, 0644);
 static int fg_get_time_to_full_locked(struct fg_chip *chip, int *val)
 {
 	int rc, ibatt_avg, vbatt_avg, rbatt, msoc, full_soc, act_cap_mah,
-		i_cc2cv = 0, soc_cc2cv, tau, divisor, iterm, ttf_mode,
+		i_cc2cv, soc_cc2cv, tau, divisor, iterm, ttf_mode,
 		i, soc_per_step, msoc_this_step, msoc_next_step,
 		ibatt_this_step, t_predicted_this_step, ttf_slope,
 		t_predicted_cv, t_predicted = 0;
@@ -3756,7 +3761,7 @@ static void ttf_work(struct work_struct *work)
 		/* keep the wake lock and prime the IBATT and VBATT buffers */
 		if (ttf < 0) {
 			/* delay for one FG cycle */
-			queue_delayed_work(system_power_efficient_wq, &chip->ttf_work,
+			schedule_delayed_work(&chip->ttf_work,
 							msecs_to_jiffies(1500));
 			mutex_unlock(&chip->ttf.lock);
 			return;
@@ -3773,7 +3778,7 @@ static void ttf_work(struct work_struct *work)
 	}
 
 	/* recurse every 10 seconds */
-	queue_delayed_work(system_power_efficient_wq, &chip->ttf_work, msecs_to_jiffies(10000));
+	schedule_delayed_work(&chip->ttf_work, msecs_to_jiffies(10000));
 end_work:
 	vote(chip->awake_votable, TTF_PRIMING, false, 0);
 	mutex_unlock(&chip->ttf.lock);
@@ -3786,38 +3791,7 @@ static int fg_psy_get_property(struct power_supply *psy,
 				       union power_supply_propval *pval)
 {
 	struct fg_chip *chip = power_supply_get_drvdata(psy);
-	struct fg_saved_data *sd = chip->saved_data + psp;
-	union power_supply_propval typec_sts = { .intval = -1 };
 	int rc = 0;
-
-	switch (psp) {
-	case POWER_SUPPLY_PROP_CHARGE_FULL_DESIGN:
-	case POWER_SUPPLY_PROP_RESISTANCE_ID:
-	case POWER_SUPPLY_PROP_VOLTAGE_MAX_DESIGN:
-	case POWER_SUPPLY_PROP_CYCLE_COUNT_ID:
-	case POWER_SUPPLY_PROP_CHARGE_NOW:
-	case POWER_SUPPLY_PROP_CHARGE_FULL:
-	case POWER_SUPPLY_PROP_SOC_REPORTING_READY:
-		/* These props don't require a fg query; don't ratelimit them */
-	case POWER_SUPPLY_PROP_CAPACITY:
-	case POWER_SUPPLY_PROP_STATUS:
-		/* These props affect interactive experience in user space */
-		break;
-	default:
-		if (!sd->last_req_expires)
-			break;
-
-		if (usb_psy_initialized(chip))
-			power_supply_get_property(chip->usb_psy,
-				POWER_SUPPLY_PROP_TYPEC_MODE, &typec_sts);
-
-		if (typec_sts.intval == POWER_SUPPLY_TYPEC_NONE &&
-			time_before(jiffies, sd->last_req_expires)) {
-			*pval = sd->val;
-			return 0;
-		}
-		break;
-	}
 
 	switch (psp) {
 	case POWER_SUPPLY_PROP_CAPACITY:
@@ -3876,7 +3850,10 @@ static int fg_psy_get_property(struct power_supply *psy,
 		rc = fg_get_sram_prop(chip, FG_SRAM_OCV, &pval->intval);
 		break;
 	case POWER_SUPPLY_PROP_CHARGE_FULL_DESIGN:
-		pval->intval = chip->cl.nom_cap_uah;
+		if (-EINVAL != chip->bp.nom_cap_uah)
+			pval->intval = chip->bp.nom_cap_uah * 1000;
+		else
+			pval->intval = chip->cl.nom_cap_uah;
 		break;
 	case POWER_SUPPLY_PROP_RESISTANCE_ID:
 		pval->intval = chip->batt_id_ohms;
@@ -3946,9 +3923,6 @@ static int fg_psy_get_property(struct power_supply *psy,
 	if (rc < 0)
 		return -ENODATA;
 
-	sd->val = *pval;
-	sd->last_req_expires = jiffies + msecs_to_jiffies(FG_RATE_LIM_MS);
-
 	return 0;
 }
 
@@ -4003,6 +3977,14 @@ static int fg_psy_set_property(struct power_supply *psy,
 		}
 		break;
 	case POWER_SUPPLY_PROP_CHARGE_FULL:
+		if (chip->cl.active) {
+			pr_warn("Capacity learning active!\n");
+			return 0;
+		}
+		if (pval->intval <= 0 || pval->intval > chip->cl.nom_cap_uah) {
+			pr_err("charge_full is out of bounds\n");
+			return -EINVAL;
+		}
 		chip->cl.learned_cc_uah = pval->intval;
 		rc = fg_save_learned_cap_to_sram(chip);
 		if (rc < 0)
@@ -4533,7 +4515,7 @@ static irqreturn_t fg_batt_missing_irq_handler(int irq, void *data)
 	}
 
 	clear_battery_profile(chip);
-	queue_delayed_work(system_power_efficient_wq, &chip->profile_load_work, 0);
+	schedule_delayed_work(&chip->profile_load_work, 0);
 
 	if (chip->fg_psy)
 		power_supply_changed(chip->fg_psy);
@@ -5130,8 +5112,6 @@ static int fg_parse_dt(struct fg_chip *chip)
 			pr_warn("Error reading Jeita thresholds, default values will be used rc:%d\n",
 				rc);
 	}
-	chip->dt.jeita_thresholds[JEITA_WARM] = 85;
-	chip->dt.jeita_thresholds[JEITA_HOT] = 85;
 
 	pr_info("%s: jeita threshold %d, %d, %d, %d\n", __func__,
 						chip->dt.jeita_thresholds[JEITA_COLD],
@@ -5371,7 +5351,7 @@ static void soc_work_fn(struct work_struct *work)
 
 	cycle_count = fg_get_cycle_count(chip);
 
-	pr_debug("adjust_soc: s %d r %d i %d v %d t %d cc %d m 0x%02x\n",
+	pr_info("adjust_soc: s %d r %d i %d v %d t %d cc %d m 0x%02x\n",
 			soc, esr_uohms, curr_ua, volt_uv, temp, cycle_count, msoc);
 
 	if (temp < 450 && chip->last_batt_temp >= 450) {
@@ -5389,7 +5369,7 @@ static void soc_work_fn(struct work_struct *work)
 		prev_soc = soc;
 	}
 
-	queue_delayed_work(system_power_efficient_wq, 
+	schedule_delayed_work(
 		&chip->soc_work, msecs_to_jiffies(SOC_WORK_MS));
 }
 
@@ -5512,7 +5492,7 @@ static void fg_battery_soc_smooth_tracking(struct fg_chip *chip)
 			power_supply_changed(chip->batt_psy);
 	}
 
-	pr_debug("soc:%d, last_soc:%d, raw_soc:%d, soc_changed:%d.\n",
+	pr_info("soc:%d, last_soc:%d, raw_soc:%d, soc_changed:%d.\n",
 			chip->param.batt_soc, last_batt_soc,
 			chip->param.batt_raw_soc, soc_changed);
 }
@@ -5541,11 +5521,11 @@ static void soc_monitor_work(struct work_struct *work)
 	if (chip->soc_reporting_ready)
 		fg_battery_soc_smooth_tracking(chip);
 
-	pr_debug("soc:%d, raw_soc:%d, c:%d, s:%d\n",
+	pr_info("soc:%d, raw_soc:%d, c:%d, s:%d\n",
 			chip->param.batt_soc, chip->param.batt_raw_soc,
 			chip->param.batt_ma, chip->charge_status);
 
-	queue_delayed_work(system_power_efficient_wq, &chip->soc_monitor_work,
+	schedule_delayed_work(&chip->soc_monitor_work,
 			msecs_to_jiffies(MONITOR_SOC_WAIT_PER_MS));
 }
 
@@ -5723,14 +5703,12 @@ static int fg_gen3_probe(struct platform_device *pdev)
 	/* Keep BATT_MISSING_IRQ disabled until we require it */
 	vote(chip->batt_miss_irq_en_votable, BATT_MISS_IRQ_VOTER, false, 0);
 
-#ifdef CONFIG_DEBUG_FS
 	rc = fg_debugfs_create(chip);
 	if (rc < 0) {
 		dev_err(chip->dev, "Error in creating debugfs entries, rc:%d\n",
 			rc);
 		goto exit;
 	}
-#endif
 
 	rc = fg_get_battery_voltage(chip, &volt_uv);
 	if (!rc)
@@ -5748,11 +5726,11 @@ static int fg_gen3_probe(struct platform_device *pdev)
 	}
 
 	device_init_wakeup(chip->dev, true);
-	queue_delayed_work(system_power_efficient_wq, &chip->profile_load_work, 0);
-	queue_delayed_work(system_power_efficient_wq, &chip->soc_work, 0);
+	schedule_delayed_work(&chip->profile_load_work, 0);
+	schedule_delayed_work(&chip->soc_work, 0);
 
 	chip->param.batt_soc = -EINVAL;
-	queue_delayed_work(system_power_efficient_wq, &chip->soc_monitor_work,
+	schedule_delayed_work(&chip->soc_monitor_work,
 			msecs_to_jiffies(MONITOR_SOC_WAIT_MS));
 
 	pr_debug("FG GEN3 driver probed successfully\n");
@@ -5790,9 +5768,9 @@ static int fg_gen3_resume(struct device *dev)
 	if (rc < 0)
 		pr_err("Error in configuring ESR timer, rc=%d\n", rc);
 
-	queue_delayed_work(system_power_efficient_wq, &chip->ttf_work, 0);
+	schedule_delayed_work(&chip->ttf_work, 0);
 	if (fg_sram_dump)
-		queue_delayed_work(system_power_efficient_wq, &chip->sram_dump_work,
+		schedule_delayed_work(&chip->sram_dump_work,
 				msecs_to_jiffies(fg_sram_dump_period_ms));
 
 	if (!work_pending(&chip->status_change_work)) {
@@ -5805,7 +5783,7 @@ static int fg_gen3_resume(struct device *dev)
 	chip->param.update_now = true;
 	spin_unlock(&chip->suspend_lock);
 
-	queue_delayed_work(system_power_efficient_wq, &chip->soc_monitor_work,
+	schedule_delayed_work(&chip->soc_monitor_work,
 			msecs_to_jiffies(MONITOR_SOC_WAIT_MS));
 
 	return 0;

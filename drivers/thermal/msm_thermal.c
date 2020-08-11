@@ -1,5 +1,4 @@
-/* Copyright (c) 2012-2019, The Linux Foundation. All rights reserved.
- *  Copyright (c) 2020 Amktiao.
+/* Copyright (c) 2012-2018, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -17,7 +16,6 @@
 #include <linux/kernel.h>
 #include <linux/init.h>
 #include <linux/module.h>
-#include <linux/moduleparam.h>
 #include <linux/kthread.h>
 #include <linux/mutex.h>
 #include <linux/msm_tsens.h>
@@ -61,11 +59,11 @@
 
 #define MSM_LIMITS_DCVSH		0x10
 #define MSM_LIMITS_NODE_DCVS		0x44435653
-#define MSM_LIMITS_SUB_FN_THERMAL	0x54484D4C
 #define MSM_LIMITS_SUB_FN_GENERAL	0x47454E00
 #define MSM_LIMITS_SUB_FN_CRNT		0x43524E54
 #define MSM_LIMITS_SUB_FN_REL		0x52454C00
-#define MSM_LIMITS_FREQ_CAP		0x46434150
+#define MSM_LIMITS_DOMAIN_MAX		0x444D4158
+#define MSM_LIMITS_DOMAIN_MIN		0x444D494E
 #define MSM_LIMITS_CLUSTER_0		0x6370302D
 #define MSM_LIMITS_CLUSTER_1		0x6370312D
 #define MSM_LIMITS_ALGO_MODE_ENABLE	0x454E424C
@@ -1020,58 +1018,55 @@ static struct notifier_block msm_thermal_cpufreq_notifier = {
 	.notifier_call = msm_thermal_cpufreq_callback,
 };
 
-static int msm_lmh_dcvs_write(uint32_t node_id, uint32_t fn,
-			      uint32_t setting, uint32_t val, uint32_t val1,
-			      bool enable_val1)
+static int msm_lmh_dcvs_write(uint32_t node_id, uint32_t fn, uint32_t setting,
+				uint32_t val)
 {
 	int ret;
 	struct scm_desc desc_arg;
 	uint32_t *payload = NULL;
-	uint32_t payload_len;
 
-	payload_len = ((enable_val1) ? 6 : 5) * sizeof(uint32_t);
-	payload = kcalloc((enable_val1) ? 6 : 5, sizeof(uint32_t), GFP_KERNEL);
+	payload = kzalloc(sizeof(uint32_t) * 5, GFP_KERNEL);
 	if (!payload)
 		return -ENOMEM;
 
-	payload[0] = fn; /* algorithm */
+	payload[0] = fn;
 	payload[1] = 0; /* unused sub-algorithm */
 	payload[2] = setting;
-	payload[3] = enable_val1 ? 2 : 1; /* number of values */
+	payload[3] = 1; /* number of values */
 	payload[4] = val;
-	if (enable_val1)
-		payload[5] = val1;
 
 	desc_arg.args[0] = SCM_BUFFER_PHYS(payload);
-	desc_arg.args[1] = payload_len;
+	desc_arg.args[1] = sizeof(uint32_t) * 5;
 	desc_arg.args[2] = MSM_LIMITS_NODE_DCVS;
 	desc_arg.args[3] = node_id;
 	desc_arg.args[4] = 0; /* version */
 	desc_arg.arginfo = SCM_ARGS(5, SCM_RO, SCM_VAL, SCM_VAL,
 					SCM_VAL, SCM_VAL);
 
-	dmac_flush_range(payload, (void *)payload + payload_len);
+	dmac_flush_range(payload, (void *)payload + 5 * (sizeof(uint32_t)));
 	ret = scm_call2(SCM_SIP_FNID(SCM_SVC_LMH, MSM_LIMITS_DCVSH), &desc_arg);
 
 	kfree(payload);
-
 	return ret;
 }
 
 static int msm_lmh_dcvs_update(int cpu)
 {
 	uint32_t id = cpus[cpu].parent_ptr->cluster_id;
-	uint32_t max_freq = cpus[cpu].limited_max_freq, hw_max_freq = U32_MAX;
+	uint32_t max_freq = cpus[cpu].limited_max_freq;
+	uint32_t min_freq = cpus[cpu].limited_min_freq;
 	uint32_t affinity;
 	int ret;
 
 	/*
-	 * It is better to use max limits of cluster for given
+	 * It is better to use max/min limits of cluster for given
 	 * cpu if cluster mitigation is supported. It ensures that it
-	 * requests aggregated max limits of all cpus in that cluster.
+	 * requests aggregated max/min limits of all cpus in that cluster.
 	 */
-	if (core_ptr)
+	if (core_ptr) {
 		max_freq = cpus[cpu].parent_ptr->limited_max_freq;
+		min_freq = cpus[cpu].parent_ptr->limited_min_freq;
+	}
 
 	switch (id) {
 	case 0:
@@ -1085,14 +1080,13 @@ static int msm_lmh_dcvs_update(int cpu)
 		return -EINVAL;
 	};
 
-	if (cpus[cpu].parent_ptr->freq_table)
-		hw_max_freq =
-			cpus[cpu].parent_ptr->freq_table[
-				cpus[cpu].parent_ptr->freq_idx_high].frequency;
+	ret = msm_lmh_dcvs_write(affinity, MSM_LIMITS_SUB_FN_GENERAL,
+					MSM_LIMITS_DOMAIN_MAX, max_freq);
+	if (ret)
+		return ret;
 
-	ret = msm_lmh_dcvs_write(affinity, MSM_LIMITS_SUB_FN_THERMAL,
-					MSM_LIMITS_FREQ_CAP, max_freq,
-					max_freq >= hw_max_freq ? 0 : 1, 1);
+	ret = msm_lmh_dcvs_write(affinity, MSM_LIMITS_SUB_FN_GENERAL,
+					MSM_LIMITS_DOMAIN_MIN, min_freq);
 	if (ret)
 		return ret;
 	/*
@@ -1274,10 +1268,8 @@ static int create_thermal_debugfs(void)
 			0600, msm_therm_debugfs->parent, &tsens_temp_print);
 	if (IS_ERR(msm_therm_debugfs->tsens_print)) {
 		ret = PTR_ERR(msm_therm_debugfs->tsens_print);
-#ifdef CONFIG_DEBUG_FS
 		pr_err("Error creating debugfs:[%s]. err:%d\n",
 			MSM_TSENS_PRINT, ret);
-#endif
 		goto create_exit;
 	}
 
@@ -1737,23 +1729,23 @@ static int msm_thermal_lmh_dcvs_init(struct platform_device *pdev)
 	 */
 	ret = msm_lmh_dcvs_write(MSM_LIMITS_CLUSTER_0,
 				MSM_LIMITS_SUB_FN_REL,
-				MSM_LIMITS_ALGO_MODE_ENABLE, 1, 0, 0);
+				MSM_LIMITS_ALGO_MODE_ENABLE, 1);
 	if (ret)
 		pr_err("Unable to enable REL algo for cluster0\n");
 	ret = msm_lmh_dcvs_write(MSM_LIMITS_CLUSTER_1,
 				MSM_LIMITS_SUB_FN_REL,
-				MSM_LIMITS_ALGO_MODE_ENABLE, 1, 0, 0);
+				MSM_LIMITS_ALGO_MODE_ENABLE, 1);
 	if (ret)
 		pr_err("Unable to enable REL algo for cluster1\n");
 
 	ret = msm_lmh_dcvs_write(MSM_LIMITS_CLUSTER_0,
 				MSM_LIMITS_SUB_FN_CRNT,
-				MSM_LIMITS_ALGO_MODE_ENABLE, 1, 0, 0);
+				MSM_LIMITS_ALGO_MODE_ENABLE, 1);
 	if (ret)
 		pr_err("Unable enable CRNT algo for cluster0\n");
 	ret = msm_lmh_dcvs_write(MSM_LIMITS_CLUSTER_1,
 				MSM_LIMITS_SUB_FN_CRNT,
-				MSM_LIMITS_ALGO_MODE_ENABLE, 1, 0, 0);
+				MSM_LIMITS_ALGO_MODE_ENABLE, 1);
 	if (ret)
 		pr_err("Unable enable CRNT algo for cluster1\n");
 
@@ -2807,7 +2799,7 @@ static int do_vdd_mx(void)
 		}
 	}
 
-	if (dis_cnt == thresh[MSM_VDD_MX_RESTRICTION].thresh_ct) {
+	if ((dis_cnt == thresh[MSM_VDD_MX_RESTRICTION].thresh_ct)) {
 		ret = remove_vdd_mx_restriction();
 		if (ret)
 			pr_err("Failed to remove vdd mx restriction\n");
@@ -3175,8 +3167,7 @@ static int __ref update_offline_cores(int val)
 
 	if (pend_hotplug_req && !in_suspend && !retry_in_progress) {
 		retry_in_progress = true;
-		queue_delayed_work(system_power_efficient_wq,
-			&retry_hotplug_work,
+		schedule_delayed_work(&retry_hotplug_work,
 			msecs_to_jiffies(HOTPLUG_RETRY_INTERVAL_MS));
 	}
 
@@ -3670,9 +3661,8 @@ static void check_temp(struct work_struct *work)
 
 reschedule:
 	if (polling_enabled)
-		queue_delayed_work(system_power_efficient_wq,
-			&check_temp_work,
-			msecs_to_jiffies(msm_thermal_info.poll_ms));
+		schedule_delayed_work(&check_temp_work,
+				msecs_to_jiffies(msm_thermal_info.poll_ms));
 }
 
 static int __ref msm_thermal_cpu_callback(struct notifier_block *nfb,
@@ -4979,13 +4969,6 @@ static struct kernel_param_ops module_ops = {
 
 module_param_cb(enabled, &module_ops, &enabled, 0644);
 MODULE_PARM_DESC(enabled, "enforce thermal limit on cpu");
-
-/* Thermal */
-module_param_named(poll_ms, msm_thermal_info.poll_ms, uint, 0755);
-module_param_named(freq_mitig_temp_degc,
-		   msm_thermal_info.freq_mitig_temp_degc, uint, 0755);
-module_param_named(core_temp_limit_degC, msm_thermal_info.core_limit_temp_degC,
-		   uint, 0755);
 
 static ssize_t show_cc_enabled(struct kobject *kobj,
 		struct kobj_attribute *attr, char *buf)
@@ -6364,8 +6347,8 @@ static int fetch_cpu_mitigaiton_info(struct msm_thermal_data *data,
 			err = -ENOMEM;
 			goto fetch_mitig_exit;
 		}
-		strscpy((char *)cpus[_cpu].sensor_type, sensor_name,
-			sizeof(cpus[_cpu].sensor_type));
+		strlcpy((char *) cpus[_cpu].sensor_type, sensor_name,
+			strlen(sensor_name) + 1);
 		create_alias_name(_cpu, limits, pdev);
 	}
 
@@ -7595,7 +7578,7 @@ int __init msm_thermal_device_init(void)
 {
 	return platform_driver_register(&msm_thermal_device_driver);
 }
-subsys_initcall(msm_thermal_device_init);
+arch_initcall(msm_thermal_device_init);
 
 int __init msm_thermal_late_init(void)
 {

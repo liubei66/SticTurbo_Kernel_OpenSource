@@ -2,6 +2,7 @@
  *  Ptrace user space interface.
  *
  *    Copyright IBM Corp. 1999, 2010
+ *    Copyright (C) 2019 XiaoMi, Inc.
  *    Author(s): Denis Joseph Barrow
  *               Martin Schwidefsky (schwidefsky@de.ibm.com)
  */

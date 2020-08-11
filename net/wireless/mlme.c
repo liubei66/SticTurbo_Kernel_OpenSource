@@ -350,11 +350,6 @@ int cfg80211_mlme_deauth(struct cfg80211_registered_device *rdev,
 	     !ether_addr_equal(wdev->current_bss->pub.bssid, bssid)))
 		return 0;
 
-	if (ether_addr_equal(wdev->disconnect_bssid, bssid) ||
-	    (wdev->current_bss &&
-	     ether_addr_equal(wdev->current_bss->pub.bssid, bssid)))
-		wdev->conn_owner_nlportid = 0;
-
 	return rdev_deauth(rdev, dev, &req);
 }
 
@@ -774,7 +769,7 @@ void cfg80211_dfs_channels_update_work(struct work_struct *work)
 	wiphy = &rdev->wiphy;
 
 	rtnl_lock();
-	for (bandid = 0; bandid < NUM_NL80211_BANDS; bandid++) {
+	for (bandid = 0; bandid < IEEE80211_NUM_BANDS; bandid++) {
 		sband = wiphy->bands[bandid];
 		if (!sband)
 			continue;

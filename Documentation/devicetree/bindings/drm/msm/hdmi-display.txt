@@ -7,8 +7,6 @@ Required properties:
 Optional properties:
 - qcom,display-type: display type of this manager. It could be "primary",
   "secondary", "tertiary", etc.
-- qcom,display-topology-control: display topology control. It could be
-  "force-mixer", "force-tiling"
 - qcom,non-pluggable: Boolean to indicate if display is non pluggable.
 - qcom,skip_ddc: Boolean to indicate if display skips ddc function.
 - qcom,customize-modes: Customized modes when it's non pluggable display.
@@ -39,7 +37,6 @@ Example:
 		compatible = "qcom,hdmi-display";
 		label = "hdmi_display";
 		qcom,display-type = "secondary";
-		qcom,display-topology-control = "force-mixer";
 		qcom,non-pluggable;
 		qcom,customize-modes {
 			qcom,customize-mode-id@0 {

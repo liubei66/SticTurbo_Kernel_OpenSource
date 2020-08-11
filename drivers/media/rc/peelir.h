@@ -1,6 +1,6 @@
 /*
  * Copyright (C) Peel Technologies Inc
- * Copyright (C) 2017 XiaoMi, Inc.
+ * Copyright (C) 2019 XiaoMi, Inc.
  */
 
 #ifndef PEELIR_H

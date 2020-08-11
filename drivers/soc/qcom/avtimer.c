@@ -1,4 +1,5 @@
-/* Copyright (c) 2012-2016, 2019, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2012-2016, The Linux Foundation. All rights reserved.
+ * Copyright (C) 2019 XiaoMi, Inc.
 
 * This program is free software; you can redistribute it and/or modify
 * it under the terms of the GNU General Public License version 2 and
@@ -91,13 +92,6 @@ static int32_t aprv2_core_fn_q(struct apr_client_data *data, void *priv)
 		}
 
 		payload1 = data->payload;
-
-		if (data->payload_size < 2 * sizeof(uint32_t)) {
-			pr_err("%s: payload has invalid size %d\n",
-				__func__, data->payload_size);
-			return -EINVAL;
-		}
-
 		switch (payload1[0]) {
 		case AVCS_CMD_REMOTE_AVTIMER_RELEASE_REQUEST:
 			pr_debug("%s: Cmd = TIMER RELEASE status[0x%x]\n",
@@ -112,7 +106,7 @@ static int32_t aprv2_core_fn_q(struct apr_client_data *data, void *priv)
 	}
 
 	case RESET_EVENTS:{
-		pr_debug("%s: Reset event received in AV timer\n", __func__);
+		pr_err("%s: Reset event received in AV timer\n", __func__);
 		apr_reset(avtimer.core_handle_q);
 		avtimer.core_handle_q = NULL;
 		avtimer.avtimer_open_cnt = 0;
@@ -123,11 +117,6 @@ static int32_t aprv2_core_fn_q(struct apr_client_data *data, void *priv)
 	}
 
 	case AVCS_CMD_RSP_REMOTE_AVTIMER_VOTE_REQUEST:
-		if (data->payload_size < sizeof(uint32_t)) {
-			pr_err("%s: payload has invalid size %d\n",
-				__func__, data->payload_size);
-			return -EINVAL;
-		}
 		payload1 = data->payload;
 		pr_debug("%s: RSP_REMOTE_AVTIMER_VOTE_REQUEST handle %x\n",
 			__func__, payload1[0]);

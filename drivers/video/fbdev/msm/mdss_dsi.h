@@ -1,5 +1,5 @@
 /* Copyright (c) 2012-2018, The Linux Foundation. All rights reserved.
- * Copyright (C) 2018 XiaoMi, Inc.
+ * Copyright (C) 2019 XiaoMi, Inc.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -797,13 +797,7 @@ void mdss_dsi_set_reg(struct mdss_dsi_ctrl_pdata *ctrl, int off,
 int mdss_dsi_phy_pll_reset_status(struct mdss_dsi_ctrl_pdata *ctrl);
 int mdss_dsi_check_panel_status(struct mdss_dsi_ctrl_pdata *ctrl, void *arg);
 
-#ifdef CONFIG_DEBUG_FS
 void mdss_dsi_debug_bus_init(struct mdss_dsi_data *sdata);
-#else
-static inline void mdss_dsi_debug_bus_init(struct mdss_dsi_data *sdata)
-{
-}
-#endif
 
 static inline const char *__mdss_dsi_pm_name(enum dsi_pm_type module)
 {

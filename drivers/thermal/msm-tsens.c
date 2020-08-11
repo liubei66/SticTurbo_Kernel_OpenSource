@@ -199,9 +199,9 @@ enum tsens_tm_trip_type {
 #define TSENS_TM_WRITABLE_TRIPS_MASK ((1 << TSENS_TM_TRIP_NUM) - 1)
 
 struct tsens_thrshld_state {
-	int				high_th_state;
-	int				low_th_state;
-	int				crit_th_state;
+	enum thermal_device_mode	high_th_state;
+	enum thermal_device_mode	low_th_state;
+	enum thermal_device_mode	crit_th_state;
 	unsigned int			high_adc_code;
 	unsigned int			low_adc_code;
 	int				high_temp;
@@ -2174,7 +2174,7 @@ static int get_device_tree_data(struct platform_device *pdev,
 		return -ENODEV;
 	}
 
-	if (tsens_slope_data && !tmdev->gain_offset_programmed) {
+	if (!tmdev->gain_offset_programmed) {
 		for (i = 0; i < tsens_num_sensors; i++)
 			tmdev->sensor[i].slope_mul_tsens_factor =
 							tsens_slope_data[i];
@@ -2247,11 +2247,11 @@ static int get_device_tree_data(struct platform_device *pdev,
 		tmdev->wd_bark_val = wd_bark;
 	}
 
-	if (!strcmp(id->compatible, "qcom,msm8996-tsens"))
+	if (!strcmp(id->compatible, "qcom,msm8996-tsens") ||
+		(!strcmp(id->compatible, "qcom,msm8998-tsens")))
 		tmdev->tsens_type = TSENS_TYPE3;
 	else if (!strcmp(id->compatible, "qcom,msmtitanium-tsens") ||
 		(!strcmp(id->compatible, "qcom,sdm660-tsens")) ||
-		(!strcmp(id->compatible, "qcom,msm8998-tsens")) ||
 		(!strcmp(id->compatible, "qcom,sdm630-tsens")) ||
 		(!strcmp(id->compatible, "qcom,msmhamster-tsens"))) {
 		tmdev->tsens_type = TSENS_TYPE3;
@@ -2493,9 +2493,7 @@ static void tsens_debugfs_init(void)
 
 	dent = debugfs_create_dir("tsens", 0);
 	if (IS_ERR(dent)) {
-#ifdef CONFIG_DEBUG_FS
 		pr_err("Error creating TSENS directory\n");
-#endif
 		return;
 	}
 

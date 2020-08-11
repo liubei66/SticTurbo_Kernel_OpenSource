@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014-2015, 2018-2019 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2014-2015, 2018 The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -73,13 +73,11 @@ static int sockev_client_cb(struct notifier_block *nb,
 
 	sock = (struct socket *)data;
 	if (!socknlmsgsk || !sock)
-		goto sk_null;
+		goto done;
 
 	sk = sock->sk;
 	if (!sk)
-		goto sk_null;
-
-	sock_hold(sk);
+		goto done;
 
 	if (sk->sk_family != AF_INET && sk->sk_family != AF_INET6)
 		goto done;
@@ -110,8 +108,6 @@ static int sockev_client_cb(struct notifier_block *nb,
 	smsg->skflags = sk->sk_flags;
 	nlmsg_notify(socknlmsgsk, skb, 0, SKNLGRP_SOCKEV, 0, GFP_KERNEL);
 done:
-	sock_put(sk);
-sk_null:
 	return 0;
 }
 

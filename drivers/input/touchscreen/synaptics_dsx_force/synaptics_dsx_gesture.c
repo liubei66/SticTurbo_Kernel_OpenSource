@@ -5,7 +5,6 @@
  *
  * Copyright (C) 2012 Alexandra Chin <alexandra.chin@tw.synaptics.com>
  * Copyright (C) 2012 Scott Lin <scott.lin@tw.synaptics.com>
- * Copyright (C) 2018 XiaoMi, Inc.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -877,6 +876,9 @@ static ssize_t udg_sysfs_trace_data_show(struct file *data_file,
 		return -EINVAL;
 
 	if (count < trace_data_size) {
+
+
+
 		return -EINVAL;
 	}
 
@@ -951,6 +953,9 @@ static ssize_t udg_sysfs_template_data_show(struct file *data_file,
 	struct synaptics_rmi4_data *rmi4_data = udg->rmi4_data;
 
 	if (count < udg->template_data_size) {
+
+
+
 		return -EINVAL;
 	}
 

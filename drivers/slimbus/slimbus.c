@@ -1,4 +1,5 @@
 /* Copyright (c) 2011-2017, The Linux Foundation. All rights reserved.
+ * Copyright (C) 2019 XiaoMi, Inc.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -1323,10 +1324,8 @@ int slim_config_mgrports(struct slim_device *sb, u32 *ph, int nports,
 	for (i = 0; i < nports; i++) {
 		u8 pn = SLIM_HDL_TO_PORT(ph[i]);
 
-		if (ctrl->ports[pn].state == SLIM_P_CFG) {
-			mutex_unlock(&ctrl->sched.m_reconf);
+		if (ctrl->ports[pn].state == SLIM_P_CFG)
 			return -EISCONN;
-		}
 		ctrl->ports[pn].cfg = *cfg;
 	}
 	mutex_unlock(&ctrl->sched.m_reconf);
@@ -2044,6 +2043,8 @@ int slim_define_ch(struct slim_device *sb, struct slim_ch *prop, u16 *chanh,
 
 	if (!ctrl || !chanh || !prop || !nchan)
 		return -EINVAL;
+	if (prop->ratem == 0)
+		return -EINVAL;
 	mutex_lock(&ctrl->sched.m_reconf);
 	for (i = 0; i < nchan; i++) {
 		u8 chan = SLIM_HDL_TO_CHIDX(chanh[i]);
@@ -2755,10 +2756,9 @@ static void slim_change_existing_chans(struct slim_controller *ctrl, int coeff)
 	for (i = 0; i < len; i++) {
 		struct slim_ich *slc = arr[i];
 		if (slc->state == SLIM_CH_ACTIVE ||
-			slc->state == SLIM_CH_SUSPENDED) {
+			slc->state == SLIM_CH_SUSPENDED)
 			slc->offset = slc->newoff;
 			slc->interval = slc->newintr;
-		}
 	}
 }
 static void slim_chan_changes(struct slim_device *sb, bool revert)

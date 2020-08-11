@@ -199,7 +199,19 @@ static int drm_helper_probe_single_connector_modes_merge_bits(struct drm_connect
 		goto prune;
 	}
 
-	count = (*connector_funcs->get_modes)(connector);
+#ifdef CONFIG_DRM_LOAD_EDID_FIRMWARE
+	count = drm_load_edid_firmware(connector);
+	if (count == 0)
+#endif
+	{
+		if (connector->override_edid) {
+			struct edid *edid = (struct edid *) connector->edid_blob_ptr->data;
+
+			count = drm_add_edid_modes(connector, edid);
+			drm_edid_to_eld(connector, edid);
+		} else
+			count = (*connector_funcs->get_modes)(connector);
+	}
 
 	if (count == 0 && connector->status == connector_status_connected)
 		count = drm_add_modes_noedid(connector, 1024, 768);
@@ -325,9 +337,6 @@ static void output_poll_execute(struct work_struct *work)
 	struct drm_connector *connector;
 	enum drm_connector_status old_status;
 	bool repoll = false, changed;
-
-	if (!dev->mode_config.poll_enabled)
-		return;
 
 	/* Pick up any changes detected by the probe functions. */
 	changed = dev->mode_config.delayed_event;
@@ -492,11 +501,7 @@ EXPORT_SYMBOL(drm_kms_helper_poll_init);
  */
 void drm_kms_helper_poll_fini(struct drm_device *dev)
 {
-	if (!dev->mode_config.poll_enabled)
-		return;
-
-	dev->mode_config.poll_enabled = false;
-	cancel_delayed_work_sync(&dev->mode_config.output_poll_work);
+	drm_kms_helper_poll_disable(dev);
 }
 EXPORT_SYMBOL(drm_kms_helper_poll_fini);
 

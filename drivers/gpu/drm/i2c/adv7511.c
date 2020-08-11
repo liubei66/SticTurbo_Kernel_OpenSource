@@ -450,18 +450,6 @@ static void adv7511_hpd_work(struct work_struct *work)
 	else
 		status = connector_status_disconnected;
 
-	/*
-	 * The bridge resets its registers on unplug. So when we get a plug
-	 * event and we're already supposed to be powered, cycle the bridge to
-	 * restore its state.
-	 */
-	if (status == connector_status_connected &&
-	    adv7511->connector.status == connector_status_disconnected &&
-	    adv7511->powered) {
-		regcache_mark_dirty(adv7511->regmap);
-		adv7511_power_on(adv7511);
-	}
-
 	if (adv7511->connector.status != status) {
 		adv7511->connector.status = status;
 		drm_kms_helper_hotplug_event(adv7511->connector.dev);
@@ -781,11 +769,11 @@ static void adv7511_encoder_mode_set(struct drm_encoder *encoder,
 			vsync_polarity = 1;
 	}
 
-	if (drm_mode_vrefresh(mode) <= 24)
+	if (mode->vrefresh <= 24000)
 		low_refresh_rate = ADV7511_LOW_REFRESH_RATE_24HZ;
-	else if (drm_mode_vrefresh(mode) <= 25)
+	else if (mode->vrefresh <= 25000)
 		low_refresh_rate = ADV7511_LOW_REFRESH_RATE_25HZ;
-	else if (drm_mode_vrefresh(mode) <= 30)
+	else if (mode->vrefresh <= 30000)
 		low_refresh_rate = ADV7511_LOW_REFRESH_RATE_30HZ;
 	else
 		low_refresh_rate = ADV7511_LOW_REFRESH_RATE_NONE;

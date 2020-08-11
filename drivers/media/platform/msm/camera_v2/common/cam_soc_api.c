@@ -1,4 +1,5 @@
 /* Copyright (c) 2015-2017, The Linux Foundation. All rights reserved.
+ * Copyright (C) 2019 XiaoMi, Inc.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -205,7 +206,7 @@ int msm_camera_get_clk_info(struct platform_device *pdev,
 {
 	int rc = 0;
 
-	if (!pdev || !clk_info || !clk_ptr || !num_clk)
+	if (!pdev || !&pdev->dev || !clk_info || !clk_ptr || !num_clk)
 		return -EINVAL;
 
 	rc = msm_camera_get_clk_info_internal(&pdev->dev,
@@ -355,14 +356,12 @@ int msm_camera_clk_enable(struct device *dev,
 	if (enable) {
 		for (i = 0; i < num_clk; i++) {
 			CDBG("enable %s\n", clk_info[i].clk_name);
-#ifdef CONFIG_MACH_XIAOMI_MSM8998
 			clk_ptr[i] = clk_get(dev, clk_info[i].clk_name);
 			if (IS_ERR(clk_ptr[i])) {
 				pr_err("%s get failed\n", clk_info[i].clk_name);
 				rc = PTR_ERR(clk_ptr[i]);
 				goto cam_clk_set_err;
 			}
-#endif
 			if (clk_info[i].clk_rate > 0) {
 				clk_rate = clk_round_rate(clk_ptr[i],
 					clk_info[i].clk_rate);
@@ -515,7 +514,7 @@ int msm_camera_put_clk_info(struct platform_device *pdev,
 {
 	int rc = 0;
 
-	if (!pdev || !clk_info || !clk_ptr)
+	if (!pdev || !&pdev->dev || !clk_info || !clk_ptr)
 		return -EINVAL;
 
 	rc = msm_camera_put_clk_info_internal(&pdev->dev,

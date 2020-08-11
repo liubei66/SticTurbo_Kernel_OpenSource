@@ -138,9 +138,6 @@ int balloon_page_migrate(struct address_space *mapping,
 		enum migrate_mode mode)
 {
 	struct balloon_dev_info *balloon = balloon_page_device(page);
-	
-	if (mode == MIGRATE_SYNC_NO_COPY)
-		return -EINVAL;
 
 	VM_BUG_ON_PAGE(!PageLocked(page), page);
 	VM_BUG_ON_PAGE(!PageLocked(newpage), newpage);

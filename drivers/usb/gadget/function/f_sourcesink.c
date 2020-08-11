@@ -298,7 +298,9 @@ static struct usb_gadget_strings *sourcesink_strings[] = {
 
 static inline struct usb_request *ss_alloc_ep_req(struct usb_ep *ep, int len)
 {
-	return alloc_ep_req(ep, len);
+	struct f_sourcesink		*ss = ep->driver_data;
+
+	return alloc_ep_req(ep, len, ss->buflen);
 }
 
 static void disable_ep(struct usb_composite_dev *cdev, struct usb_ep *ep)
@@ -609,7 +611,7 @@ static int source_sink_start_ep(struct f_sourcesink *ss, bool is_in,
 			req = ss_alloc_ep_req(ep, size);
 		} else {
 			ep = is_in ? ss->in_ep : ss->out_ep;
-			req = ss_alloc_ep_req(ep, ss->buflen);
+			req = ss_alloc_ep_req(ep, 0);
 		}
 
 		if (!req)
@@ -847,7 +849,7 @@ static struct usb_function *source_sink_alloc_func(
 
 	ss = kzalloc(sizeof(*ss), GFP_KERNEL);
 	if (!ss)
-		return ERR_PTR(-ENOMEM);
+		return NULL;
 
 	ss_opts =  container_of(fi, struct f_ss_opts, func_inst);
 

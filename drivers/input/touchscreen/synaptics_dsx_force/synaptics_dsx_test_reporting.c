@@ -5,7 +5,6 @@
  *
  * Copyright (C) 2012 Alexandra Chin <alexandra.chin@tw.synaptics.com>
  * Copyright (C) 2012 Scott Lin <scott.lin@tw.synaptics.com>
- * Copyright (C) 2018 XiaoMi, Inc.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -286,6 +285,42 @@ static char *factory_string[] = {
 	"elec_open_test_limit_two",
 	NULL,
 	};
+
+#if 0
+/* test limit config */
+#define TDDI_SHORT_LIMIT_B			150
+#define TDDI_NOISE_LIMIT			28
+
+/* #define ENABLE_EXTEND_EE_SHORT */
+#define TDDI_EXTEND_EE_SHORT_RESET_DUR  60
+#define TDDI_EXTEND_EE_SHORT_INT_DUR  150
+#define TDDI_EXTEND_EE_SHORT_TX_ON_COUNT  146
+#define TDDI_EXTEND_EE_SHORT_RX_ON_COUNT  146
+#define TDDI_EXTEND_EE_SHORT_TEST_LIMIT_PART1  100
+#define TDDI_EXTEND_EE_SHORT_TEST_LIMIT_PART2  96
+
+#define TDDI_OPEN_TEST_INT_DUR_ONE		145
+#define TDDI_OPEN_TEST_INT_DUR_TWO		15
+#define TDDI_OPEN_TEST_LIMIT_PHASE2_LOWER	50
+
+/* #define ENABLE_AMP_OPEN_B7 */
+#define TDDI_B7_OPEN_TEST_INT_DUR_ONE		23
+#define TDDI_B7_OPEN_TEST_INT_DUR_TWO		27
+#define TDDI_B7_OPEN_TEST_LIMIT_PHASE2_LOWER	0
+#define TDDI_B7_OPEN_TEST_LIMIT_PHASE2_UPPER   115
+
+#define BUTTON_COUNT 3
+#define ABS_0D_OPEN_FACTOR 8
+#define ABS_0D_OPEN_TEST_LIMIT 30
+
+#define ELEC_OPEN_TEST_TX_ON_COUNT 2
+#define ELEC_OPEN_TEST_RX_ON_COUNT 2
+#define ELEC_OPEN_INT_DUR_ONE 4
+#define ELEC_OPEN_INT_DUR_TWO 15
+#define ELEC_OPEN_TEST_LIMIT_ONE 500
+#define ELEC_OPEN_TEST_LIMIT_TWO 80
+/* test limit config - */
+#endif
 
 #define TEST_INVALID	0
 #define TEST_FAILED	1
@@ -1318,6 +1353,7 @@ struct synaptics_rmi4_f54_handle {
 	struct f54_data_31 data_31;
 	struct f54_control control;
 	struct mutex status_mutex;
+	struct mutex open_mutex;
 	struct kobject *sysfs_dir;
 	struct hrtimer watchdog;
 	struct work_struct timeout_work;
@@ -1653,7 +1689,8 @@ static bool test_report_type_valid(enum f54_report_types report_type)
 	case F54_ABS_DOZE_NO_CBC_INCELL:
 		if (f54->query_65.has_ctrl225) {
 			return true;
-		} else {
+		}
+		else {
 			return false;
 		}
 		break;
@@ -3528,6 +3565,7 @@ static int tddi_ratio_calculation(signed short *p_image)
 		goto exit;
 	}
 
+
 	p_right_median = (signed short *) kzalloc(rx_num * sizeof(short), GFP_KERNEL);
 	if (!p_right_median) {
 		dev_err(rmi4_data->pdev->dev.parent, "%s: Failed to alloc mem for p_right_median\n", __func__);
@@ -3556,26 +3594,32 @@ static int tddi_ratio_calculation(signed short *p_image)
 		goto exit;
 	}
 
+
 	if (f54->swap_sensor_side) {
+
 		p_data_16 = p_image;
 		for (i = 0; i < rx_num; i++) {
 			for (j = 0; j < left_size; j++) {
 				p_left_column_buf[i * left_size + j] = p_data_16[j * rx_num + i];
 			}
 		}
+
 		p_data_16 = p_image + left_size * rx_num;
 		for (i = 0; i < rx_num; i++) {
 			for (j = 0; j < right_size; j++) {
 				p_right_column_buf[i * right_size + j] = p_data_16[j * rx_num + i];
 			}
 		}
-	} else {
+	}
+	else {
+
 		p_data_16 = p_image;
 		for (i = 0; i < rx_num; i++) {
 			for (j = 0; j < right_size; j++) {
 				p_right_column_buf[i * right_size + j] = p_data_16[j * rx_num + i];
 			}
 		}
+
 		p_data_16 = p_image + right_size * rx_num;
 		for (i = 0; i < rx_num; i++) {
 			for (j = 0; j < left_size; j++) {
@@ -3584,30 +3628,40 @@ static int tddi_ratio_calculation(signed short *p_image)
 		}
 	}
 
+
 	for (i = 0; i < rx_num; i++) {
 		p_left_median[i] = FindMedian(p_left_column_buf + i * left_size, left_size);
 		p_right_median[i] = FindMedian(p_right_column_buf + i * right_size, right_size);
 	}
 
+
+
 	for (i = 0; i < tx_num; i++) {
 		for (j = 0; j < rx_num; j++) {
+
 			if (f54->swap_sensor_side) {
+
 				if (i < left_size) {
 					temp = (signed int) p_image[i * rx_num + j];
 					temp = temp * 100 / p_left_median[j];
-				} else {
+				}
+				else {
 					temp = (signed int) p_image[i * rx_num + j];
 					temp = temp * 100 / p_right_median[j];
 				}
-			} else {
+			}
+			else {
+
 				if (i < right_size) {
 					temp = (signed int) p_image[i * rx_num + j];
 					temp = temp * 100 / p_right_median[j];
-				} else {
+				}
+				else {
 					temp = (signed int) p_image[i * rx_num + j];
 					temp = temp * 100 / p_left_median[j];
 				}
 			}
+
 
 			p_image[i * rx_num + j] = temp;
 		}
@@ -3657,6 +3711,7 @@ static ssize_t test_sysfs_tddi_extend_ee_short_store(struct device *dev,
 				__func__);
 		return -ENOMEM;
 	}
+
 
 	tddi_rt95_part_one = kzalloc(buffer_size, GFP_KERNEL);
 	if (!tddi_rt95_part_one) {
@@ -3782,7 +3837,8 @@ static ssize_t test_sysfs_tddi_extend_ee_short_store(struct device *dev,
 						__func__, i, j, tddi_rt95_part_one[i*rx_num + j], factory_param->tddi_extend_ee_short_test_limit_part1);
 
 				tddi_rt95_part_one[i*rx_num + j] = 1;
-			} else {
+			}
+			else {
 				tddi_rt95_part_one[i*rx_num + j] = 0;
 			}
 		}
@@ -3798,6 +3854,7 @@ static ssize_t test_sysfs_tddi_extend_ee_short_store(struct device *dev,
 		offset += 2;
 	}
 
+
 	tddi_ratio_calculation(tddi_rt95_part_two);
 
 	for (i = 0; i < tx_num; i++) {
@@ -3812,7 +3869,8 @@ static ssize_t test_sysfs_tddi_extend_ee_short_store(struct device *dev,
 						__func__, i, j, tddi_rt95_part_two[i*rx_num + j], factory_param->tddi_extend_ee_short_test_limit_part2);
 
 				tddi_rt95_part_two[i*rx_num + j] = 1;
-			} else {
+			}
+			else {
 				tddi_rt95_part_two[i*rx_num + j] = 0;
 			}
 		}
@@ -3889,6 +3947,8 @@ static ssize_t test_sysfs_tddi_extend_ee_short_show(struct device *dev,
 
 	if (!td43xx_ee_short_data)
 		return -EINVAL;
+
+
 
 	if (1 == g_flag_read_report_fail) {
 		kfree(td43xx_ee_short_data);
@@ -4018,6 +4078,7 @@ static ssize_t test_sysfs_td43xx_ee_short_show(struct device *dev,
 
 	if (!td43xx_ee_short_data)
 		return -EINVAL;
+
 
 	if (1 == g_flag_read_report_fail) {
 		kfree(td43xx_ee_short_data);
@@ -4320,6 +4381,7 @@ static int tddi_amp_open_data_testing_b7(signed short *p_image,
 		tx_num -= 1;
 	}
 
+
 	p_right_median = (signed short *) kzalloc(rx_num * sizeof(short), GFP_KERNEL);
 	if (!p_right_median) {
 		dev_err(rmi4_data->pdev->dev.parent,
@@ -4357,25 +4419,30 @@ static int tddi_amp_open_data_testing_b7(signed short *p_image,
 	}
 
 	if (f54->swap_sensor_side) {
+
 		p_data_16 = p_image;
 		for (i = 0; i < rx_num; i++) {
 			for (j = 0; j < left_size; j++) {
 				p_left_column_buf[i * left_size + j] = p_data_16[j * rx_num + i];
 			}
 		}
+
 		p_data_16 = p_image + left_size * rx_num;
 		for (i = 0; i < rx_num; i++) {
 			for (j = 0; j < right_size; j++) {
 				p_right_column_buf[i * right_size + j] = p_data_16[j * rx_num + i];
 			}
 		}
-	} else {
+	}
+	else {
+
 		p_data_16 = p_image;
 		for (i = 0; i < rx_num; i++) {
 			for (j = 0; j < right_size; j++) {
 				p_right_column_buf[i * right_size + j] = p_data_16[j * rx_num + i];
 			}
 		}
+
 		p_data_16 = p_image + right_size * rx_num;
 		for (i = 0; i < rx_num; i++) {
 			for (j = 0; j < left_size; j++) {
@@ -4384,16 +4451,19 @@ static int tddi_amp_open_data_testing_b7(signed short *p_image,
 		}
 	}
 
+
 	for (i = 0; i < rx_num; i++) {
 		p_left_median[i] = FindMedian(p_left_column_buf + i * left_size, left_size);
 		p_right_median[i] = FindMedian(p_right_column_buf + i * right_size, right_size);
 	}
 
 
+
 	for (i = 0; i < tx_num; i++) {
 		for (j = 0; j < rx_num; j++) {
 
 			if (f54->swap_sensor_side) {
+
 				if (i < left_size) {
 					temp = (signed int) p_image[i * rx_num + j];
 					temp = temp * 100 / p_left_median[j];
@@ -4401,7 +4471,9 @@ static int tddi_amp_open_data_testing_b7(signed short *p_image,
 					temp = (signed int) p_image[i * rx_num + j];
 					temp = temp * 100 / p_right_median[j];
 				}
-			} else {
+			}
+			else {
+
 				if (i < right_size) {
 					temp = (signed int) p_image[i * rx_num + j];
 					temp = temp * 100 / p_right_median[j];
@@ -4413,6 +4485,8 @@ static int tddi_amp_open_data_testing_b7(signed short *p_image,
 
 			p_result[i * rx_num + j] =  0;
 
+
+
 			if (is_b7) {
 				if ((temp < factory_param->tddi_b7_open_test_limit_phase2_lower) ||
 					(temp > factory_param->tddi_b7_open_test_limit_phase2_upper)) {
@@ -4421,7 +4495,8 @@ static int tddi_amp_open_data_testing_b7(signed short *p_image,
 						pr_info("%s : phase 2 failed at (tx%-2d, rx%-2d), data = %d\n",
 								__func__, i, j, temp);
 				}
-			} else {
+			}
+			else {
 				 if (temp < factory_param->tddi_b7_open_test_limit_phase2_lower) {
 					p_result[i * rx_num + j] =  1;
 
@@ -4481,6 +4556,7 @@ static ssize_t test_sysfs_td4722_b7_amp_open_store(struct device *dev,
 		return -ENOMEM;
 	}
 
+
 	p_report_data_8 = kzalloc(tx_num * rx_num * 2, GFP_KERNEL);
 	if (!p_report_data_8) {
 		dev_err(rmi4_data->pdev->dev.parent,
@@ -4525,6 +4601,7 @@ static ssize_t test_sysfs_td4722_b7_amp_open_store(struct device *dev,
 	}
 
 
+
 	if (f54->query.touch_controller_family != 2) {
 		dev_err(rmi4_data->pdev->dev.parent,
 				"%s: not support touch controller family = 0 or 1 \n",
@@ -4532,6 +4609,8 @@ static ssize_t test_sysfs_td4722_b7_amp_open_store(struct device *dev,
 		retval = -EINVAL;
 		goto exit;
 	}
+
+
 	retval = synaptics_rmi4_reg_read(rmi4_data,
 			control.reg_99->address,
 			original_data_f54_ctrl99,
@@ -4571,6 +4650,7 @@ static ssize_t test_sysfs_td4722_b7_amp_open_store(struct device *dev,
 		retval = -EIO;
 		goto exit;
 	}
+
 	retval = test_sysfs_read_report_td43xx(dev, attr, "92", count,
 				false, false);
 	if (retval < 0) {
@@ -4585,6 +4665,7 @@ static ssize_t test_sysfs_td4722_b7_amp_open_store(struct device *dev,
 	secure_memcpy(p_report_data_8, tx_num * rx_num * 2,
 		f54->report_data, f54->report_size, f54->report_size);
 
+
 	k = 0;
 	for (i = 0; i < tx_num; i++) {
 		for (j = 0; j < rx_num; j++) {
@@ -4594,6 +4675,7 @@ static ssize_t test_sysfs_td4722_b7_amp_open_store(struct device *dev,
 			k += 2;
 		}
 	}
+
 
 	tddi_amp_open_data_testing_b7(p_rt92_image_1,
 								p_result_1,
@@ -4626,6 +4708,7 @@ static ssize_t test_sysfs_td4722_b7_amp_open_store(struct device *dev,
 		retval = -EIO;
 		goto exit;
 	}
+
 	retval = test_sysfs_read_report_td43xx(dev, attr, "92", count,
 				false, false);
 	if (retval < 0) {
@@ -4640,6 +4723,7 @@ static ssize_t test_sysfs_td4722_b7_amp_open_store(struct device *dev,
 	secure_memcpy(p_report_data_8, tx_num * rx_num * 2,
 		f54->report_data, f54->report_size, f54->report_size);
 
+
 	k = 0;
 	for (i = 0; i < tx_num; i++) {
 		for (j = 0; j < rx_num; j++) {
@@ -4649,6 +4733,7 @@ static ssize_t test_sysfs_td4722_b7_amp_open_store(struct device *dev,
 			k += 2;
 		}
 	}
+
 
 	tddi_amp_open_data_testing_b7(p_rt92_image_2,
 								p_result_2,
@@ -4694,6 +4779,7 @@ static ssize_t test_sysfs_td4722_b7_amp_open_store(struct device *dev,
 
 
 exit:
+
 	kfree(p_rt92_image_1);
 	kfree(p_rt92_image_2);
 	kfree(p_report_data_8);
@@ -4721,6 +4807,7 @@ static ssize_t test_sysfs_td4722_b7_amp_open_show(struct device *dev,
 
 	if (!td43xx_amp_open_data)
 		return -EINVAL;
+
 
 	if (1 == g_flag_read_report_fail) {
 		kfree(td43xx_amp_open_data);
@@ -5148,6 +5235,7 @@ static ssize_t test_sysfs_td43xx_amp_open_show(struct device *dev,
 	if (!td43xx_amp_open_data)
 		return -EINVAL;
 
+
 	if (1 == g_flag_read_report_fail) {
 		kfree(td43xx_amp_open_data);
 		td43xx_amp_open_data = NULL;
@@ -5198,6 +5286,7 @@ static ssize_t test_sysfs_tddi_amp_electrode_open_store(struct device *dev,
 	if (setting != 1 || !factory_param)
 		return -EINVAL;
 
+
 	if (td43xx_amp_open_data)
 		kfree(td43xx_amp_open_data);
 	td43xx_amp_open_data = kzalloc(tx_num * rx_num, GFP_KERNEL);
@@ -5207,6 +5296,7 @@ static ssize_t test_sysfs_tddi_amp_electrode_open_store(struct device *dev,
 				__func__);
 		return -ENOMEM;
 	}
+
 
 	p_report_data_8 = kzalloc(tx_num * rx_num * 2, GFP_KERNEL);
 	if (!p_report_data_8) {
@@ -5525,10 +5615,11 @@ static ssize_t test_sysfs_tddi_amp_electrode_open_store(struct device *dev,
 
 				dev_err(f54->rmi4_data->pdev->dev.parent,
 						"%s: fail at (tx%-2d, rx%-2d) = %-4d at phase 1 (limit = %d)\n",
-						__func__, i, j, p_rt92_delta_image[i*rx_num + j], factory_param->elec_open_test_limit_one);
+ 						__func__, i, j, p_rt92_delta_image[i*rx_num + j], factory_param->elec_open_test_limit_one);
 
 				p_rt92_image_1[i*rx_num + j] = TEST_FAILED;
-			} else {
+			}
+			else {
 				p_rt92_image_1[i*rx_num + j] = TEST_OK;
 			}
 		}
@@ -5539,6 +5630,7 @@ static ssize_t test_sysfs_tddi_amp_electrode_open_store(struct device *dev,
 	/* step 11 */
 	/* phase 2, data calculation and verification */
 	/* the calculated ratio should be lower than the test limit */
+
 
 	tddi_ratio_calculation(p_rt92_delta_image);
 	for (i = 0; i < tx_num; i++) {
@@ -5553,7 +5645,8 @@ static ssize_t test_sysfs_tddi_amp_electrode_open_store(struct device *dev,
 						__func__, i, j, p_rt92_delta_image[i*rx_num + j], factory_param->elec_open_test_limit_two);
 
 				p_rt92_image_2[i*rx_num + j] = TEST_FAILED;
-			} else {
+			}
+			else {
 				p_rt92_image_2[i*rx_num + j] = TEST_OK;
 			}
 		}
@@ -5573,6 +5666,7 @@ static ssize_t test_sysfs_tddi_amp_electrode_open_store(struct device *dev,
 	}
 
 exit:
+
 	kfree(p_report_data_8);
 	kfree(p_rt92_image_1);
 	kfree(p_rt92_image_2);
@@ -6789,7 +6883,7 @@ static int test_set_controls(void)
 	/* controls 180 to 181 reserved */
 
 	/* control 182 */
-	if (f54->query_47.has_ctrl182) {
+	if (f54->query_47.has_ctrl182){
 		control->reg_182 = kzalloc(sizeof(*(control->reg_182)),
 				GFP_KERNEL);
 		if (!control->reg_182)
@@ -8211,32 +8305,41 @@ out:
 
 static int syna_selftest_open(struct inode *inode, struct file *file)
 {
-	f54->data = vmalloc(PAGE_SIZE);
-
 	return 0;
 }
 
 static ssize_t syna_selftest_read(struct file *file, char __user *buf, size_t count, loff_t *pos)
 {
+	int retval;
 	char tmp[5];
 
-	if (*pos != 0)
-		return 0;
+	mutex_lock(&f54->open_mutex);
+
+	if (*pos != 0) {
+		retval = 0;
+		goto out;
+	}
 
 	snprintf(tmp, sizeof(f54->result_type), "%d\n", f54->result_type);
 	if (copy_to_user(buf, tmp, strlen(tmp))) {
-		return -EFAULT;
+		retval = -EFAULT;
+		goto out;
 	}
 
 	*pos += strlen(buf);
-
-	return strlen(buf);
+	retval = strlen(buf);
+out:
+	mutex_unlock(&f54->open_mutex);
+	return retval;
 }
 
 static ssize_t syna_selftest_write(struct file *file, const char __user *buf, size_t count, loff_t *pos)
 {
 	int retval;
 	char tmp[6];
+
+	mutex_lock(&f54->open_mutex);
+	f54->data = vmalloc(PAGE_SIZE);
 
 	if (!f54->data || count > sizeof(tmp)) {
 		retval = -EINVAL;
@@ -8274,14 +8377,15 @@ out:
 	if (retval >= 0)
 		retval = count;
 
+	vfree(f54->data);
+	f54->data = NULL;
+	mutex_unlock(&f54->open_mutex);
+
 	return retval;
 }
 
 static int syna_selftest_release(struct inode *inode, struct file *file)
 {
-	vfree(f54->data);
-	f54->data = NULL;
-
 	return 0;
 }
 
@@ -8525,11 +8629,12 @@ static int synaptics_rmi4_test_init(struct synaptics_rmi4_data *rmi4_data)
 	INIT_WORK(&f54->resume_touch_work, test_resume_touch_work);
 
 	mutex_init(&f54->status_mutex);
+	mutex_init(&f54->open_mutex);
 	f54->status = STATUS_IDLE;
 
 	if (!proc_already) {
 		proc_already = true;
-		proc_create("tp_selftest", 0, NULL, &syna_selftest_ops);
+		proc_create("tp_selftest", 0644, NULL, &syna_selftest_ops);
 		proc_create("tp_data_dump", 0, NULL, &syna_datadump_ops);
 		proc_create("tp_factory_param", 0, NULL, &syna_factory_ops);
 	}

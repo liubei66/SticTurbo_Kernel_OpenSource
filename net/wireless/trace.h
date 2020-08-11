@@ -110,7 +110,7 @@
 				conf->dot11MeshHWMPconfirmationInterval;      \
 	} while (0)
 
-#define CHAN_ENTRY __field(enum nl80211_band, band) \
+#define CHAN_ENTRY __field(enum ieee80211_band, band) \
 		   __field(u16, center_freq)
 #define CHAN_ASSIGN(chan)					  \
 	do {							  \
@@ -125,7 +125,7 @@
 #define CHAN_PR_FMT "band: %d, freq: %u"
 #define CHAN_PR_ARG __entry->band, __entry->center_freq
 
-#define CHAN_DEF_ENTRY __field(enum nl80211_band, band)		\
+#define CHAN_DEF_ENTRY __field(enum ieee80211_band, band)		\
 		       __field(u32, control_freq)			\
 		       __field(u32, width)				\
 		       __field(u32, center_freq1)			\
@@ -2102,29 +2102,6 @@ TRACE_EVENT(rdev_tdls_cancel_channel_switch,
 		  WIPHY_PR_ARG, NETDEV_PR_ARG, MAC_PR_ARG(addr))
 );
 
-TRACE_EVENT(rdev_external_auth,
-	    TP_PROTO(struct wiphy *wiphy, struct net_device *netdev,
-		     struct cfg80211_external_auth_params *params),
-	    TP_ARGS(wiphy, netdev, params),
-	    TP_STRUCT__entry(WIPHY_ENTRY
-			     NETDEV_ENTRY
-			     MAC_ENTRY(bssid)
-			     __array(u8, ssid, IEEE80211_MAX_SSID_LEN + 1)
-			     __field(u16, status)
-	    ),
-	    TP_fast_assign(WIPHY_ASSIGN;
-			   NETDEV_ASSIGN;
-			   MAC_ASSIGN(bssid, params->bssid);
-			   memset(__entry->ssid, 0, IEEE80211_MAX_SSID_LEN + 1);
-			   memcpy(__entry->ssid, params->ssid.ssid,
-				  params->ssid.ssid_len);
-			   __entry->status = params->status;
-	    ),
-	    TP_printk(WIPHY_PR_FMT ", " NETDEV_PR_FMT ", bssid: " MAC_PR_FMT
-		      ", ssid: %s, status: %u", WIPHY_PR_ARG, NETDEV_PR_ARG,
-		      __entry->bssid, __entry->ssid, __entry->status)
-);
-
 /*************************************************************
  *	     cfg80211 exported functions traces		     *
  *************************************************************/
@@ -2650,7 +2627,7 @@ TRACE_EVENT(cfg80211_scan_done,
 	TP_STRUCT__entry(
 		__field(u32, n_channels)
 		__dynamic_array(u8, ie, request ? request->ie_len : 0)
-		__array(u32, rates, NUM_NL80211_BANDS)
+		__array(u32, rates, IEEE80211_NUM_BANDS)
 		__field(u32, wdev_id)
 		MAC_ENTRY(wiphy_mac)
 		__field(bool, no_cck)
@@ -2661,7 +2638,7 @@ TRACE_EVENT(cfg80211_scan_done,
 			memcpy(__get_dynamic_array(ie), request->ie,
 			       request->ie_len);
 			memcpy(__entry->rates, request->rates,
-			       NUM_NL80211_BANDS);
+			       IEEE80211_NUM_BANDS);
 			__entry->wdev_id = request->wdev ?
 					request->wdev->identifier : 0;
 			if (request->wiphy)
@@ -2864,43 +2841,6 @@ TRACE_EVENT(cfg80211_stop_iface,
 	),
 	TP_printk(WIPHY_PR_FMT ", " WDEV_PR_FMT,
 		  WIPHY_PR_ARG, WDEV_PR_ARG)
-);
-
-TRACE_EVENT(rdev_update_owe_info,
-	    TP_PROTO(struct wiphy *wiphy, struct net_device *netdev,
-		     struct cfg80211_update_owe_info *owe_info),
-	    TP_ARGS(wiphy, netdev, owe_info),
-	    TP_STRUCT__entry(WIPHY_ENTRY
-			     NETDEV_ENTRY
-			     MAC_ENTRY(peer)
-			     __field(u16, status)
-			     __dynamic_array(u8, ie, owe_info->ie_len)),
-	    TP_fast_assign(WIPHY_ASSIGN;
-			   NETDEV_ASSIGN;
-			   MAC_ASSIGN(peer, owe_info->peer);
-			   __entry->status = owe_info->status;
-			   memcpy(__get_dynamic_array(ie),
-				  owe_info->ie, owe_info->ie_len);),
-	    TP_printk(WIPHY_PR_FMT ", " NETDEV_PR_FMT ", peer: " MAC_PR_FMT
-		  " status %d", WIPHY_PR_ARG, NETDEV_PR_ARG, MAC_PR_ARG(peer),
-		  __entry->status)
-);
-
-TRACE_EVENT(cfg80211_update_owe_info_event,
-	    TP_PROTO(struct wiphy *wiphy, struct net_device *netdev,
-		     struct cfg80211_update_owe_info *owe_info),
-	    TP_ARGS(wiphy, netdev, owe_info),
-	    TP_STRUCT__entry(WIPHY_ENTRY
-			     NETDEV_ENTRY
-			     MAC_ENTRY(peer)
-			     __dynamic_array(u8, ie, owe_info->ie_len)),
-	    TP_fast_assign(WIPHY_ASSIGN;
-			   NETDEV_ASSIGN;
-			   MAC_ASSIGN(peer, owe_info->peer);
-			   memcpy(__get_dynamic_array(ie), owe_info->ie,
-				  owe_info->ie_len);),
-	    TP_printk(WIPHY_PR_FMT ", " NETDEV_PR_FMT ", peer: " MAC_PR_FMT,
-		      WIPHY_PR_ARG, NETDEV_PR_ARG, MAC_PR_ARG(peer))
 );
 
 #endif /* !__RDEV_OPS_TRACE || TRACE_HEADER_MULTI_READ */

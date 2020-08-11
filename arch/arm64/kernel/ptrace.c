@@ -1359,7 +1359,7 @@ asmlinkage int syscall_trace_enter(struct pt_regs *regs)
 
 	/* Do the secure computing after ptrace; failures should be fast. */
 	if (secure_computing(NULL) == -1)
-		return -1;
+		return -EPERM;
 
 	if (test_thread_flag(TIF_SYSCALL_TRACEPOINT))
 		trace_sys_enter(regs, regs->syscallno);

@@ -1,5 +1,5 @@
 /* Copyright (c) 2014-2017, The Linux Foundation. All rights reserved.
- * Copyright (C) 2018 XiaoMi, Inc.
+ * Copyright (C) 2019 XiaoMi, Inc.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -574,6 +574,11 @@ static int qpnp_wled_set_level(struct qpnp_wled *wled, int level)
 {
 	int i, rc;
 	u8 reg;
+
+
+	/* WLED's lower limit of operation is 0.4% */
+
+
 
 	/* set brightness registers */
 	for (i = 0; i < wled->max_strings; i++) {
@@ -1960,7 +1965,7 @@ static int qpnp_wled_config(struct qpnp_wled *wled)
 	/* Configure the SWITCHING FREQ register */
 	if (wled->switch_freq_khz == 1600)
 		reg = QPNP_WLED_SWITCH_FREQ_1600_KHZ_CODE;
-	else if(wled->switch_freq_khz == 600)
+	else if (wled->switch_freq_khz == 600)
 		reg = QPNP_WLED_SWITCH_FREQ_600_KHZ_CODE;
 	else
 		reg = QPNP_WLED_SWITCH_FREQ_800_KHZ_CODE;
@@ -2266,7 +2271,7 @@ int qpnp_wled_cabc(struct led_classdev *led_cdev, bool enable)
 					wled->strings[i]), &reg);
 		if (rc < 0)
 			return rc;
-		reg &= QPNP_WLED_CABC_MASK;
+		reg &= ~QPNP_WLED_CABC_MASK;
 		reg |= (wled->en_cabc << QPNP_WLED_CABC_SHIFT);
 		rc = qpnp_wled_write_reg(wled,
 				QPNP_WLED_CABC_REG(wled->sink_base,
@@ -2665,12 +2670,11 @@ static int qpnp_wled_probe(struct platform_device *pdev)
 	wled = devm_kzalloc(&pdev->dev, sizeof(*wled), GFP_KERNEL);
 	if (!wled)
 		return -ENOMEM;
-
-	wled->regmap = dev_get_regmap(pdev->dev.parent, NULL);
-	if (!wled->regmap) {
-		dev_err(&pdev->dev, "Couldn't get parent's regmap\n");
-		return -EINVAL;
-	}
+		wled->regmap = dev_get_regmap(pdev->dev.parent, NULL);
+		if (!wled->regmap) {
+			dev_err(&pdev->dev, "Couldn't get parent's regmap\n");
+			return -EINVAL;
+		}
 
 	wled->pdev = pdev;
 

@@ -5,7 +5,6 @@
  *
  * Copyright (C) 2012 Alexandra Chin <alexandra.chin@tw.synaptics.com>
  * Copyright (C) 2012 Scott Lin <scott.lin@tw.synaptics.com>
- * Copyright (C) 2018 XiaoMi, Inc.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -42,6 +41,7 @@
 #include <linux/platform_device.h>
 #include <linux/input/synaptics_dsx.h>
 #include "synaptics_dsx_core.h"
+#include <linux/hwinfo.h>
 
 #define FW_IHEX_NAME "synaptics/startup_fw_update.bin"
 #define FW_IMAGE_NAME "synaptics/startup_fw_update.img"
@@ -2192,6 +2192,8 @@ static int fwu_read_f34_v5v6_queries(void)
 static int fwu_read_f34_queries(void)
 {
 	int retval;
+	struct synaptics_rmi4_data *rmi4_data = fwu->rmi4_data;
+	u8 *tp_maker = NULL;
 
 	memset(&fwu->blkcount, 0x00, sizeof(fwu->blkcount));
 	memset(&fwu->phyaddr, 0x00, sizeof(fwu->phyaddr));
@@ -2201,6 +2203,13 @@ static int fwu_read_f34_queries(void)
 	else
 		retval = fwu_read_f34_v5v6_queries();
 
+	tp_maker = kzalloc(20, GFP_KERNEL);
+	if (tp_maker == NULL)
+		dev_err(rmi4_data->pdev->dev.parent, "%s: Failed to alloc vendor name memory\n", __func__);
+	else {
+		kfree(tp_maker);
+		tp_maker = NULL;
+	}
 	return retval;
 }
 
@@ -4147,7 +4156,8 @@ static const char *fwu_get_firmware_name(struct synaptics_rmi4_data *rmi4_data)
 	bool found = false;
 
 	if (bdata->tp_id_num != 0) {
-		for (i = 0; i < bdata->config_array_size; i++) {
+		for (i = 0; i < bdata->config_array_size; i++)
+		{
 			found = true;
 			if (rmi4_data->chip_id != bdata->config_array[i].chip_id)
 				continue;

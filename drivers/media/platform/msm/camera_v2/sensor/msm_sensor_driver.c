@@ -1,4 +1,5 @@
 /* Copyright (c) 2013-2017, The Linux Foundation. All rights reserved.
+ * Copyright (C) 2019 XiaoMi, Inc.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -86,17 +87,11 @@ static int32_t msm_sensor_driver_create_i2c_v4l_subdev
 	struct i2c_client *client = s_ctrl->sensor_i2c_client->client;
 
 	CDBG("%s %s I2c probe succeeded\n", __func__, client->name);
-#ifndef CONFIG_MACH_XIAOMI_MSM8998
-	if (s_ctrl->bypass_video_node_creation == 0) {
-#endif
-		rc = camera_init_v4l2(&client->dev, &session_id);
-		if (rc < 0) {
-			pr_err("failed: camera_init_i2c_v4l2 rc %d", rc);
-			return rc;
-		}
-#ifndef CONFIG_MACH_XIAOMI_MSM8998
+	rc = camera_init_v4l2(&client->dev, &session_id);
+	if (rc < 0) {
+		pr_err("failed: camera_init_i2c_v4l2 rc %d", rc);
+		return rc;
 	}
-#endif
 
 	CDBG("%s rc %d session_id %d\n", __func__, rc, session_id);
 	snprintf(s_ctrl->msm_sd.sd.name,
@@ -134,17 +129,11 @@ static int32_t msm_sensor_driver_create_v4l_subdev
 	int32_t rc = 0;
 	uint32_t session_id = 0;
 
-#ifndef CONFIG_MACH_XIAOMI_MSM8998
-	if (s_ctrl->bypass_video_node_creation == 0) {
-#endif
-		rc = camera_init_v4l2(&s_ctrl->pdev->dev, &session_id);
-		if (rc < 0) {
-			pr_err("failed: camera_init_v4l2 rc %d", rc);
-			return rc;
-		}
-#ifndef CONFIG_MACH_XIAOMI_MSM8998
+	rc = camera_init_v4l2(&s_ctrl->pdev->dev, &session_id);
+	if (rc < 0) {
+		pr_err("failed: camera_init_v4l2 rc %d", rc);
+		return rc;
 	}
-#endif
 
 	CDBG("rc %d session_id %d", rc, session_id);
 	s_ctrl->sensordata->sensor_info->session_id = session_id;
@@ -749,13 +738,11 @@ static int32_t msm_sensor_driver_is_special_support(
 	return rc;
 }
 
-#ifdef CONFIG_MACH_XIAOMI_MSM8998
 /* compatible eeprom map for sagit P3 & P2 */
 extern int get_back_sensor_module_invalid(void);
 
 extern void get_eeprom_name(uint8_t index, char *name);
 extern uint8_t eeprom_name_count;
-#endif
 
 /* static function definition */
 int32_t msm_sensor_driver_probe(void *setting,
@@ -769,11 +756,8 @@ int32_t msm_sensor_driver_probe(void *setting,
 
 	unsigned long                        mount_pos = 0;
 	uint32_t                             is_yuv;
-
-#ifdef CONFIG_MACH_XIAOMI_MSM8998
 	uint8_t i = 0;
 	char eeprom_name[64];
-#endif
 
 	/* Validate input parameters */
 	if (!setting) {
@@ -855,7 +839,6 @@ int32_t msm_sensor_driver_probe(void *setting,
 		}
 	}
 
-#ifdef CONFIG_MACH_XIAOMI_MSM8998
 	if (strcmp(slave_info->eeprom_name, "") != 0) {
 		for (i = 0; i < eeprom_name_count; i++) {
 			get_eeprom_name(i, eeprom_name);
@@ -870,22 +853,6 @@ int32_t msm_sensor_driver_probe(void *setting,
 			}
 		}
 	}
-#else
-	if (strlen(slave_info->sensor_name) >= MAX_SENSOR_NAME ||
-		strlen(slave_info->eeprom_name) >= MAX_SENSOR_NAME ||
-		strlen(slave_info->actuator_name) >= MAX_SENSOR_NAME ||
-		strlen(slave_info->ois_name) >= MAX_SENSOR_NAME) {
-		pr_err("failed: name len greater than 32.\n");
-		pr_err("sensor name len:%zu, eeprom name len: %zu.\n",
-			strlen(slave_info->sensor_name),
-			strlen(slave_info->eeprom_name));
-		pr_err("actuator name len: %zu, ois name len:%zu.\n",
-			strlen(slave_info->actuator_name),
-			strlen(slave_info->ois_name));
-		rc = -EINVAL;
-		goto free_slave_info;
-	}
-#endif
 
 	/* Print slave info */
 	CDBG("camera id %d Slave addr 0x%X addr_type %d\n",
@@ -923,7 +890,6 @@ int32_t msm_sensor_driver_probe(void *setting,
 
 	CDBG("s_ctrl[%d] %pK", slave_info->camera_id, s_ctrl);
 
-#ifdef CONFIG_MACH_XIAOMI_MSM8998
 	/* compatible eeprom map for sagit P3 & P2 */
 	if (slave_info->camera_id == 1) {
 		rc = get_back_sensor_module_invalid();
@@ -933,7 +899,6 @@ int32_t msm_sensor_driver_probe(void *setting,
 			goto  free_camera_info;
 		}
 	}
-#endif
 
 	if (s_ctrl->sensordata->special_support_size > 0) {
 		if (!msm_sensor_driver_is_special_support(s_ctrl,
@@ -1160,10 +1125,8 @@ free_slave_info:
 	return rc;
 }
 
-#ifdef CONFIG_MACH_XIAOMI_MSM8998
 bool SENSOR_SUPPORT_OIS_FLAG;
 EXPORT_SYMBOL(SENSOR_SUPPORT_OIS_FLAG);
-#endif
 
 static int32_t msm_sensor_driver_get_dt_data(struct msm_sensor_ctrl_t *s_ctrl)
 {
@@ -1171,10 +1134,7 @@ static int32_t msm_sensor_driver_get_dt_data(struct msm_sensor_ctrl_t *s_ctrl)
 	struct msm_camera_sensor_board_info *sensordata = NULL;
 	struct device_node                  *of_node = s_ctrl->of_node;
 	uint32_t	cell_id;
-
-#ifdef CONFIG_MACH_XIAOMI_MSM8998
 	struct device_node *ois_src_node = NULL;
-#endif
 
 	s_ctrl->sensordata = kzalloc(sizeof(*sensordata), GFP_KERNEL);
 	if (!s_ctrl->sensordata) {
@@ -1209,22 +1169,19 @@ static int32_t msm_sensor_driver_get_dt_data(struct msm_sensor_ctrl_t *s_ctrl)
 		goto FREE_SENSOR_DATA;
 	}
 
-#ifdef CONFIG_MACH_XIAOMI_MSM8998
 	/* check whether support ois*/
 	ois_src_node = of_parse_phandle(of_node, "qcom,ois-src", 0);
-	if (cell_id == 0) {
-		if (!ois_src_node) {
-			pr_err("failes: no ois node, maybe didn't support ois SENSOR_SUPPORT_OIS_FLAG false\n");
-			SENSOR_SUPPORT_OIS_FLAG = false;
-		} else {
-			pr_err("OIS SENSOR_SUPPORT_OIS_FLAG true");
-			SENSOR_SUPPORT_OIS_FLAG = true;
-			of_node_put(ois_src_node);
-			ois_src_node = NULL;
-		}
+	if (cell_id == 0){
+	if (!ois_src_node) {
+		pr_err("failes: no ois node, maybe didn't support ois SENSOR_SUPPORT_OIS_FLAG false\n");
+		SENSOR_SUPPORT_OIS_FLAG = false;
+	} else {
+	       pr_err("OIS SENSOR_SUPPORT_OIS_FLAG true");
+		SENSOR_SUPPORT_OIS_FLAG = true;
+		of_node_put(ois_src_node);
+		ois_src_node = NULL;
 	}
-#endif
-
+	}
 	sensordata->special_support_size =
 		of_property_count_strings(of_node,
 				 "qcom,special-support-sensors");

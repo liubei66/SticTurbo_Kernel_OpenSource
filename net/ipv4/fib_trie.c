@@ -316,18 +316,12 @@ static struct tnode *tnode_alloc(int bits)
 
 static inline void empty_child_inc(struct key_vector *n)
 {
-	tn_info(n)->empty_children++;
-
-	if (!tn_info(n)->empty_children)
-		tn_info(n)->full_children++;
+	++tn_info(n)->empty_children ? : ++tn_info(n)->full_children;
 }
 
 static inline void empty_child_dec(struct key_vector *n)
 {
-	if (!tn_info(n)->empty_children)
-		tn_info(n)->full_children--;
-
-	tn_info(n)->empty_children--;
+	tn_info(n)->empty_children-- ? : tn_info(n)->full_children--;
 }
 
 static struct key_vector *leaf_new(t_key key, struct fib_alias *fa)
@@ -1812,7 +1806,7 @@ void fib_table_flush_external(struct fib_table *tb)
 }
 
 /* Caller must hold RTNL. */
-int fib_table_flush(struct fib_table *tb, bool flush_all)
+int fib_table_flush(struct fib_table *tb)
 {
 	struct trie *t = (struct trie *)tb->tb_data;
 	struct key_vector *pn = t->kv;
@@ -1856,17 +1850,7 @@ int fib_table_flush(struct fib_table *tb, bool flush_all)
 		hlist_for_each_entry_safe(fa, tmp, &n->leaf, fa_list) {
 			struct fib_info *fi = fa->fa_info;
 
-			if (!fi ||
-			    (!(fi->fib_flags & RTNH_F_DEAD) &&
-			     !fib_props[fa->fa_type].error)) {
-				slen = fa->fa_slen;
-				continue;
-			}
-
-			/* Do not flush error routes if network namespace is
-			 * not being dismantled
-			 */
-			if (!flush_all && fib_props[fa->fa_type].error) {
+			if (!fi || !(fi->fib_flags & RTNH_F_DEAD)) {
 				slen = fa->fa_slen;
 				continue;
 			}

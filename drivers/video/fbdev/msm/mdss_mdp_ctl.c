@@ -1,4 +1,4 @@
-/* Copyright (c) 2012-2019, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2012-2018, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -77,15 +77,13 @@ static inline u64 fudge_factor(u64 val, u32 numer, u32 denom)
 	u64 result = val;
 
 	if (val) {
-		u64 temp = U64_MAX;
+		u64 temp = -1UL;
 
 		do_div(temp, val);
 		if (temp > numer) {
 			/* no overflow, so we can do the operation*/
 			result = (val * (u64)numer);
 			do_div(result, denom);
-		} else {
-			pr_warn("Overflow, skip fudge factor\n");
 		}
 	}
 	return result;
@@ -2579,7 +2577,6 @@ struct mdss_mdp_mixer *mdss_mdp_mixer_alloc(
 			mixer_pool += ctl->mdata->ndspp;
 			nmixers -= ctl->mdata->ndspp;
 		} else if ((ctl->panel_data->panel_info.is_pluggable) &&
-				!(ctl->panel_data->panel_info.is_prim_panel) &&
 				nmixers_active) {
 			mixer_pool += ctl->mdata->ndspp;
 			nmixers -= ctl->mdata->ndspp;
@@ -4895,8 +4892,7 @@ static inline void __mdss_mdp_mixer_write_layer(struct mdss_mdp_ctl *ctl,
 	u32 off[NUM_MIXERCFG_REGS];
 	int i;
 
-	if (WARN_ON(!values || count < NUM_MIXERCFG_REGS))
-		return;
+	BUG_ON(!values || count < NUM_MIXERCFG_REGS);
 
 	__mdss_mdp_mixer_get_offsets(mixer_num, off, ARRAY_SIZE(off));
 
@@ -6068,11 +6064,10 @@ int mdss_mdp_display_commit(struct mdss_mdp_ctl *ctl, void *arg,
 	    !bitmap_empty(mdata->bwc_enable_map, MAX_DRV_SUP_PIPES))
 		mdss_mdp_bwcpanic_ctrl(mdata, true);
 
-	if (mdata->mdp_rev >= MDSS_MDP_HW_REV_300) {
-		ret = mdss_mdp_cwb_setup(ctl);
-		if (ret)
-			pr_warn("concurrent setup failed ctl=%d\n", ctl->num);
-	}
+	ret = mdss_mdp_cwb_setup(ctl);
+	if (ret)
+		pr_warn("concurrent setup failed ctl=%d\n", ctl->num);
+
 	ctl_flush_bits |= ctl->flush_bits;
 
 	ATRACE_BEGIN("flush_kickoff");

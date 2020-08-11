@@ -474,13 +474,7 @@ urb_error:
 static int flexcop_usb_init(struct flexcop_usb *fc_usb)
 {
 	/* use the alternate setting with the larges buffer */
-	int ret = usb_set_interface(fc_usb->udev, 0, 1);
-
-	if (ret) {
-		err("set interface failed.");
-		return ret;
-	}
-
+	usb_set_interface(fc_usb->udev,0,1);
 	switch (fc_usb->udev->speed) {
 	case USB_SPEED_LOW:
 		err("cannot handle USB speed because it is too slow.");
@@ -513,9 +507,6 @@ static int flexcop_usb_probe(struct usb_interface *intf,
 	struct flexcop_usb *fc_usb = NULL;
 	struct flexcop_device *fc = NULL;
 	int ret;
-
-	if (intf->cur_altsetting->desc.bNumEndpoints < 1)
-		return -ENODEV;
 
 	if ((fc = flexcop_device_kmalloc(sizeof(struct flexcop_usb))) == NULL) {
 		err("out of memory\n");

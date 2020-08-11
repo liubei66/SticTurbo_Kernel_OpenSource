@@ -1,5 +1,5 @@
-/* Copyright (c) 2012-2019, The Linux Foundation. All rights reserved.
- * Copyright (C) 2018 XiaoMi, Inc.
+/* Copyright (c) 2012-2018, The Linux Foundation. All rights reserved.
+ *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
  * only version 2 as published by the Free Software Foundation.
@@ -2606,7 +2606,6 @@ int mdss_mdp_overlay_kickoff(struct msm_fb_data_type *mfd,
 		commit_cb.data = mfd;
 		ret = mdss_mdp_display_commit(mdp5_data->ctl, NULL,
 			&commit_cb);
-		ctl->panel_data->panel_info.kickoff_count++;
 		ATRACE_END("display_commit");
 	}
 	__vsync_set_vsync_handler(mfd);
@@ -3308,14 +3307,12 @@ int mdss_mdp_overlay_vsync_ctrl(struct msm_fb_data_type *mfd, int en)
 		goto end;
 	}
 
-	mdp5_data->vsync_en = en;
-
 	if (!ctl->panel_data->panel_info.cont_splash_enabled
 		&& (!mdss_mdp_ctl_is_power_on(ctl) ||
 		mdss_panel_is_power_on_ulp(ctl->power_state))) {
 		pr_debug("fb%d vsync pending first update en=%d, ctl power state:%d\n",
 				mfd->index, en, ctl->power_state);
-		rc = 0;
+		rc = -EPERM;
 		goto end;
 	}
 
@@ -5255,7 +5252,6 @@ static int __handle_overlay_prepare(struct msm_fb_data_type *mfd,
 		sorted_ovs = kzalloc(num_ovs * sizeof(*ip_ovs), GFP_KERNEL);
 		if (!sorted_ovs) {
 			pr_err("error allocating ovlist mem\n");
-			mutex_unlock(&mdp5_data->ov_lock);
 			return -ENOMEM;
 		}
 		memcpy(sorted_ovs, ip_ovs, num_ovs * sizeof(*ip_ovs));
@@ -5263,7 +5259,6 @@ static int __handle_overlay_prepare(struct msm_fb_data_type *mfd,
 		if (ret) {
 			pr_err("src_split_sort failed. ret=%d\n", ret);
 			kfree(sorted_ovs);
-			mutex_unlock(&mdp5_data->ov_lock);
 			return ret;
 		}
 	}
@@ -5764,15 +5759,6 @@ static int mdss_mdp_overlay_on(struct msm_fb_data_type *mfd)
 	}
 
 panel_on:
-	if (mdp5_data->vsync_en) {
-		if ((ctl) && (ctl->ops.add_vsync_handler)) {
-			pr_info("reenabling vsync for fb%d\n", mfd->index);
-			mdss_mdp_clk_ctrl(MDP_BLOCK_POWER_ON);
-			rc = ctl->ops.add_vsync_handler(ctl,
-					 &ctl->vsync_handler);
-			mdss_mdp_clk_ctrl(MDP_BLOCK_POWER_OFF);
-		}
-	}
 	if (IS_ERR_VALUE(rc)) {
 		pr_err("Failed to turn on fb%d\n", mfd->index);
 		mdss_mdp_overlay_off(mfd);
@@ -6278,7 +6264,7 @@ static int __vsync_retire_setup(struct msm_fb_data_type *mfd)
 	init_kthread_worker(&mdp5_data->worker);
 	init_kthread_work(&mdp5_data->vsync_work, __vsync_retire_work_handler);
 
-	mdp5_data->thread = kthread_run_perf_critical(kthread_worker_fn,
+	mdp5_data->thread = kthread_run(kthread_worker_fn,
 					&mdp5_data->worker, "vsync_retire_work");
 
 	if (IS_ERR(mdp5_data->thread)) {
@@ -6396,15 +6382,6 @@ void mdss_mdp_footswitch_ctrl_handler(bool on)
 static void mdss_mdp_signal_retire_fence(struct msm_fb_data_type *mfd,
 					 int retire_cnt)
 {
-	struct mdss_overlay_private *mdp5_data;
-
-	if (!mfd)
-		return;
-
-	mdp5_data = mfd_to_mdp5_data(mfd);
-	if (!mdp5_data->ctl || !mdp5_data->ctl->ops.remove_vsync_handler)
-		return;
-
 	__vsync_retire_signal(mfd, retire_cnt);
 	pr_debug("Signaled (%d) pending retire fence\n", retire_cnt);
 }
@@ -6614,7 +6591,6 @@ int mdss_mdp_overlay_init(struct msm_fb_data_type *mfd)
 		}
 	}
 	mfd->mdp_sync_pt_data.async_wait_fences = true;
-	mdp5_data->vsync_en = false;
 
 	pm_runtime_set_suspended(&mfd->pdev->dev);
 	pm_runtime_enable(&mfd->pdev->dev);

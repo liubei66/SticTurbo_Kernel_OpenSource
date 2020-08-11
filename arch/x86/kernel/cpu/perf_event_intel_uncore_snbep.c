@@ -1081,8 +1081,6 @@ static struct pci_driver snbep_uncore_pci_driver = {
 	.id_table	= snbep_uncore_pci_ids,
 };
 
-#define NODE_ID_MASK	0x7
-
 /*
  * build pci bus to socket mapping
  */
@@ -1104,7 +1102,7 @@ static int snbep_pci2phy_map_init(int devid)
 		err = pci_read_config_dword(ubox_dev, 0x40, &config);
 		if (err)
 			break;
-		nodeid = config & NODE_ID_MASK;
+		nodeid = config;
 		/* get the Node ID mapping */
 		err = pci_read_config_dword(ubox_dev, 0x54, &config);
 		if (err)

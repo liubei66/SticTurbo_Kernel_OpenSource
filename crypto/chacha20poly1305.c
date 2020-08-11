@@ -130,9 +130,6 @@ static int chacha_decrypt(struct aead_request *req)
 	struct scatterlist *src, *dst;
 	int err;
 
-	if (rctx->cryptlen == 0)
-		goto skip;
-
 	chacha_iv(creq->iv, req, 1);
 
 	sg_init_table(rctx->src, 2);
@@ -153,7 +150,6 @@ static int chacha_decrypt(struct aead_request *req)
 	if (err)
 		return err;
 
-skip:
 	return poly_verify_tag(req);
 }
 
@@ -419,9 +415,6 @@ static int chacha_encrypt(struct aead_request *req)
 	struct scatterlist *src, *dst;
 	int err;
 
-	if (req->cryptlen == 0)
-		goto skip;
-
 	chacha_iv(creq->iv, req, 1);
 
 	sg_init_table(rctx->src, 2);
@@ -442,7 +435,6 @@ static int chacha_encrypt(struct aead_request *req)
 	if (err)
 		return err;
 
-skip:
 	return poly_genkey(req);
 }
 
@@ -645,8 +637,8 @@ static int chachapoly_create(struct crypto_template *tmpl, struct rtattr **tb,
 
 	err = -ENAMETOOLONG;
 	if (snprintf(inst->alg.base.cra_name, CRYPTO_MAX_ALG_NAME,
-		     "%s(%s,%s)", name, chacha->cra_name,
-		     poly->cra_name) >= CRYPTO_MAX_ALG_NAME)
+		     "%s(%s,%s)", name, chacha_name,
+		     poly_name) >= CRYPTO_MAX_ALG_NAME)
 		goto out_drop_chacha;
 	if (snprintf(inst->alg.base.cra_driver_name, CRYPTO_MAX_ALG_NAME,
 		     "%s(%s,%s)", name, chacha->cra_driver_name,

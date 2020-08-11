@@ -3128,17 +3128,17 @@ static int __lock_acquire(struct lockdep_map *lock, unsigned int subclass,
 	if (depth) {
 		hlock = curr->held_locks + depth - 1;
 		if (hlock->class_idx == class_idx && nest_lock) {
-			if (!references)
-				references++;
+			if (hlock->references) {
+				/*
+				 * Check: unsigned int references:12, overflow.
+				 */
+				if (DEBUG_LOCKS_WARN_ON(hlock->references == (1 << 12)-1))
+					return 0;
 
-			if (!hlock->references)
 				hlock->references++;
-
-			hlock->references += references;
-
-			/* Overflow */
-			if (DEBUG_LOCKS_WARN_ON(hlock->references < references))
-				return 0;
+			} else {
+				hlock->references = 2;
+			}
 
 			return 1;
 		}
@@ -3313,9 +3313,6 @@ __lock_set_class(struct lockdep_map *lock, const char *name,
 	struct lock_class *class;
 	unsigned int depth;
 	int i;
-
-	if (unlikely(!debug_locks))
-		return 0;
 
 	depth = curr->lockdep_depth;
 	/*
@@ -3829,7 +3826,7 @@ void lock_contended(struct lockdep_map *lock, unsigned long ip)
 {
 	unsigned long flags;
 
-	if (unlikely(!lock_stat || !debug_locks))
+	if (unlikely(!lock_stat))
 		return;
 
 	if (unlikely(current->lockdep_recursion))
@@ -3849,7 +3846,7 @@ void lock_acquired(struct lockdep_map *lock, unsigned long ip)
 {
 	unsigned long flags;
 
-	if (unlikely(!lock_stat || !debug_locks))
+	if (unlikely(!lock_stat))
 		return;
 
 	if (unlikely(current->lockdep_recursion))

@@ -1,4 +1,5 @@
 /* Copyright (c) 2008-2019, The Linux Foundation. All rights reserved.
+ * Copyright (C) 2019 XiaoMi, Inc.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -22,7 +23,6 @@
 #include <linux/sched.h>
 #include <linux/ratelimit.h>
 #include <linux/timer.h>
-#include <linux/sched.h>
 #include <linux/platform_device.h>
 #include <linux/msm_mhi.h>
 #ifdef CONFIG_DIAG_OVER_USB
@@ -228,17 +228,20 @@ static void drain_timer_func(unsigned long data)
 static void diag_drain_apps_data(struct diag_apps_data_t *data)
 {
 	int err = 0;
+	unsigned long flags;
 
 	if (!data || !data->buf)
 		return;
 
 	err = diag_mux_write(DIAG_LOCAL_PROC, data->buf, data->len,
 			     data->ctxt);
+	spin_lock_irqsave(&driver->diagmem_lock, flags);
 	if (err)
 		diagmem_free(driver, data->buf, POOL_TYPE_HDLC);
 
 	data->buf = NULL;
 	data->len = 0;
+	spin_unlock_irqrestore(&driver->diagmem_lock, flags);
 }
 
 void diag_update_user_client_work_fn(struct work_struct *work)
@@ -309,6 +312,8 @@ static void diag_mempool_init(void)
 	diagmem_init(driver, POOL_TYPE_HDLC);
 	diagmem_init(driver, POOL_TYPE_USER);
 	diagmem_init(driver, POOL_TYPE_DCI);
+
+	spin_lock_init(&driver->diagmem_lock);
 }
 
 static void diag_mempool_exit(void)
@@ -584,8 +589,8 @@ static int diag_remove_client_entry(struct file *file)
 static int diagchar_close(struct inode *inode, struct file *file)
 {
 	int ret;
-	DIAG_LOG(DIAG_DEBUG_USERSPACE, "diag: %s process exit with pid = %d\n",
-		current->comm, current->tgid);
+	DIAG_LOG(DIAG_DEBUG_USERSPACE, "diag: process exit %s\n",
+		current->comm);
 	ret = diag_remove_client_entry(file);
 	mutex_lock(&driver->diag_maskclear_mutex);
 	driver->mask_clear = 0;
@@ -1161,7 +1166,7 @@ static void diag_remote_exit(void)
 	return;
 }
 
-int diagfwd_bridge_init(int xprt)
+int diagfwd_bridge_init(bool use_mhi)
 {
 	return 0;
 }
@@ -1188,19 +1193,15 @@ static int diag_process_userspace_remote(int proc, void *buf, int len)
 }
 #endif
 
-static int mask_request_validate(unsigned char mask_buf[], int len)
+static int mask_request_validate(unsigned char mask_buf[])
 {
 	uint8_t packet_id;
 	uint8_t subsys_id;
 	uint16_t ss_cmd;
 
-	if (len <= 0)
-		return 0;
 	packet_id = mask_buf[0];
 
 	if (packet_id == DIAG_CMD_DIAG_SUBSYS_DELAY) {
-		if (len < 2*sizeof(uint8_t) + sizeof(uint16_t))
-			return 0;
 		subsys_id = mask_buf[1];
 		ss_cmd = *(uint16_t *)(mask_buf + 2);
 		switch (subsys_id) {
@@ -1216,8 +1217,6 @@ static int mask_request_validate(unsigned char mask_buf[], int len)
 			return 0;
 		}
 	} else if (packet_id == 0x4B) {
-		if (len < 2*sizeof(uint8_t) + sizeof(uint16_t))
-			return 0;
 		subsys_id = mask_buf[1];
 		ss_cmd = *(uint16_t *)(mask_buf + 2);
 		/* Packets with SSID which are allowed */
@@ -2610,6 +2609,7 @@ static int diag_process_apps_data_hdlc(unsigned char *buf, int len,
 {
 	int err = 0;
 	int ret = PKT_DROP;
+	unsigned long flags;
 	struct diag_apps_data_t *data = &hdlc_data;
 	struct diag_send_desc_type send = { NULL, NULL, DIAG_STATE_START, 0 };
 	struct diag_hdlc_dest_type enc = { NULL, NULL, 0 };
@@ -2717,10 +2717,11 @@ static int diag_process_apps_data_hdlc(unsigned char *buf, int len,
 	return PKT_ALLOC;
 
 fail_free_buf:
+	spin_lock_irqsave(&driver->diagmem_lock, flags);
 	diagmem_free(driver, data->buf, POOL_TYPE_HDLC);
 	data->buf = NULL;
 	data->len = 0;
-
+	spin_unlock_irqrestore(&driver->diagmem_lock, flags);
 fail_ret:
 	return ret;
 }
@@ -2730,6 +2731,7 @@ static int diag_process_apps_data_non_hdlc(unsigned char *buf, int len,
 {
 	int err = 0;
 	int ret = PKT_DROP;
+	unsigned long flags;
 	struct diag_pkt_frame_t header;
 	struct diag_apps_data_t *data = &non_hdlc_data;
 	/*
@@ -2796,9 +2798,11 @@ static int diag_process_apps_data_non_hdlc(unsigned char *buf, int len,
 	return PKT_ALLOC;
 
 fail_free_buf:
+	spin_lock_irqsave(&driver->diagmem_lock, flags);
 	diagmem_free(driver, data->buf, POOL_TYPE_HDLC);
 	data->buf = NULL;
 	data->len = 0;
+	spin_unlock_irqrestore(&driver->diagmem_lock, flags);
 
 fail_ret:
 	return ret;
@@ -2899,8 +2903,7 @@ static int diag_user_process_raw_data(const char __user *buf, int len)
 	}
 
 	/* Check for proc_type */
-	if (len >= sizeof(int))
-		remote_proc = diag_get_remote(*(int *)user_space_data);
+	remote_proc = diag_get_remote(*(int *)user_space_data);
 	if (remote_proc) {
 		token_offset = sizeof(int);
 		if (len <= MIN_SIZ_ALLOW) {
@@ -2914,7 +2917,7 @@ static int diag_user_process_raw_data(const char __user *buf, int len)
 	}
 	if (driver->mask_check) {
 		if (!mask_request_validate(user_space_data +
-						token_offset, len)) {
+						token_offset)) {
 			pr_alert("diag: mask request Invalid\n");
 			diagmem_free(driver, user_space_data, mempool);
 			user_space_data = NULL;
@@ -2992,7 +2995,7 @@ static int diag_user_process_userspace_data(const char __user *buf, int len)
 	/* Check masks for On-Device logging */
 	if (driver->mask_check) {
 		if (!mask_request_validate(driver->user_space_data_buf +
-					   token_offset, len)) {
+					   token_offset)) {
 			pr_alert("diag: mask request Invalid\n");
 			return -EFAULT;
 		}
@@ -3097,13 +3100,13 @@ static int diag_user_process_apps_data(const char __user *buf, int len,
 	mutex_lock(&apps_data_mutex);
 	mutex_lock(&driver->hdlc_disable_mutex);
 	hdlc_disabled = driver->p_hdlc_disabled[APPS_DATA];
-	mutex_unlock(&driver->hdlc_disable_mutex);
 	if (hdlc_disabled)
 		ret = diag_process_apps_data_non_hdlc(user_space_data, len,
 						      pkt_type);
 	else
 		ret = diag_process_apps_data_hdlc(user_space_data, len,
 						  pkt_type);
+	mutex_unlock(&driver->hdlc_disable_mutex);
 	mutex_unlock(&apps_data_mutex);
 
 	diagmem_free(driver, user_space_data, mempool);
@@ -3132,8 +3135,6 @@ static ssize_t diagchar_read(struct file *file, char __user *buf, size_t count,
 	int exit_stat = 0;
 	int write_len = 0;
 	struct diag_md_session_t *session_info = NULL;
-	struct pid *pid_struct = NULL;
-	struct task_struct *task_s = NULL;
 
 	mutex_lock(&driver->diagchar_mutex);
 	for (i = 0; i < driver->num_clients; i++)
@@ -3341,40 +3342,17 @@ exit:
 		list_for_each_safe(start, temp, &driver->dci_client_list) {
 			entry = list_entry(start, struct diag_dci_client_tbl,
 									track);
-			pid_struct = find_get_pid(entry->tgid);
-			if (!pid_struct)
+			if (entry->client->tgid != current->tgid)
 				continue;
-			task_s = get_pid_task(pid_struct, PIDTYPE_PID);
-			if (!task_s) {
-				DIAG_LOG(DIAG_DEBUG_DCI,
-				"diag: valid task doesn't exist for pid = %d\n",
-				entry->tgid);
-				put_pid(pid_struct);
+			if (!entry->in_service)
 				continue;
-			}
-			if (task_s == entry->client) {
-				if (entry->client->tgid != current->tgid) {
-					put_task_struct(task_s);
-					put_pid(pid_struct);
-					continue;
-				}
-			}
-			if (!entry->in_service) {
-				put_task_struct(task_s);
-				put_pid(pid_struct);
-				continue;
-			}
 			if (copy_to_user(buf + ret, &data_type, sizeof(int))) {
-				put_task_struct(task_s);
-				put_pid(pid_struct);
 				mutex_unlock(&driver->dci_mutex);
 				goto end;
 			}
 			ret += sizeof(int);
 			if (copy_to_user(buf + ret, &entry->client_info.token,
 				sizeof(int))) {
-				put_task_struct(task_s);
-				put_pid(pid_struct);
 				mutex_unlock(&driver->dci_mutex);
 				goto end;
 			}
@@ -3386,13 +3364,9 @@ exit:
 			atomic_dec(&driver->data_ready_notif[index]);
 			mutex_unlock(&driver->diagchar_mutex);
 			if (exit_stat == 1) {
-				put_task_struct(task_s);
-				put_pid(pid_struct);
 				mutex_unlock(&driver->dci_mutex);
 				goto end;
 			}
-			put_task_struct(task_s);
-			put_pid(pid_struct);
 		}
 		mutex_unlock(&driver->dci_mutex);
 		goto end;
@@ -3788,7 +3762,7 @@ static int diag_mhi_probe(struct platform_device *pdev)
 		diag_remote_exit();
 		return ret;
 	}
-	ret = diagfwd_bridge_init(1);
+	ret = diagfwd_bridge_init(true);
 	if (ret) {
 		diagfwd_bridge_exit();
 		return ret;
@@ -3821,7 +3795,7 @@ static int diagfwd_usb_probe(struct platform_device *pdev)
 		diag_remote_exit();
 		return ret;
 	}
-	ret = diagfwd_bridge_init(0);
+	ret = diagfwd_bridge_init(false);
 	if (ret) {
 		diagfwd_bridge_exit();
 		return ret;
@@ -3841,39 +3815,6 @@ static struct platform_driver diagfwd_usb_driver = {
 		.name = "DIAGFWD USB Platform",
 		.owner = THIS_MODULE,
 		.of_match_table = diagfwd_usb_table,
-	},
-};
-
-static int diagfwd_sdio_probe(struct platform_device *pdev)
-{
-	int ret;
-
-	driver->pdev = pdev;
-	ret = diag_remote_init();
-	if (ret) {
-		diag_remote_exit();
-		return ret;
-	}
-	ret = diagfwd_bridge_init(2);
-	if (ret) {
-		diagfwd_bridge_exit();
-		return ret;
-	}
-	pr_debug("diag: usb device is ready\n");
-	return 0;
-}
-
-static const struct of_device_id diagfwd_sdio_table[] = {
-	{.compatible = "qcom,diagfwd-sdio"},
-	{},
-};
-
-static struct platform_driver diagfwd_sdio_driver = {
-	.probe = diagfwd_sdio_probe,
-	.driver = {
-		.name = "DIAGFWD SDIO Platform",
-		.owner = THIS_MODULE,
-		.of_match_table = diagfwd_sdio_table,
 	},
 };
 
@@ -4004,7 +3945,6 @@ static int __init diagchar_init(void)
 	pr_debug("diagchar initialized now");
 	platform_driver_register(&diag_mhi_driver);
 	platform_driver_register(&diagfwd_usb_driver);
-	platform_driver_register(&diagfwd_sdio_driver);
 	return 0;
 
 fail:

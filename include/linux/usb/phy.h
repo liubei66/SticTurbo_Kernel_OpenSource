@@ -126,9 +126,6 @@ struct usb_phy {
 
 	/* reset the PHY clocks */
 	int	(*reset)(struct usb_phy *x);
-
-	/* return linestate with Idp_src (used for DCD with USB2 PHY) */
-	int (*dpdm_with_idp_src)(struct usb_phy *x);
 };
 
 /**
@@ -208,15 +205,6 @@ usb_phy_reset(struct usb_phy *x)
 {
 	if (x && x->reset)
 		return x->reset(x);
-
-	return 0;
-}
-
-static inline int
-usb_phy_dpdm_with_idp_src(struct usb_phy *x)
-{
-	if (x && x->dpdm_with_idp_src)
-		return x->dpdm_with_idp_src(x);
 
 	return 0;
 }

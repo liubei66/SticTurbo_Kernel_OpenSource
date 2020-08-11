@@ -483,15 +483,27 @@ static struct socket *sockfd_lookup_light(int fd, int *err, int *fput_needed)
 static ssize_t sockfs_getxattr(struct dentry *dentry,
 			       const char *name, void *value, size_t size)
 {
-	if (!strcmp(name, XATTR_NAME_SOCKPROTONAME)) {
+	const char *proto_name;
+	size_t proto_size;
+	int error;
+
+	error = -ENODATA;
+	if (!strncmp(name, XATTR_NAME_SOCKPROTONAME, XATTR_NAME_SOCKPROTONAME_LEN)) {
+		proto_name = dentry->d_name.name;
+		proto_size = strlen(proto_name);
+
 		if (value) {
-			if (dentry->d_name.len + 1 > size)
-				return -ERANGE;
-			memcpy(value, dentry->d_name.name, dentry->d_name.len + 1);
+			error = -ERANGE;
+			if (proto_size + 1 > size)
+				goto out;
+
+			strncpy(value, proto_name, proto_size + 1);
 		}
-		return dentry->d_name.len + 1;
+		error = proto_size + 1;
 	}
-	return -EOPNOTSUPP;
+
+out:
+	return error;
 }
 
 static ssize_t sockfs_listxattr(struct dentry *dentry, char *buffer,
@@ -591,7 +603,6 @@ static void __sock_release(struct socket *sock, struct inode *inode)
 		if (inode)
 			inode_lock(inode);
 		sock->ops->release(sock);
-		sock->sk = NULL;
 		if (inode)
 			inode_unlock(inode);
 		sock->ops = NULL;
@@ -2821,14 +2832,9 @@ static int ethtool_ioctl(struct net *net, struct compat_ifreq __user *ifr32)
 		    copy_in_user(&rxnfc->fs.ring_cookie,
 				 &compat_rxnfc->fs.ring_cookie,
 				 (void __user *)(&rxnfc->fs.location + 1) -
-				 (void __user *)&rxnfc->fs.ring_cookie))
-			return -EFAULT;
-		if (ethcmd == ETHTOOL_GRXCLSRLALL) {
-			if (put_user(rule_cnt, &rxnfc->rule_cnt))
-				return -EFAULT;
-		} else if (copy_in_user(&rxnfc->rule_cnt,
-					&compat_rxnfc->rule_cnt,
-					sizeof(rxnfc->rule_cnt)))
+				 (void __user *)&rxnfc->fs.ring_cookie) ||
+		    copy_in_user(&rxnfc->rule_cnt, &compat_rxnfc->rule_cnt,
+				 sizeof(rxnfc->rule_cnt)))
 			return -EFAULT;
 	}
 
@@ -3064,9 +3070,8 @@ static int routing_ioctl(struct net *net, struct socket *sock,
 
 	if (sock && sock->sk && sock->sk->sk_family == AF_INET6) { /* ipv6 */
 		struct in6_rtmsg32 __user *ur6 = argp;
-		ret = copy_from_user((u8 *)&r6 + offsetof(typeof(r6), rtmsg_dst),
-				     (u8 *)ur6 + offsetof(typeof(*ur6), rtmsg_dst),
-				     3 * sizeof(r6.rtmsg_dst));
+		ret = copy_from_user(&r6.rtmsg_dst, &(ur6->rtmsg_dst),
+			3 * sizeof(struct in6_addr));
 		ret |= get_user(r6.rtmsg_type, &(ur6->rtmsg_type));
 		ret |= get_user(r6.rtmsg_dst_len, &(ur6->rtmsg_dst_len));
 		ret |= get_user(r6.rtmsg_src_len, &(ur6->rtmsg_src_len));
@@ -3078,9 +3083,8 @@ static int routing_ioctl(struct net *net, struct socket *sock,
 		r = (void *) &r6;
 	} else { /* ipv4 */
 		struct rtentry32 __user *ur4 = argp;
-		ret = copy_from_user((u8 *)&r4 + offsetof(typeof(r4), rt_dst),
-				     (u8 *)ur4 + offsetof(typeof(*ur4), rt_dst),
-				     3 * sizeof(r4.rt_dst));
+		ret = copy_from_user(&r4.rt_dst, &(ur4->rt_dst),
+					3 * sizeof(struct sockaddr));
 		ret |= get_user(r4.rt_flags, &(ur4->rt_flags));
 		ret |= get_user(r4.rt_metric, &(ur4->rt_metric));
 		ret |= get_user(r4.rt_mtu, &(ur4->rt_mtu));

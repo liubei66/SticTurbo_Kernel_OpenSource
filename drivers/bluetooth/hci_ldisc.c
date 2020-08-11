@@ -246,7 +246,7 @@ static int hci_uart_flush(struct hci_dev *hdev)
 	tty_ldisc_flush(tty);
 	tty_driver_flush_buffer(tty);
 
-	if (test_bit(HCI_UART_PROTO_READY, &hu->flags))
+	if (test_bit(HCI_UART_PROTO_SET, &hu->flags))
 		hu->proto->flush(hu);
 
 	return 0;
@@ -274,15 +274,6 @@ static int hci_uart_send_frame(struct hci_dev *hdev, struct sk_buff *skb)
 	hci_uart_tx_wakeup(hu);
 
 	return 0;
-}
-
-/* Check the underlying device or tty has flow control support */
-bool hci_uart_has_flow_control(struct hci_uart *hu)
-{
-	if (hu->tty->driver->ops->tiocmget && hu->tty->driver->ops->tiocmset)
-		return true;
-
-	return false;
 }
 
 /* Flow control or un-flow control the device */
@@ -531,7 +522,7 @@ static void hci_uart_tty_close(struct tty_struct *tty)
 
 	cancel_work_sync(&hu->write_work);
 
-	if (test_and_clear_bit(HCI_UART_PROTO_READY, &hu->flags)) {
+	if (test_and_clear_bit(HCI_UART_PROTO_SET, &hu->flags)) {
 		if (hdev) {
 			if (test_bit(HCI_UART_REGISTERED, &hu->flags))
 				hci_unregister_dev(hdev);
@@ -542,7 +533,6 @@ static void hci_uart_tty_close(struct tty_struct *tty)
 		hu->proto = NULL;
 		hci_uart_proto_unlock(hu);
 	}
-	clear_bit(HCI_UART_PROTO_SET, &hu->flags);
 
 	cancel_work_sync(&hu->write_work);
 
@@ -574,7 +564,7 @@ static void hci_uart_tty_wakeup(struct tty_struct *tty)
 	if (tty != hu->tty)
 		return;
 
-	if (test_bit(HCI_UART_PROTO_READY, &hu->flags))
+	if (test_bit(HCI_UART_PROTO_SET, &hu->flags))
 		hci_uart_tx_wakeup(hu);
 }
 
@@ -598,7 +588,7 @@ static void hci_uart_tty_receive(struct tty_struct *tty, const u8 *data,
 	if (!hu || tty != hu->tty)
 		return;
 
-	if (!test_bit(HCI_UART_PROTO_READY, &hu->flags))
+	if (!test_bit(HCI_UART_PROTO_SET, &hu->flags))
 		return;
 
 	/* It does not need a lock here as it is already protected by a mutex in
@@ -693,7 +683,6 @@ static int hci_uart_set_proto(struct hci_uart *hu, int id)
 		return err;
 	}
 
-	set_bit(HCI_UART_PROTO_READY, &hu->flags);
 	return 0;
 }
 

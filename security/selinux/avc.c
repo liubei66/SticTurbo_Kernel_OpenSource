@@ -147,22 +147,23 @@ static void avc_dump_query(struct audit_buffer *ab, u32 ssid, u32 tsid, u16 tcla
 {
 	int rc;
 	char *scontext;
-	char buf[SELINUX_LABEL_LENGTH];
 	u32 scontext_len;
 
-	scontext = buf;
-
-	rc = security_sid_to_context_stack(ssid, &scontext, &scontext_len);
+	rc = security_sid_to_context(ssid, &scontext, &scontext_len);
 	if (rc)
 		audit_log_format(ab, "ssid=%d", ssid);
-	else
+	else {
 		audit_log_format(ab, "scontext=%s", scontext);
+		kfree(scontext);
+	}
 
-	rc = security_sid_to_context_stack(tsid, &scontext, &scontext_len);
+	rc = security_sid_to_context(tsid, &scontext, &scontext_len);
 	if (rc)
 		audit_log_format(ab, " tsid=%d", tsid);
-	else
+	else {
 		audit_log_format(ab, " tcontext=%s", scontext);
+		kfree(scontext);
+	}
 
 	BUG_ON(!tclass || tclass >= ARRAY_SIZE(secclass_map));
 	audit_log_format(ab, " tclass=%s", secclass_map[tclass-1].name);
@@ -348,26 +349,26 @@ static struct avc_xperms_decision_node
 	struct extended_perms_decision *xpd;
 
 	xpd_node = kmem_cache_zalloc(avc_xperms_decision_cachep,
-			GFP_NOWAIT | __GFP_NOWARN);
+				GFP_ATOMIC | __GFP_NOMEMALLOC);
 	if (!xpd_node)
 		return NULL;
 
 	xpd = &xpd_node->xpd;
 	if (which & XPERMS_ALLOWED) {
 		xpd->allowed = kmem_cache_zalloc(avc_xperms_data_cachep,
-						GFP_NOWAIT | __GFP_NOWARN);
+						GFP_ATOMIC | __GFP_NOMEMALLOC);
 		if (!xpd->allowed)
 			goto error;
 	}
 	if (which & XPERMS_AUDITALLOW) {
 		xpd->auditallow = kmem_cache_zalloc(avc_xperms_data_cachep,
-						GFP_NOWAIT | __GFP_NOWARN);
+						GFP_ATOMIC | __GFP_NOMEMALLOC);
 		if (!xpd->auditallow)
 			goto error;
 	}
 	if (which & XPERMS_DONTAUDIT) {
 		xpd->dontaudit = kmem_cache_zalloc(avc_xperms_data_cachep,
-						GFP_NOWAIT | __GFP_NOWARN);
+						GFP_ATOMIC | __GFP_NOMEMALLOC);
 		if (!xpd->dontaudit)
 			goto error;
 	}
@@ -396,7 +397,7 @@ static struct avc_xperms_node *avc_xperms_alloc(void)
 	struct avc_xperms_node *xp_node;
 
 	xp_node = kmem_cache_zalloc(avc_xperms_cachep,
-			GFP_NOWAIT | __GFP_NOWARN);
+				GFP_ATOMIC|__GFP_NOMEMALLOC);
 	if (!xp_node)
 		return xp_node;
 	INIT_LIST_HEAD(&xp_node->xpd_head);
@@ -549,7 +550,7 @@ static struct avc_node *avc_alloc_node(void)
 {
 	struct avc_node *node;
 
-	node = kmem_cache_zalloc(avc_node_cachep, GFP_NOWAIT | __GFP_NOWARN);
+	node = kmem_cache_zalloc(avc_node_cachep, GFP_ATOMIC|__GFP_NOMEMALLOC);
 	if (!node)
 		goto out;
 
@@ -744,9 +745,6 @@ noinline int slow_avc_audit(u32 ssid, u32 tsid, u16 tclass,
 {
 	struct common_audit_data stack_data;
 	struct selinux_audit_data sad;
-
-	if (denied && !result)
-		return 0;
 
 	if (!a) {
 		a = &stack_data;
@@ -985,6 +983,14 @@ static noinline int avc_denied(u32 ssid, u32 tsid,
 				u8 driver, u8 xperm, unsigned flags,
 				struct av_decision *avd)
 {
+	if (flags & AVC_STRICT)
+		return -EACCES;
+
+	if (selinux_enforcing && !(avd->flags & AVD_FLAGS_PERMISSIVE))
+		return -EACCES;
+
+	avc_update_node(AVC_CALLBACK_GRANT, requested, driver, xperm, ssid,
+				tsid, tclass, avd->seqno, NULL, flags);
 	return 0;
 }
 

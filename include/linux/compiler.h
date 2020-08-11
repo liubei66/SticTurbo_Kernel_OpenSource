@@ -52,22 +52,6 @@ extern void __chk_io_ptr(const volatile void __iomem *);
 
 #ifdef __KERNEL__
 
-/*
- * Minimal backport of compiler_attributes.h to add support for __copy
- * to v4.9.y so that we can use it in init/exit_module to avoid
- * -Werror=missing-attributes errors on GCC 9.
- */
-#ifndef __has_attribute
-# define __has_attribute(x) __GCC4_has_attribute_##x
-# define __GCC4_has_attribute___copy__                0
-#endif
-
-#if __has_attribute(__copy__)
-# define __copy(symbol)                 __attribute__((__copy__(symbol)))
-#else
-# define __copy(symbol)
-#endif
-
 #ifdef __GNUC__
 #include <linux/compiler-gcc.h>
 #endif
@@ -191,37 +175,9 @@ void ftrace_likely_update(struct ftrace_branch_data *f, int val, int expect);
 # define barrier_data(ptr) barrier()
 #endif
 
-/* workaround for GCC PR82365 if needed */
-#ifndef barrier_before_unreachable
-# define barrier_before_unreachable() do { } while (0)
-#endif
-
 /* Unreachable code */
 #ifndef unreachable
 # define unreachable() do { } while (1)
-#endif
-
-/*
- * KENTRY - kernel entry point
- * This can be used to annotate symbols (functions or data) that are used
- * without their linker symbol being referenced explicitly. For example,
- * interrupt vector handlers, or functions in the kernel image that are found
- * programatically.
- *
- * Not required for symbols exported with EXPORT_SYMBOL, or initcalls. Those
- * are handled in their own way (with KEEP() in linker scripts).
- *
- * KENTRY can be avoided if the symbols in question are marked as KEEP() in the
- * linker script. For example an architecture could KEEP() its entire
- * boot/exception vector code rather than annotate each function and data.
- */
-#ifndef KENTRY
-# define KENTRY(sym)						\
-	extern typeof(sym) sym;					\
-	static const unsigned long __kentry_##sym		\
-	__used							\
-	__attribute__((section("___kentry" "+" #sym ), used))	\
-	= (unsigned long)&sym;
 #endif
 
 #ifndef RELOC_HIDE
@@ -459,10 +415,6 @@ static __always_inline void __write_once_size(volatile void *p, void *res, int s
 
 #ifndef __visible
 #define __visible
-#endif
-
-#ifndef __norecordmcount
-#define __norecordmcount
 #endif
 
 /*

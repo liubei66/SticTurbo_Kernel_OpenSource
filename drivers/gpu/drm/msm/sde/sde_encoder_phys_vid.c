@@ -1,4 +1,4 @@
-/* Copyright (c) 2015-2019, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2015-2018, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -308,13 +308,7 @@ static void sde_encoder_phys_vid_vblank_irq(void *arg, int irq_idx)
 	if (hw_ctl && hw_ctl->ops.get_flush_register)
 		flush_register = hw_ctl->ops.get_flush_register(hw_ctl);
 
-	/*
-	 * When bootloader's splash is presented, as bootloader is concurrently
-	 * flushing hardware pipes, so when checking flush_register, we need
-	 * to care if the active bit in the flush_register matches with the
-	 * bootloader's splash pipe flush bits.
-	 */
-	if ((flush_register & ~phys_enc->splash_flush_bits) == 0)
+	if (flush_register == 0)
 		new_cnt = atomic_add_unless(&phys_enc->pending_kickoff_cnt,
 				-1, 0);
 	spin_unlock_irqrestore(phys_enc->enc_spinlock, lock_flags);
@@ -841,18 +835,6 @@ static void sde_encoder_phys_vid_disable(struct sde_encoder_phys *phys_enc)
 	phys_enc->enable_state = SDE_ENC_DISABLED;
 }
 
-static void sde_encoder_phys_vid_post_disable(
-		struct sde_encoder_phys *phys_enc)
-{
-	if (!phys_enc || !phys_enc->hw_ctl) {
-		SDE_ERROR("invalid encoder %d\n", phys_enc != NULL);
-		return;
-	}
-
-	if (phys_enc->hw_ctl->ops.clear_intf_cfg)
-		phys_enc->hw_ctl->ops.clear_intf_cfg(phys_enc->hw_ctl);
-}
-
 static void sde_encoder_phys_vid_handle_post_kickoff(
 		struct sde_encoder_phys *phys_enc)
 {
@@ -908,7 +890,6 @@ static void sde_encoder_phys_vid_init_ops(struct sde_encoder_phys_ops *ops)
 	ops->mode_fixup = sde_encoder_phys_vid_mode_fixup;
 	ops->enable = sde_encoder_phys_vid_enable;
 	ops->disable = sde_encoder_phys_vid_disable;
-	ops->post_disable = sde_encoder_phys_vid_post_disable;
 	ops->destroy = sde_encoder_phys_vid_destroy;
 	ops->get_hw_resources = sde_encoder_phys_vid_get_hw_resources;
 	ops->control_vblank_irq = sde_encoder_phys_vid_control_vblank_irq;
@@ -989,7 +970,6 @@ struct sde_encoder_phys *sde_encoder_phys_vid_init(
 		INIT_LIST_HEAD(&vid_enc->irq_cb[i].list);
 	atomic_set(&phys_enc->vblank_refcount, 0);
 	atomic_set(&phys_enc->pending_kickoff_cnt, 0);
-	phys_enc->splash_flush_bits = 0;
 	init_waitqueue_head(&phys_enc->pending_kickoff_wq);
 	phys_enc->enable_state = SDE_ENC_DISABLED;
 

@@ -191,7 +191,6 @@ static struct page *get_arg_page(struct linux_binprm *bprm, unsigned long pos,
 {
 	struct page *page;
 	int ret;
-	unsigned int gup_flags = FOLL_FORCE;
 
 #ifdef CONFIG_STACK_GROWSUP
 	if (write) {
@@ -200,12 +199,8 @@ static struct page *get_arg_page(struct linux_binprm *bprm, unsigned long pos,
 			return NULL;
 	}
 #endif
-
-	if (write)
-		gup_flags |= FOLL_WRITE;
-
-	ret = get_user_pages(current, bprm->mm, pos, 1, gup_flags,
-			&page, NULL);
+	ret = get_user_pages(current, bprm->mm, pos,
+			1, write, 1, &page, NULL);
 	if (ret <= 0)
 		return NULL;
 
@@ -1019,15 +1014,6 @@ static int de_thread(struct task_struct *tsk)
 		leader->group_leader = tsk;
 
 		tsk->exit_signal = SIGCHLD;
-		/*
-		 * need to delete leader from adj tree, because it will not be
-		 * group leader (exit_signal = -1) soon. release_task(leader)
-		 * can't delete it.
-		 */
-		spin_lock_irq(lock);
-		delete_from_adj_tree(leader);
-		add_2_adj_tree(tsk);
-		spin_unlock_irq(lock);
 		leader->exit_signal = -1;
 
 		BUG_ON(leader->exit_state != EXIT_ZOMBIE);
@@ -1091,31 +1077,15 @@ killed:
 	return -EAGAIN;
 }
 
-char *__get_task_comm(char *buf, size_t buf_size, struct task_struct *tsk)
+char *get_task_comm(char *buf, struct task_struct *tsk)
 {
+	/* buf must be at least sizeof(tsk->comm) in size */
 	task_lock(tsk);
-	strncpy(buf, tsk->comm, buf_size);
+	strncpy(buf, tsk->comm, sizeof(tsk->comm));
 	task_unlock(tsk);
 	return buf;
 }
-EXPORT_SYMBOL_GPL(__get_task_comm);
-
-#ifdef CONFIG_BLOCK_UNWANTED_APPS
-struct task_kill_info {
-	struct task_struct *task;
-	struct work_struct work;
-};
-
-static void proc_kill_task(struct work_struct *work)
-{
-	struct task_kill_info *kinfo = container_of(work, typeof(*kinfo), work);
-	struct task_struct *task = kinfo->task;
-
-	send_sig(SIGKILL, task, 0);
-	put_task_struct(task);
-	kfree(kinfo);
-}
-#endif
+EXPORT_SYMBOL_GPL(get_task_comm);
 
 /*
  * These functions flushes out all traces of the currently running executable
@@ -1128,26 +1098,6 @@ void __set_task_comm(struct task_struct *tsk, const char *buf, bool exec)
 	trace_task_rename(tsk, buf);
 	strlcpy(tsk->comm, buf, sizeof(tsk->comm));
 	task_unlock(tsk);
-#ifdef CONFIG_BLOCK_UNWANTED_APPS
-	if (unlikely(strstr(tsk->comm, "cnss_diag")) ||
-		unlikely(strstr(tsk->comm, "com.miui.daemon")) ||
-		unlikely(strstr(tsk->comm, "com.miui.daemon:*")) ||
-		unlikely(strstr(tsk->comm, "com.miui.systemAdSolution")) ||
-		unlikely(strstr(tsk->comm, "com.xiaomi.ab")) ||
-		unlikely(strstr(tsk->comm, "com.miui.analytics")) ||
-		unlikely(strstr(tsk->comm, "libweex*")) ||
-		unlikely(strstr(tsk->comm, "com.xiaomi.powerchecker")) ||
-		unlikely(strstr(tsk->comm, "tcpdump"))) {
-		struct task_kill_info *kinfo;
-		kinfo = kmalloc(sizeof(*kinfo), GFP_KERNEL);
-		if (kinfo) {
-			get_task_struct(tsk);
-			kinfo->task = tsk;
-			INIT_WORK(&kinfo->work, proc_kill_task);
-			schedule_work(&kinfo->work);
-		}
-	}
-#endif
 	perf_event_comm(tsk, exec);
 }
 
@@ -1690,7 +1640,7 @@ static int do_execveat_common(int fd, struct filename *filename,
 	current->fs->in_exec = 0;
 	current->in_execve = 0;
 	acct_update_integrals(current);
-	task_numa_free(current, false);
+	task_numa_free(current);
 	free_bprm(bprm);
 	kfree(pathbuf);
 	putname(filename);

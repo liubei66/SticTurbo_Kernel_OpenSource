@@ -133,7 +133,7 @@ static int call_cpuidle(struct cpuidle_driver *drv, struct cpuidle_device *dev,
  */
 static void cpuidle_idle_call(void)
 {
-	struct cpuidle_device *dev = cpuidle_get_device();
+	struct cpuidle_device *dev = __this_cpu_read(cpuidle_devices);
 	struct cpuidle_driver *drv = cpuidle_get_cpu_driver(dev);
 	int next_state, entered_state;
 
@@ -210,7 +210,6 @@ DEFINE_PER_CPU(bool, cpu_dead_idle);
 static void cpu_idle_loop(void)
 {
 	while (1) {
-	int cpu = smp_processor_id();
 		/*
 		 * If the arch has a polling bit, we maintain an invariant:
 		 *
@@ -228,7 +227,7 @@ static void cpu_idle_loop(void)
 			check_pgt_cache();
 			rmb();
 
-			if (cpu_is_offline(cpu)) {
+			if (cpu_is_offline(smp_processor_id())) {
 				rcu_cpu_notify(NULL, CPU_DYING_IDLE,
 					       (void *)(long)smp_processor_id());
 				smp_mb(); /* all activity before dead. */

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013-2017, 2019 Linux Foundation. All rights reserved.
+ * Copyright (c) 2013-2017, Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -195,8 +195,7 @@ static int lsm_lab_buffer_sanity(struct lsm_priv *prtd,
 }
 
 static void lsm_event_handler(uint32_t opcode, uint32_t token,
-			      void *payload, uint16_t client_size,
-				void *priv)
+			      void *payload, void *priv)
 {
 	unsigned long flags;
 	struct lsm_priv *prtd = priv;
@@ -264,12 +263,6 @@ static void lsm_event_handler(uint32_t opcode, uint32_t token,
 	}
 
 	case LSM_SESSION_EVENT_DETECTION_STATUS:
-		if (client_size < 3 * sizeof(uint8_t)) {
-			dev_err(rtd->dev,
-					"%s: client_size has invalid size[%d]\n",
-					__func__, client_size);
-			return;
-		}
 		status = (uint16_t)((uint8_t *)payload)[0];
 		payload_size = (uint16_t)((uint8_t *)payload)[2];
 		index = 4;
@@ -279,12 +272,6 @@ static void lsm_event_handler(uint32_t opcode, uint32_t token,
 	break;
 
 	case LSM_SESSION_EVENT_DETECTION_STATUS_V2:
-		if (client_size < 2 * sizeof(uint8_t)) {
-			dev_err(rtd->dev,
-					"%s: client_size has invalid size[%d]\n",
-					__func__, client_size);
-			return;
-		}
 		status = (uint16_t)((uint8_t *)payload)[0];
 		payload_size = (uint16_t)((uint8_t *)payload)[1];
 		index = 2;
@@ -294,12 +281,6 @@ static void lsm_event_handler(uint32_t opcode, uint32_t token,
 		break;
 
 	case LSM_SESSION_EVENT_DETECTION_STATUS_V3:
-		if (client_size < 2 * (sizeof(uint32_t) + sizeof(uint8_t))) {
-			dev_err(rtd->dev,
-					"%s: client_size has invalid size[%d]\n",
-					__func__, client_size);
-			return;
-		}
 		event_ts_lsw = ((uint32_t *)payload)[0];
 		event_ts_msw = ((uint32_t *)payload)[1];
 		status = (uint16_t)((uint8_t *)payload)[8];
@@ -325,7 +306,6 @@ static void lsm_event_handler(uint32_t opcode, uint32_t token,
 		if (!prtd->event_status) {
 			dev_err(rtd->dev, "%s: no memory for event status\n",
 				__func__);
-			spin_unlock_irqrestore(&prtd->event_lock, flags);
 			return;
 		}
 		/*
@@ -338,22 +318,12 @@ static void lsm_event_handler(uint32_t opcode, uint32_t token,
 		prtd->event_status->payload_size = payload_size;
 
 		if (likely(prtd->event_status)) {
-			if (client_size >= (payload_size + index)) {
-				memcpy(prtd->event_status->payload,
-					&((uint8_t *)payload)[index],
-					payload_size);
-				prtd->event_avail = 1;
-				spin_unlock_irqrestore(&prtd->event_lock,
-								flags);
-				wake_up(&prtd->event_wait);
-			} else {
-				spin_unlock_irqrestore(&prtd->event_lock,
-								flags);
-				dev_err(rtd->dev,
-						"%s: Failed to copy memory with invalid size = %d\n",
-						__func__, payload_size);
-				return;
-			}
+			memcpy(prtd->event_status->payload,
+			       &((uint8_t *)payload)[index],
+			       payload_size);
+			prtd->event_avail = 1;
+			spin_unlock_irqrestore(&prtd->event_lock, flags);
+			wake_up(&prtd->event_wait);
 		} else {
 			spin_unlock_irqrestore(&prtd->event_lock, flags);
 			dev_err(rtd->dev,
@@ -1396,8 +1366,7 @@ static int msm_lsm_ioctl_compat(struct snd_pcm_substream *substream,
 		if (copy_from_user(&userarg32, arg, sizeof(userarg32))) {
 			dev_err(rtd->dev, "%s: err copyuser ioctl %s\n",
 				__func__, "SNDRV_LSM_EVENT_STATUS_V3_32");
-			err = -EFAULT;
-			goto done;
+			return -EFAULT;
 		}
 
 		if (userarg32.payload_size >
@@ -1405,8 +1374,7 @@ static int msm_lsm_ioctl_compat(struct snd_pcm_substream *substream,
 			pr_err("%s: payload_size %d is invalid, max allowed = %d\n",
 				__func__, userarg32.payload_size,
 				LISTEN_MAX_STATUS_PAYLOAD_SIZE);
-			err = -EINVAL;
-			goto done;
+			return -EINVAL;
 		}
 
 		size = sizeof(*user) + userarg32.payload_size;
@@ -1415,8 +1383,7 @@ static int msm_lsm_ioctl_compat(struct snd_pcm_substream *substream,
 			dev_err(rtd->dev,
 				"%s: Allocation failed event status size %d\n",
 				__func__, size);
-			err = -EFAULT;
-			goto done;
+			return -EFAULT;
 		}
 		cmd = SNDRV_LSM_EVENT_STATUS_V3;
 		user->payload_size = userarg32.payload_size;
