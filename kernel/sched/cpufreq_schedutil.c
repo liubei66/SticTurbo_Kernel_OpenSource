@@ -3,6 +3,7 @@
  *
  * Copyright (C) 2016, Intel Corporation
  * Copyright (C) 2019 XiaoMi, Inc.
+ * Copyright (C) 2020 SticKernel.
  * Author: Rafael J. Wysocki <rafael.j.wysocki@intel.com>
  *
  * This program is free software; you can redistribute it and/or modify
@@ -193,7 +194,6 @@ static unsigned int get_next_freq(struct sugov_policy *sg_policy,
 				policy->cpuinfo.max_freq : policy->cur;
 
 	freq = (freq + (freq >> 2)) * util / max;
-	trace_sugov_next_freq(policy->cpu, util, max, freq);
 
 	if (freq == sg_policy->cached_raw_freq && sg_policy->next_freq != UINT_MAX)
 		return sg_policy->next_freq;
@@ -951,7 +951,7 @@ static int sugov_init(struct cpufreq_policy *policy)
 	tunables->hispeed_load = DEFAULT_HISPEED_LOAD;
 	tunables->hispeed_freq = 0;
 	tunables->threshold_freq = 0;
-	tunables->powersave = 0;
+	tunables->powersave = 1;
 
 	tunables->iowait_boost_enable = true;
 
