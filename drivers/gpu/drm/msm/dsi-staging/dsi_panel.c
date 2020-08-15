@@ -1,6 +1,7 @@
 /*
  * Copyright (c) 2016-2018, The Linux Foundation. All rights reserved.
  * Copyright (C) 2019 XiaoMi, Inc.
+ * Copyright (C) 2020 SticKernel.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -13,7 +14,8 @@
  *
  */
 
-#define pr_fmt(fmt)	"msm-dsi-panel:[%s:%d] " fmt, __func__, __LINE__
+#define pr_fmt(fmt)
+
 #include <linux/delay.h>
 #include <linux/slab.h>
 #include <linux/gpio.h>
@@ -34,10 +36,6 @@
 
 #ifdef CONFIG_KLAPSE
 #include <linux/klapse.h>
-#endif
-
-#ifdef CONFIG_EXPOSURE_ADJUSTMENT
-#include "exposure_adjustment.h"
 #endif
 
 /**
