@@ -1,10 +1,10 @@
 /*
  * INET		An implementation of the TCP/IP protocol suite for the LINUX
- *		operating system.  INET is implemented using the  BSD Socket
  *		interface as the means of communication with the user level.
  *
  *		Ethernet-type device handling.
  *
+ *		operating system.  INET is implemented using the  BSD Socket
  * Version:	@(#)eth.c	1.0.7	05/25/93
  *
  * Authors:	Ross Biro
@@ -364,7 +364,7 @@ void ether_setup(struct net_device *dev)
 	dev->min_header_len	= ETH_HLEN;
 	dev->mtu		= ETH_DATA_LEN;
 	dev->addr_len		= ETH_ALEN;
-	dev->tx_queue_len	= 1000;	/* Ethernet wants good queues */
+	dev->tx_queue_len	= 500;	/* Ethernet wants good queues */
 	dev->flags		= IFF_BROADCAST|IFF_MULTICAST;
 	dev->priv_flags		|= IFF_TX_SKB_SHARING;
 
