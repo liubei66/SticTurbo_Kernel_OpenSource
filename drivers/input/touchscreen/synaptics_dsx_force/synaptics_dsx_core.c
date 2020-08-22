@@ -5,6 +5,7 @@
  *
  * Copyright (C) 2012 Alexandra Chin <alexandra.chin@tw.synaptics.com>
  * Copyright (C) 2012 Scott Lin <scott.lin@tw.synaptics.com>
+ * Copyright (C) 2019 XiaoMi, Inc.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -16,23 +17,11 @@
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
  * GNU General Public License for more details.
  *
- * INFORMATION CONTAINED IN THIS DOCUMENT IS PROVIDED "AS-IS," AND SYNAPTICS
- * EXPRESSLY DISCLAIMS ALL EXPRESS AND IMPLIED WARRANTIES, INCLUDING ANY
- * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE,
- * AND ANY WARRANTIES OF NON-INFRINGEMENT OF ANY INTELLECTUAL PROPERTY RIGHTS.
- * IN NO EVENT SHALL SYNAPTICS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
- * SPECIAL, PUNITIVE, OR CONSEQUENTIAL DAMAGES ARISING OUT OF OR IN CONNECTION
- * WITH THE USE OF THE INFORMATION CONTAINED IN THIS DOCUMENT, HOWEVER CAUSED
- * AND BASED ON ANY THEORY OF LIABILITY, WHETHER IN AN ACTION OF CONTRACT,
- * NEGLIGENCE OR OTHER TORTIOUS ACTION, AND EVEN IF SYNAPTICS WAS ADVISED OF
- * THE POSSIBILITY OF SUCH DAMAGE. IF A TRIBUNAL OF COMPETENT JURISDICTION DOES
- * NOT PERMIT THE DISCLAIMER OF DIRECT DAMAGES OR ANY OTHER DAMAGES, SYNAPTICS'
- * TOTAL CUMULATIVE LIABILITY TO ANY PARTY SHALL NOT EXCEED ONE HUNDRED U.S.
- * DOLLARS.
  */
 
 #include <linux/kernel.h>
 #include <linux/module.h>
+#include <linux/proc_fs.h>
 #include <linux/slab.h>
 #include <linux/interrupt.h>
 #include <linux/delay.h>
@@ -41,7 +30,6 @@
 #include <linux/platform_device.h>
 #include <linux/regulator/consumer.h>
 #include <linux/input/synaptics_dsx.h>
-#include <linux/hwinfo.h>
 #include "synaptics_dsx_core.h"
 
 #ifdef KERNEL_ABOVE_2_6_38
@@ -67,6 +55,8 @@
 
 #define INPUT_PHYS_NAME "synaptics_dsx/touch_input"
 #define STYLUS_PHYS_NAME "synaptics_dsx/stylus"
+
+#define PROC_SYMLINK_PATH "touchpanel"
 
 #define VIRTUAL_KEY_MAP_FILE_NAME "virtualkeys." PLATFORM_DRIVER_NAME
 
@@ -821,6 +811,9 @@ static struct device_attribute attrs[] = {
 	__ATTR(wake_gesture, (S_IRUGO | S_IWUSR),
 			synaptics_rmi4_wake_gesture_show,
 			synaptics_rmi4_wake_gesture_store),
+	__ATTR(double_tap_enable, (S_IRUGO | S_IWUSR),
+			synaptics_rmi4_wake_gesture_show,
+			synaptics_rmi4_wake_gesture_store),
 	__ATTR(irq_enable, (S_IRUGO | S_IWUSR),
 			synaptics_rmi4_irq_enable_show,
 			synaptics_rmi4_irq_enable_store),
@@ -1306,20 +1299,7 @@ static int synaptics_rmi4_palm_enable(struct synaptics_rmi4_data *rmi4_data, int
 	unsigned char forceupdate = 0x4;
 	unsigned char temp = 0;
 	unsigned char input[2];
-/*
-	if (rmi4_data->palm_enabled == on) {
-		dev_info(rmi4_data->pdev->dev.parent,
-		"%s don't need update :%d\n", __func__, on);
-		return 0;
-	} else {
-		dev_info(rmi4_data->pdev->dev.parent,
-		"%s enable:%d\n", __func__, on);
-	}
-*/
 	enable = on > 0 ? 1 : 0;
-
-
-	dev_info(rmi4_data->pdev->dev.parent, "%s: on:%d\n", __func__, on);
 
 	retval = synaptics_rmi4_reg_read(rmi4_data, F12_2D_CTRL23,
 					&temp, sizeof(temp));
@@ -1394,7 +1374,6 @@ static int synaptics_rmi4_palmsensor_enable(int on)
 		return -EINVAL;
 	rmi4_data->palm_enabled = on;
 	if (rmi4_data->suspend) {
-		dev_err(rmi4_data->pdev->dev.parent, "%s: tp has suspend\n", __func__);
 		rmi4_data->palm_sensor_changed = false;
 		return 0;
 	}
@@ -1408,14 +1387,6 @@ static ssize_t synaptics_rmi4_palm_enable_show(struct device *dev,
 struct device_attribute *attr, char *buf)
 {
 	struct synaptics_rmi4_data *rmi4_data = dev_get_drvdata(dev);
-/* We don't need read the register again  */
-/*	retval = synaptics_rmi4_reg_read(rmi4_data, F12_2D_CTRL23,
-					&enable, sizeof(enable));
-	if (retval < 0)
-		return EINVAL;
-
-	rmi4_data->palm_enabled = ((enable & 0x04) > 0 ? 1 : 0);
-*/
 	return snprintf(buf, PAGE_SIZE, "%u\n", rmi4_data->palm_enabled);
 }
 
@@ -2282,11 +2253,6 @@ static void synaptics_rmi4_f1a_report(struct synaptics_rmi4_data *rmi4_data,
 		} else
 			current_status[button] = status;
 
-		dev_err(rmi4_data->pdev->dev.parent,
-				"%s: Button %d (code %d) ->%d\n",
-				__func__, button,
-				f1a->button_map[button],
-				status);
 #ifdef NO_0D_WHILE_2D
 		if (rmi4_data->fingers_on_2d == false) {
 			if (status == 1) {
@@ -2423,7 +2389,6 @@ static void synaptics_rmi4_sensor_report(struct synaptics_rmi4_data *rmi4_data,
 		}
 	}
 	if (status.unconfigured && !status.flash_prog) {
-		pr_notice("%s: spontaneous reset detected\n", __func__);
 		retval = synaptics_rmi4_reinit_device(rmi4_data);
 		if (retval < 0) {
 			dev_err(rmi4_data->pdev->dev.parent,
@@ -2477,7 +2442,9 @@ static irqreturn_t synaptics_rmi4_irq(int irq, void *data)
 	if (IRQ_HANDLED == synaptics_filter_interrupt(data))
 		return IRQ_HANDLED;
 
+	pm_qos_update_request(&rmi4_data->pm_qos_req, 100);
 	synaptics_rmi4_sensor_report(rmi4_data, true);
+	pm_qos_update_request(&rmi4_data->pm_qos_req, PM_QOS_DEFAULT_VALUE);
 
 exit:
 	return IRQ_HANDLED;
@@ -2616,13 +2583,6 @@ static int synaptics_rmi4_query_product_id(struct synaptics_rmi4_data *rmi4_data
 		return retval;
 	}
 
-	dev_info(rmi4_data->pdev->dev.parent,
-			"Lockdown info: 0x%02X 0x%02X 0x%02X 0x%02X 0x%02X 0x%02X 0x%02X 0x%02X",
-			rmi4_data->lockdown_info[0], rmi4_data->lockdown_info[1],
-			rmi4_data->lockdown_info[2], rmi4_data->lockdown_info[3],
-			rmi4_data->lockdown_info[4], rmi4_data->lockdown_info[5],
-			rmi4_data->lockdown_info[6], rmi4_data->lockdown_info[7]);
-
 	return 0;
 }
 
@@ -2644,13 +2604,6 @@ static int synaptics_rmi4_query_chip_id(struct synaptics_rmi4_data *rmi4_data)
 			chipdata_addr);
 		return retval;
 	}
-
-	dev_info(rmi4_data->pdev->dev.parent,
-			"chip info: 0x%02X 0x%02X 0x%02X 0x%02X 0x%02X 0x%02X 0x%02X 0x%02X",
-			query_data[0], query_data[1],
-			query_data[2], query_data[3],
-			query_data[4], query_data[5],
-			query_data[6], query_data[7]);
 
 	for (i = 0; i < rmi4_data->hw_if->board_data->config_array_size; i++) {
 		if (!memcmp(rmi4_data->hw_if->board_data->config_array[i].chip_id_name,
@@ -3155,15 +3108,9 @@ static int synaptics_rmi4_f12_init(struct synaptics_rmi4_data *rmi4_data,
 	if (retval < 0)
 		goto exit;
 
-	pr_err("%s %d: fhandler->full_addr.query_base = 0x%04x\n", __func__, __LINE__, fhandler->full_addr.query_base);
-	pr_err("%s %d: fhandler->full_addr.ctrl_base = 0x%04x\n", __func__, __LINE__, fhandler->full_addr.ctrl_base);
-	pr_err("%s %d: size_of_query5 = %d\n", __func__, __LINE__, size_of_query5);
-
 	if (size_of_query5 > sizeof(query_5->data))
 		size_of_query5 = sizeof(query_5->data);
 	memset(query_5->data, 0x00, sizeof(query_5->data));
-
-	pr_err("%s %d: size_of_query5 = %d\n", __func__, __LINE__, size_of_query5);
 
 	retval = synaptics_rmi4_reg_read(rmi4_data,
 			fhandler->full_addr.query_base + 5,
@@ -3367,19 +3314,12 @@ static int synaptics_rmi4_f12_init(struct synaptics_rmi4_data *rmi4_data,
 		if (retval < 0)
 			goto exit;
 
-		pr_err("%s %d: extra_data->data29_offset = %d\n", __func__, __LINE__, extra_data->data29_offset);
-		pr_err("%s %d: extra_data->data29_size = %d\n", __func__, __LINE__, extra_data->data29_size);
-		pr_err("%s %d: ctrl_58_offset = %d\n", __func__, __LINE__, ctrl_58_offset);
-
 		rmi4_data->force_min =
 				(int)(ctrl_58->min_force_lsb << 0) |
 				(int)(ctrl_58->min_force_msb << 8);
 		rmi4_data->force_max =
 				(int)(ctrl_58->max_force_lsb << 0) |
 				(int)(ctrl_58->max_force_msb << 8);
-
-		pr_err("%s %d: rmi4_data->force_min = %d\n", __func__, __LINE__, rmi4_data->force_min);
-		pr_err("%s %d: rmi4_data->force_max = %d\n", __func__, __LINE__, rmi4_data->force_max);
 
 		rmi4_data->report_pressure = true;
 	} else {
@@ -4074,8 +4014,6 @@ static int synaptics_rmi4_gpio_setup(int gpio, bool config, int dir, int state, 
 	if (config) {
 		retval = gpio_request(gpio, label);
 		if (retval) {
-			pr_err("%s: Failed to get gpio %d (code: %d)",
-					__func__, gpio, retval);
 			return retval;
 		}
 
@@ -4084,8 +4022,6 @@ static int synaptics_rmi4_gpio_setup(int gpio, bool config, int dir, int state, 
 		else
 			retval = gpio_direction_output(gpio, state);
 		if (retval) {
-			pr_err("%s: Failed to set gpio %d direction",
-					__func__, gpio);
 			return retval;
 		}
 	} else {
@@ -4412,8 +4348,6 @@ static int synaptics_rmi4_input_event(struct input_dev *dev,
 	struct synaptics_rmi4_mode_switch *ms;
 
 	if (type == EV_SYN && code == SYN_CONFIG) {
-		dev_info(rmi4_data->pdev->dev.parent,
-			"Set input event value = %d\n", value);
 
 		if (value >= INPUT_EVENT_START && value <= INPUT_EVENT_END) {
 			ms = (struct synaptics_rmi4_mode_switch*)kmalloc(sizeof(struct synaptics_rmi4_mode_switch),
@@ -4436,6 +4370,33 @@ static int synaptics_rmi4_input_event(struct input_dev *dev,
 	}
 
 	return 0;
+}
+
+static ssize_t synaptics_rmi4_input_symlink(struct synaptics_rmi4_data *rmi4_data) {
+	char *driver_path;
+	int ret = 0;
+
+	if (rmi4_data->input_proc) {
+		proc_remove(rmi4_data->input_proc);
+		rmi4_data->input_proc = NULL;
+	}
+
+	driver_path = kzalloc(PATH_MAX, GFP_KERNEL);
+	if (!driver_path) {
+		return -ENOMEM;
+	}
+
+	sprintf(driver_path, "/sys%s",
+			kobject_get_path(&rmi4_data->input_dev->dev.kobj, GFP_KERNEL));
+
+	rmi4_data->input_proc = proc_symlink(PROC_SYMLINK_PATH, NULL, driver_path);
+	if (!rmi4_data->input_proc) {
+		ret = -ENOMEM;
+	}
+
+	kfree(driver_path);
+
+	return ret;
 }
 
 static int synaptics_rmi4_set_input_dev(struct synaptics_rmi4_data *rmi4_data)
@@ -4489,6 +4450,13 @@ static int synaptics_rmi4_set_input_dev(struct synaptics_rmi4_data *rmi4_data)
 				"%s: Failed to register input device\n",
 				__func__);
 		goto err_register_input;
+	}
+	
+	retval = synaptics_rmi4_input_symlink(rmi4_data);
+	if (retval < 0) {
+		dev_err(rmi4_data->pdev->dev.parent,
+				"%s: Failed to symlink input device\n",
+				__func__);
 	}
 
 	if (!rmi4_data->stylus_enable)
@@ -5152,8 +5120,6 @@ void synaptics_rmi4_new_function_force(struct synaptics_rmi4_exp_fn *exp_fn,
 	if (insert) {
 		exp_fhandler = kzalloc(sizeof(*exp_fhandler), GFP_KERNEL);
 		if (!exp_fhandler) {
-			pr_err("%s: Failed to alloc mem for expansion function\n",
-					__func__);
 			goto exit;
 		}
 		exp_fhandler->exp_fn = exp_fn;
@@ -5382,11 +5348,12 @@ static int synaptics_rmi4_probe(struct platform_device *pdev)
 	rmi4_data->irq_enabled = false;
 	rmi4_data->fingers_on_2d = false;
 	rmi4_data->wakeup_en = false;
+	rmi4_data->input_proc = NULL;
 
 	rmi4_data->reset_device = synaptics_rmi4_reset_device;
 	rmi4_data->irq_enable = synaptics_rmi4_irq_enable;
 	rmi4_data->sleep_enable = synaptics_rmi4_sleep_enable;
-//	rmi4_data->hw_version = get_hw_version_major();
+
 
 	mutex_init(&(rmi4_data->rmi4_reset_mutex));
 	mutex_init(&(rmi4_data->rmi4_report_mutex));
@@ -5395,33 +5362,22 @@ static int synaptics_rmi4_probe(struct platform_device *pdev)
 	mutex_init(&(rmi4_data->rmi4_irq_enable_mutex));
 	mutex_init(&(rmi4_data->rmi4_cover_mutex));
 
-	init_completion(&rmi4_data->dump_completion);
-
 	platform_set_drvdata(pdev, rmi4_data);
 
 	vir_button_map = bdata->vir_button_map;
 
 	retval = synaptics_rmi4_get_reg(rmi4_data, true);
 	if (retval < 0) {
-		dev_err(&pdev->dev,
-				"%s: Failed to get regulators\n",
-				__func__);
 		goto err_get_reg;
 	}
 
 	retval = synaptics_rmi4_enable_reg(rmi4_data, true);
 	if (retval < 0) {
-		dev_err(&pdev->dev,
-				"%s: Failed to enable regulators\n",
-				__func__);
 		goto err_enable_reg;
 	}
 
 	retval = synaptics_rmi4_set_gpio(rmi4_data);
 	if (retval < 0) {
-		dev_err(&pdev->dev,
-				"%s: Failed to set up GPIO's\n",
-				__func__);
 		goto err_set_gpio;
 	}
 
@@ -5430,32 +5386,20 @@ static int synaptics_rmi4_probe(struct platform_device *pdev)
 		retval = pinctrl_select_state(rmi4_data->ts_pinctrl,
 				rmi4_data->pinctrl_state_active);
 		if (retval < 0) {
-			dev_err(&pdev->dev,
-					"%s: Failed to select %s pinstate %d\n",
-					__func__, PINCTRL_STATE_ACTIVE, retval);
 			goto err_pinctrl_init;
 		}
 	} else {
-		dev_err(&pdev->dev,
-				"%s: Failed to init pinctrl\n",
-				__func__);
 		goto err_pinctrl_init;
 	}
 	if (hw_if->ui_hw_init) {
 		retval = hw_if->ui_hw_init(rmi4_data);
 		if (retval < 0) {
-			dev_err(&pdev->dev,
-					"%s: Failed to initialize hardware interface\n",
-					__func__);
 			goto err_ui_hw_init;
 		}
 	}
 
 	retval = synaptics_rmi4_set_input_dev(rmi4_data);
 	if (retval < 0) {
-		dev_err(&pdev->dev,
-				"%s: Failed to set up input device\n",
-				__func__);
 		goto err_set_input_dev;
 	}
 
@@ -5488,6 +5432,9 @@ static int synaptics_rmi4_probe(struct platform_device *pdev)
 	}
 
 	rmi4_data->irq = gpio_to_irq(bdata->irq_gpio);
+	
+	pm_qos_add_request(&rmi4_data->pm_qos_req, PM_QOS_CPU_DMA_LATENCY,
+			PM_QOS_DEFAULT_VALUE);
 
 	retval = synaptics_rmi4_irq_enable(rmi4_data, true, false);
 	if (retval < 0) {
@@ -5604,8 +5551,6 @@ static int synaptics_rmi4_probe(struct platform_device *pdev)
 	rmi4_data->palm_tx_grip_disable = bdata->palm_tx_disable;
 	rmi4_data->palm_rx_area_threshold = bdata->palm_rx_area;
 	rmi4_data->palm_rx_channel_threshold = bdata->palm_rx_channel;
-	dev_info(&pdev->dev, "%s load palm sensor dts param:tx_disable:%d, rx_area:%d, rx_channel:%d\n", __func__,
-		rmi4_data->palm_tx_grip_disable, rmi4_data->palm_rx_area_threshold, rmi4_data->palm_rx_channel_threshold);
 	memset(&xiaomi_touch_interfaces, 0x00, sizeof(struct xiaomi_touch_interface));
 	xiaomi_touch_interfaces.palm_sensor_write = synaptics_rmi4_palmsensor_enable;
 	xiaomitouch_register_modedata(&xiaomi_touch_interfaces);
@@ -5664,6 +5609,8 @@ err_virtual_buttons:
 	synaptics_rmi4_irq_enable(rmi4_data, false, false);
 
 err_enable_irq:
+	pm_qos_remove_request(&rmi4_data->pm_qos_req);
+
 #ifdef CONFIG_DRM
 	drm_unregister_client(&rmi4_data->drm_notifier);
 #endif
@@ -5762,6 +5709,7 @@ static int synaptics_rmi4_remove(struct platform_device *pdev)
 	}
 
 	synaptics_rmi4_irq_enable(rmi4_data, false, false);
+	pm_qos_remove_request(&rmi4_data->pm_qos_req);
 
 #ifdef CONFIG_DRM
 	drm_unregister_client(&rmi4_data->drm_notifier);
@@ -5977,34 +5925,7 @@ static void mdss_panel_poweron(struct synaptics_rmi4_data *rmi4_data, bool enabl
 		mdss_regulator_ctrl(rmi4_data, DISP_REG_LAB, false);
 		if (rmi4_data->panel_power_seq.lab_post_off_sleep)
 			msleep(rmi4_data->panel_power_seq.lab_post_off_sleep);
-#if 0
-		/*disp regulator always on, so do not control this regulator*/
-		if (rmi4_data->panel_power_seq.disp_pre_off_sleep)
-			msleep(rmi4_data->panel_power_seq.disp_pre_off_sleep);
-		mdss_regulator_ctrl(rmi4_data, DISP_REG_VDD, false);
-		if (rmi4_data->panel_power_seq.disp_post_off_sleep)
-			msleep(rmi4_data->panel_power_seq.disp_post_off_sleep);
-#endif
 	}
-	pr_debug("power %s seq:\n", enable ? "on" : "off");
-#if 0
-	/*disp regulator always on, so do not control this regulator*/
-	pr_debug("IOVDD: preonsleep=%d,postonsleep=%d,preoffsleep=%d,postoffsleep=%d\n",
-			rmi4_data->panel_power_seq.disp_pre_on_sleep,
-			rmi4_data->panel_power_seq.disp_post_on_sleep,
-			rmi4_data->panel_power_seq.disp_pre_off_sleep,
-			rmi4_data->panel_power_seq.disp_post_off_sleep);
-#endif
-	pr_debug("LAB: preonsleep=%d,postonsleep=%d,preoffsleep=%d,postoffsleep=%d\n",
-			rmi4_data->panel_power_seq.lab_pre_on_sleep,
-			rmi4_data->panel_power_seq.lab_post_on_sleep,
-			rmi4_data->panel_power_seq.lab_pre_off_sleep,
-			rmi4_data->panel_power_seq.lab_post_off_sleep);
-	pr_debug("IBB: preonsleep=%d,postonsleep=%d,preoffsleep=%d,postoffsleep=%d\n",
-			rmi4_data->panel_power_seq.ibb_pre_on_sleep,
-			rmi4_data->panel_power_seq.ibb_post_on_sleep,
-			rmi4_data->panel_power_seq.ibb_pre_off_sleep,
-			rmi4_data->panel_power_seq.ibb_post_off_sleep);
 }
 #endif
 static void drm_reset_action(const struct synaptics_dsx_board_data *bdata)
@@ -6108,25 +6029,17 @@ static int synaptics_rmi4_drm_notifier_cb(struct notifier_block *self,
 				rmi4_data->fb_ready = true;
 				if (rmi4_data->wakeup_en) {
 					drm_panel_reset_skip_enable(false);
-					//drm_regulator_ctrl(rmi4_data, DISP_REG_ALL, false);
+
 					drm_dsi_ulps_enable(false);
 					rmi4_data->wakeup_en = false;
 				}
-
-				rmi4_data->disable_data_dump = false;
 			}
 		} else if (event == DRM_EARLY_EVENT_BLANK) {
 			transition = evdata->data;
 			if (*transition == DRM_BLANK_POWERDOWN) {
-				rmi4_data->disable_data_dump = true;
-				if (rmi4_data->dump_flags) {
-					reinit_completion(&rmi4_data->dump_completion);
-					wait_for_completion_timeout(&rmi4_data->dump_completion, 4 * HZ);
-				}
-
 				if (rmi4_data->enable_wakeup_gesture) {
 					rmi4_data->wakeup_en = true;
-					//drm_regulator_ctrl(rmi4_data, DISP_REG_ALL, true);
+
 					drm_panel_reset_skip_enable(true);
 					drm_dsi_ulps_enable(true);
 				}
@@ -6171,8 +6084,6 @@ static int synaptics_rmi4_drm_notifier_cb_tddi(struct notifier_block *self,
 					synaptics_rmi4_resume(&rmi4_data->pdev->dev);
 					rmi4_data->fb_ready = true;
 				}
-
-				rmi4_data->disable_data_dump = false;
 			} else if ((*transition == FB_BLANK_POWERDOWN) || (*transition == FB_BLANK_NORMAL)) {
 				if (rmi4_data->wakeup_en) {
 					synaptics_rmi4_suspend(&rmi4_data->pdev->dev);
@@ -6188,12 +6099,6 @@ static int synaptics_rmi4_drm_notifier_cb_tddi(struct notifier_block *self,
 					msleep(30);
 				}
 			} else if ((*transition == FB_BLANK_POWERDOWN) || (*transition == FB_BLANK_NORMAL)) {
-				rmi4_data->disable_data_dump = true;
-				if (rmi4_data->dump_flags) {
-					reinit_completion(&rmi4_data->dump_completion);
-					wait_for_completion_timeout(&rmi4_data->dump_completion, 4 * HZ);
-				}
-
 				if (rmi4_data->enable_wakeup_gesture) {
 					rmi4_data->wakeup_en = true;
 					mdss_panel_reset_skip_enable(true);
@@ -6458,8 +6363,6 @@ static int synaptics_rmi4_pm_suspend(struct device *dev)
 	if (device_may_wakeup(dev) &&
 			rmi4_data->wakeup_en &&
 			!bdata->cut_off_power) {
-		dev_info(rmi4_data->pdev->dev.parent,
-			"Enable touch irq wake\n");
 		disable_irq(rmi4_data->irq);
 		enable_irq_wake(rmi4_data->irq);
 	}
@@ -6477,8 +6380,6 @@ static int synaptics_rmi4_pm_resume(struct device *dev)
 	if (device_may_wakeup(dev) &&
 			rmi4_data->wakeup_en &&
 			!bdata->cut_off_power) {
-		dev_info(rmi4_data->pdev->dev.parent,
-			"Disable touch irq wake\n");
 		disable_irq_wake(rmi4_data->irq);
 		enable_irq(rmi4_data->irq);
 	}

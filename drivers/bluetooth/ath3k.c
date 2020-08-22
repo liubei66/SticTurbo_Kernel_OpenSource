@@ -592,6 +592,5 @@ module_usb_driver(ath3k_driver);
 
 MODULE_AUTHOR("Atheros Communications");
 MODULE_DESCRIPTION("Atheros AR30xx firmware driver");
-MODULE_VERSION(VERSION);
 MODULE_LICENSE("GPL");
 MODULE_FIRMWARE(ATH3K_FIRMWARE);

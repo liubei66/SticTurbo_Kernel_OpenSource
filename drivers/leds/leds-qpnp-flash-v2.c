@@ -327,6 +327,10 @@ struct qpnp_flash_led {
 	bool				trigger_chgr;
 };
 
+struct flash_node_data *g_torch_0 = NULL;
+struct flash_node_data *g_torch_1 = NULL;
+struct flash_switch_data *g_switch_0 = NULL;
+
 static int thermal_derate_slow_table[] = {
 	128, 256, 512, 1024, 2048, 4096, 8192, 314592,
 };
@@ -1748,7 +1752,7 @@ static void qpnp_flash_led_brightness_set(struct led_classdev *led_cdev,
 						strlen("led:torch"))) {
 		fnode = container_of(led_cdev, struct flash_node_data, cdev);
 		led = dev_get_drvdata(&fnode->pdev->dev);
-	}else if (!strncmp(led_cdev->name, "flashlight", strlen("flashlight"))){
+	} else if (!strncmp(led_cdev->name, "flashlight", strlen("flashlight"))){
 		fnode = container_of(led_cdev, struct flash_node_data, cdev);
 		led = dev_get_drvdata(&fnode->pdev->dev);
 	}
@@ -1762,18 +1766,16 @@ static void qpnp_flash_led_brightness_set(struct led_classdev *led_cdev,
 	if (snode) {
 		rc = qpnp_flash_led_switch_set(snode, value > 0);
 		if (rc < 0)
-			pr_err("Failed to set flash LED switch rc=%d\n", rc);
+			pr_debug("Failed to set flash LED switch rc=%d\n", rc);
 	} else if (fnode) {
-		if (!strncmp(led_cdev->name, "flashlight", strlen("flashlight")))
-		{
-			if (g_torch_0 && g_torch_1 && g_switch_0){
+		if (!strncmp(led_cdev->name, "flashlight", strlen("flashlight"))) {
+			if (g_torch_0 && g_torch_1 && g_switch_0) {
 				pr_err("flash light fnode %d", __LINE__);
 				qpnp_flash_led_node_set(g_torch_0, value);
 				qpnp_flash_led_node_set(g_torch_1, value);
 				qpnp_flash_led_switch_set(g_switch_0, value > 0);
 			}
-		}
-		else{
+		} else{
 			qpnp_flash_led_node_set(fnode, value);
 		}
 	}
@@ -2678,7 +2680,7 @@ static int qpnp_flash_led_probe(struct platform_device *pdev)
 	struct flash_switch_data *snode;
 	node = pdev->dev.of_node;
 	if (!node) {
-		pr_err("No flash LED nodes defined\n");
+		pr_debug("No flash LED nodes defined\n");
 		return -ENODEV;
 	}
 

@@ -1939,7 +1939,8 @@ static __net_exit void l2tp_exit_net(struct net *net)
 	}
 	rcu_read_unlock_bh();
 
-	flush_workqueue(l2tp_wq);
+	if (l2tp_wq)
+		flush_workqueue(l2tp_wq);
 	rcu_barrier();
 }
 
@@ -1987,5 +1988,3 @@ module_exit(l2tp_exit);
 MODULE_AUTHOR("James Chapman <jchapman@katalix.com>");
 MODULE_DESCRIPTION("L2TP core");
 MODULE_LICENSE("GPL");
-MODULE_VERSION(L2TP_DRV_VERSION);
-

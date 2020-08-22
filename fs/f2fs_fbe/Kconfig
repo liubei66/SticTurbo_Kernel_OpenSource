@@ -1,0 +1,4 @@
+config FS_F2FSCRYPTO
+	tristate "FS F2FS Encryption (Per-file encryption)"
+	select CRYPTO
+	select KEYS

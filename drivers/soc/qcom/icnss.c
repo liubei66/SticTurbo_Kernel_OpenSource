@@ -79,67 +79,45 @@ module_param(qmi_timeout, ulong, 0600);
 
 #define PROBE_TIMEOUT			15000
 
-#define icnss_ipc_log_string(_x...) do {				\
-	if (icnss_ipc_log_context)					\
-		ipc_log_string(icnss_ipc_log_context, _x);		\
-	} while (0)
+#define icnss_ipc_log_string(_x...) ((void)0)
 
-#define icnss_ipc_log_long_string(_x...) do {				\
-	if (icnss_ipc_log_long_context)					\
-		ipc_log_string(icnss_ipc_log_long_context, _x);		\
-	} while (0)
+#define icnss_ipc_log_long_string(_x...) ((void)0)
 
 #define icnss_pr_err(_fmt, ...) do {					\
 	printk("%s" pr_fmt(_fmt), KERN_ERR, ##__VA_ARGS__);		\
-	icnss_ipc_log_string("%s" pr_fmt(_fmt), "",			\
-			     ##__VA_ARGS__);				\
 	} while (0)
 
 #define icnss_pr_warn(_fmt, ...) do {					\
 	printk("%s" pr_fmt(_fmt), KERN_WARNING, ##__VA_ARGS__);		\
-	icnss_ipc_log_string("%s" pr_fmt(_fmt), "",			\
-			     ##__VA_ARGS__);				\
 	} while (0)
 
 #define icnss_pr_info(_fmt, ...) do {					\
 	printk("%s" pr_fmt(_fmt), KERN_INFO, ##__VA_ARGS__);		\
-	icnss_ipc_log_string("%s" pr_fmt(_fmt), "",			\
-			     ##__VA_ARGS__);				\
 	} while (0)
 
 #if defined(CONFIG_DYNAMIC_DEBUG)
 #define icnss_pr_dbg(_fmt, ...) do {					\
 	pr_debug(_fmt, ##__VA_ARGS__);					\
-	icnss_ipc_log_string(pr_fmt(_fmt), ##__VA_ARGS__);		\
 	} while (0)
 
 #define icnss_pr_vdbg(_fmt, ...) do {					\
 	pr_debug(_fmt, ##__VA_ARGS__);					\
-	icnss_ipc_log_long_string(pr_fmt(_fmt), ##__VA_ARGS__);		\
 	} while (0)
 #elif defined(DEBUG)
 #define icnss_pr_dbg(_fmt, ...) do {					\
 	printk("%s" pr_fmt(_fmt), KERN_DEBUG, ##__VA_ARGS__);		\
-	icnss_ipc_log_string("%s" pr_fmt(_fmt), "",			\
-			     ##__VA_ARGS__);				\
 	} while (0)
 
 #define icnss_pr_vdbg(_fmt, ...) do {					\
 	printk("%s" pr_fmt(_fmt), KERN_DEBUG, ##__VA_ARGS__);		\
-	icnss_ipc_log_long_string("%s" pr_fmt(_fmt), "",		\
-				  ##__VA_ARGS__);			\
 	} while (0)
 #else
 #define icnss_pr_dbg(_fmt, ...) do {					\
 	no_printk("%s" pr_fmt(_fmt), KERN_DEBUG, ##__VA_ARGS__);	\
-	icnss_ipc_log_string("%s" pr_fmt(_fmt), "",			\
-		     ##__VA_ARGS__);					\
 	} while (0)
 
 #define icnss_pr_vdbg(_fmt, ...) do {					\
 	no_printk("%s" pr_fmt(_fmt), KERN_DEBUG, ##__VA_ARGS__);	\
-	icnss_ipc_log_long_string("%s" pr_fmt(_fmt), "",		\
-				  ##__VA_ARGS__);			\
 	} while (0)
 #endif
 
@@ -1402,7 +1380,7 @@ static int wlfw_msa_mem_info_send_sync_msg(void)
 	for (i = 0; i < resp.mem_region_info_len; i++) {
 
 		if (resp.mem_region_info[i].size > penv->msa_mem_size ||
-		    resp.mem_region_info[i].region_addr > max_mapped_addr ||
+		    resp.mem_region_info[i].region_addr >= max_mapped_addr ||
 		    resp.mem_region_info[i].region_addr < penv->msa_pa ||
 		    resp.mem_region_info[i].size +
 		    resp.mem_region_info[i].region_addr > max_mapped_addr) {
@@ -1617,7 +1595,7 @@ out:
 	return ret;
 }
 
-static int wlfw_wlan_mode_send_sync_msg(enum wlfw_driver_mode_enum_v01 mode)
+static int wlfw_wlan_mode_send_sync_msg(u32 mode)
 {
 	int ret;
 	struct wlfw_wlan_mode_req_msg_v01 req;
@@ -4764,7 +4742,7 @@ static int icnss_debugfs_create(struct icnss_priv *priv)
 
 	if (IS_ERR(root_dentry)) {
 		ret = PTR_ERR(root_dentry);
-		icnss_pr_err("Unable to create debugfs %d\n", ret);
+		icnss_pr_dbg("Unable to create debugfs %d\n", ret);
 		return ret;
 	}
 

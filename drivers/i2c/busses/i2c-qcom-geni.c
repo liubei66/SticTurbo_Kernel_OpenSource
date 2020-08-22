@@ -367,7 +367,7 @@ static void gi2c_ev_cb(struct dma_chan *ch, struct msm_gpi_cb const *cb_str,
 		break;
 	}
 	if (cb_str->cb_event != MSM_GPI_QUP_NOTIFY)
-		GENI_SE_ERR(gi2c->ipcl, true, gi2c->dev,
+		GENI_SE_DBG(gi2c->ipcl, true, gi2c->dev,
 				"GSI QN err:0x%x, status:0x%x, err:%d\n",
 				cb_str->error_log.error_code,
 				m_stat, cb_str->cb_event);
@@ -650,7 +650,7 @@ static int geni_i2c_xfer(struct i2c_adapter *adap,
 	reinit_completion(&gi2c->xfer);
 	ret = pm_runtime_get_sync(gi2c->dev);
 	if (ret < 0) {
-		GENI_SE_ERR(gi2c->ipcl, true, gi2c->dev,
+		GENI_SE_DBG(gi2c->ipcl, true, gi2c->dev,
 			    "error turning SE resources:%d\n", ret);
 		pm_runtime_put_noidle(gi2c->dev);
 		/* Set device in suspended since resume failed */

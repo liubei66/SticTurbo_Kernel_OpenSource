@@ -82,6 +82,7 @@
 #include <linux/io.h>
 #include <linux/kaiser.h>
 #include <linux/cache.h>
+#include <linux/jump_label.h>
 
 #include <asm/io.h>
 #include <asm/bugs.h>
@@ -200,13 +201,13 @@ EXPORT_SYMBOL(loops_per_jiffy);
 
 static int __init debug_kernel(char *str)
 {
-	console_loglevel = CONSOLE_LOGLEVEL_DEBUG;
+	console_loglevel = 0;
 	return 0;
 }
 
 static int __init quiet_kernel(char *str)
 {
-	console_loglevel = CONSOLE_LOGLEVEL_QUIET;
+	console_loglevel = 0;
 	return 0;
 }
 
@@ -478,6 +479,8 @@ static void __init mm_init(void)
 	kaiser_init();
 }
 
+void __init init_sync_kmem_pool(void);
+void __init init_dma_buf_kmem_pool(void);
 asmlinkage __visible void __init start_kernel(void)
 {
 	char *command_line;
@@ -647,12 +650,15 @@ asmlinkage __visible void __init start_kernel(void)
 	vfs_caches_init();
 	pagecache_init();
 	signals_init();
+	seq_file_init();
 	proc_root_init();
 	nsfs_init();
 	cpuset_init();
 	cgroup_init();
 	taskstats_init_early();
 	delayacct_init();
+	init_sync_kmem_pool();
+	init_dma_buf_kmem_pool();
 
 	check_bugs();
 
@@ -663,8 +669,6 @@ asmlinkage __visible void __init start_kernel(void)
 		efi_late_init();
 		efi_free_boot_services();
 	}
-
-	ftrace_init();
 
 	/* Do the rest non-__init'ed, we're now alive */
 	rest_init();
@@ -952,6 +956,7 @@ static int __ref kernel_init(void *unused)
 	kernel_init_freeable();
 	/* need to finish all async __init code before freeing the memory */
 	async_synchronize_full();
+	jump_label_invalidate_initmem();
 	free_initmem();
 	mark_readonly();
 	system_state = SYSTEM_RUNNING;

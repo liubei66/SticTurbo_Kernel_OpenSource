@@ -316,11 +316,12 @@ static void dev_watchdog(unsigned long arg)
 				}
 			}
 
-			if (some_queue_timedout) {
-				WARN_ONCE(1, KERN_INFO "NETDEV WATCHDOG: %s (%s): transmit queue %u timed out\n",
-				       dev->name, netdev_drivername(dev), i);
+			/* The noise is pissing off our CI and upstream doesn't
+			 * move on the bug report:
+			 *
+			 * https://bugzilla.kernel.org/show_bug.cgi?id=196399
+			 */
 				dev->netdev_ops->ndo_tx_timeout(dev);
-			}
 			if (!mod_timer(&dev->watchdog_timer,
 				       round_jiffies(jiffies +
 						     dev->watchdog_timeo)))
@@ -704,7 +705,11 @@ static void qdisc_rcu_free(struct rcu_head *head)
 
 void qdisc_destroy(struct Qdisc *qdisc)
 {
-	const struct Qdisc_ops  *ops = qdisc->ops;
+	const struct Qdisc_ops *ops;
+
+	if (!qdisc)
+		return;
+	ops = qdisc->ops;
 
 	if (qdisc->flags & TCQ_F_BUILTIN ||
 	    !atomic_dec_and_test(&qdisc->refcnt))

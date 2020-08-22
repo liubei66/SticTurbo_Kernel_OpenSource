@@ -357,7 +357,6 @@ struct fg_batt_props {
 	int		float_volt_uv;
 	int		vbatt_full_mv;
 	int		fastchg_curr_ma;
-	int		nom_cap_uah;
 };
 
 struct fg_cyc_ctr_data {
@@ -456,6 +455,11 @@ struct batt_params {
 	int		batt_mv;
 	int		batt_temp;
 	struct timespec		last_soc_change_time;
+};
+
+struct fg_saved_data {
+	union power_supply_propval val;
+	unsigned long last_req_expires;
 };
 
 struct fg_chip {
@@ -557,6 +561,7 @@ struct fg_chip {
 	struct alarm		esr_filter_alarm;
 	ktime_t			last_delta_temp_time;
 	struct delayed_work	empty_restart_fg_work;
+	struct fg_saved_data	saved_data[POWER_SUPPLY_PROP_MAX];
 };
 
 /* Debugfs data structures are below */

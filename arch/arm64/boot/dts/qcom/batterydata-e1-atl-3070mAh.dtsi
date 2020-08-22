@@ -1,4 +1,3 @@
-
 qcom,e1_scud_3070mAh {
 	qcom,max-voltage-uv = <4400000>;
 	qcom,fastchg-current-ma = <3300>;

@@ -2110,7 +2110,7 @@ static int sde_encoder_resource_control(struct drm_encoder *drm_enc,
 				&sde_enc->delayed_off_work))
 			SDE_DEBUG_ENC(sde_enc, "sw_event:%d, work cancelled\n",
 					sw_event);
-
+			
 		msm_idle_set_state(drm_enc, true);
 
 		mutex_lock(&sde_enc->rc_lock);
@@ -2216,7 +2216,7 @@ static int sde_encoder_resource_control(struct drm_encoder *drm_enc,
 			idle_pc_duration = IDLE_SHORT_TIMEOUT;
 		else
 			idle_pc_duration = IDLE_POWERCOLLAPSE_DURATION;
-
+			
 		msm_idle_set_state(drm_enc, false);
 
 		if (!autorefresh_enabled)
@@ -4206,12 +4206,6 @@ void sde_encoder_kickoff(struct drm_encoder *drm_enc, bool is_error)
 		SDE_EVT32_VERBOSE(ktime_to_ms(wakeup_time));
 		mod_timer(&sde_enc->vsync_event_timer,
 				nsecs_to_jiffies(ktime_to_ns(wakeup_time)));
-	}
-
-	if (drm_enc->bridge && drm_enc->bridge->is_dsi_drm_bridge) {
-		struct dsi_bridge *c_bridge = container_of((drm_enc->bridge), struct dsi_bridge, base);
-		if (c_bridge && c_bridge->display && c_bridge->display->panel)
-			c_bridge->display->panel->kickoff_count++;
 	}
 
 	SDE_ATRACE_END("encoder_kickoff");

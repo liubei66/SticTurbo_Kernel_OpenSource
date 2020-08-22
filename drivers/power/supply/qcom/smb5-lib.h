@@ -1,4 +1,5 @@
 /* Copyright (c) 2018 The Linux Foundation. All rights reserved.
+ * Copyright (C) 2019 XiaoMi, Inc.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -82,11 +83,11 @@ enum print_reason {
 #define SDP_100_MA			100000
 #define SDP_CURRENT_UA			500000
 #define CDP_CURRENT_UA			1500000
-#define DCP_CURRENT_UA			1500000
-#define HVDCP_CURRENT_UA		3000000
+#define DCP_CURRENT_UA			4400000
+#define HVDCP_CURRENT_UA		4400000
 #define TYPEC_DEFAULT_CURRENT_UA	900000
 #define TYPEC_MEDIUM_CURRENT_UA		1500000
-#define TYPEC_HIGH_CURRENT_UA		3000000
+#define TYPEC_HIGH_CURRENT_UA		4400000
 
 enum smb_mode {
 	PARALLEL_MASTER = 0,

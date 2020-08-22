@@ -3,6 +3,7 @@
  *
  *  Copyright (C) 2013 Texas Instruments
  *  Copyright (C) 2013 Eduardo Valentin <eduardo.valentin@ti.com>
+ *  Copyright (C) 2019 XiaoMi, Inc.
  *
  *
  *  ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -140,7 +141,7 @@ struct virtual_sensor {
 	int                        avg_denominator;
 };
 
-struct thermal_message *tm;
+struct thermal_message *tm = NULL;
 
 static int of_thermal_aggregate_trip_types(struct thermal_zone_device *tz,
 		unsigned int trip_type_mask, int *low, int *high);
@@ -1520,19 +1521,22 @@ int __init of_parse_thermal_message(void)
 		goto out;
 	}
 
-	ret = of_property_read_string(np, "thermal,batt-array-size", &tm->batt_array_size);
+	ret = of_property_read_string(np, "thermal,batt-array-size",
+			&tm->batt_array_size);
 	if (ret && (ret != -EINVAL)) {
 		pr_err("Unable to read batt array size\n");
 		tm->batt_array_size = NULL;
 	}
 
-	ret = of_property_read_string(np, "thermal,batt-level-screen-on", &tm->batt_level_screen_on);
+	ret = of_property_read_string(np, "thermal,batt-level-screen-on",
+			&tm->batt_level_screen_on);
 	if (ret && (ret != -EINVAL)) {
 		pr_err("Unable to read batt message screen on\n");
 		tm->batt_level_screen_on = NULL;
 	}
 
-	ret = of_property_read_string(np, "thermal,batt-level-screen-off", &tm->batt_level_screen_off);
+	ret = of_property_read_string(np, "thermal,batt-level-screen-off",
+			&tm->batt_level_screen_off);
 	if (ret && (ret != -EINVAL)) {
 		pr_err("Unable to read batt message screen off\n");
 		tm->batt_level_screen_off = NULL;

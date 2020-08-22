@@ -17,6 +17,11 @@
 #include <linux/kernel.h>
 #include <linux/skbuff.h>
 
+#define MAX_ALGAPI_BLOCKSIZE		160
+#define MAX_ALGAPI_ALIGNMASK		63
+#define MAX_CIPHER_BLOCKSIZE		16
+#define MAX_CIPHER_ALIGNMASK		15
+
 struct crypto_aead;
 struct crypto_instance;
 struct module;
