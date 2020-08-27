@@ -68,7 +68,7 @@
 
 #define SMSC_CHIPNAME		"smsc911x"
 #define SMSC_MDIONAME		"smsc911x-mdio"
-#define SMSC_DRV_VERSION	"2008-10-21"
+#define SMSC_DRV_VERSION	"0"
 
 MODULE_LICENSE("GPL");
 MODULE_VERSION(SMSC_DRV_VERSION);
@@ -1776,7 +1776,8 @@ static int smsc911x_stop(struct net_device *dev)
 }
 
 /* Entry point for transmitting a packet */
-static int smsc911x_hard_start_xmit(struct sk_buff *skb, struct net_device *dev)
+static netdev_tx_t
+smsc911x_hard_start_xmit(struct sk_buff *skb, struct net_device *dev)
 {
 	struct smsc911x_data *pdata = netdev_priv(dev);
 	unsigned int freespace;

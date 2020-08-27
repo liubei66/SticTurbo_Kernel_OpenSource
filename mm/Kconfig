@@ -326,6 +326,15 @@ config VIRT_TO_BUS
 config MMU_NOTIFIER
 	bool
 	select SRCU
+	
+config READAHEAD
+	bool "Enable page cache readahead"
+	default y
+	help
+	  Enable pages to be read ahead of time on an I/O request. The block
+	  parameter is named read_ahead_kb. By default, the kernel reads
+	  512 KiB ahead. Readahead is highly recommended on most systems,
+	  especially those with rotational disk storage.
 
 config KSM
 	bool "Enable KSM for page merging"
@@ -559,7 +568,7 @@ config MEM_SOFT_DIRTY
 config ZSWAP
 	bool "Compressed cache for swap pages (EXPERIMENTAL)"
 	depends on FRONTSWAP && CRYPTO=y
-	select CRYPTO_LZO
+	select CRYPTO_LZ4
 	select ZPOOL
 	default n
 	help
@@ -757,6 +766,14 @@ config PROCESS_RECLAIM
 	 (addr, addr + size-bytes) of the process.
 
 	 Any other vaule is ignored.
+	 
+config VM_MAX_READAHEAD
+	int "default max readahead window size"
+	default 128
+	help
+	 This sets the VM_MAX_READAHEAD value to allow the readahead window
+	 to grow to a maximum size of configured. This will benefit sequential
+	 read throughput and thus early boot performance.
 
 config ARCH_SUPPORTS_SPECULATIVE_PAGE_FAULT
        def_bool n
@@ -779,3 +796,7 @@ config SPECULATIVE_PAGE_FAULT
 	 detected or because underlying PMD or PTE tables are not yet
 	 allocating, it is failing its processing and a classic page fault
 	 is then tried.
+
+config VMSTAT_INTERVAL
+	int "Default interval in seconds to update vmstat"
+	default 1

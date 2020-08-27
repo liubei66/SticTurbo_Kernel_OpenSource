@@ -44,7 +44,7 @@
 			memory-region = <&secure_sp_mem>;
 			qcom,ion-heap-type = "HYP_CMA";
 		};
-
+		
 		qcom,ion-heap@10 { /* SECURE DISPLAY HEAP */
 			reg = <10>;
 			memory-region = <&secure_display_memory>;

@@ -2,6 +2,7 @@
  *
  * Copyright (C) 2012 Red Hat, Inc. All Rights Reserved.
  * Written by David Howells (dhowells@redhat.com)
+ * Copyright (C) 2020 Amktiao.
  *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public Licence
@@ -114,6 +115,7 @@ device_initcall(system_trusted_keyring_init);
  */
 static __init int load_system_certificate_list(void)
 {
+#ifdef CONFIG_STIC_SYSTEM_KEY
 	key_ref_t key;
 	const u8 *p, *end;
 	size_t plen;
@@ -156,12 +158,15 @@ static __init int load_system_certificate_list(void)
 		}
 		p += plen;
 	}
+#endif
 
 	return 0;
 
+#ifdef CONFIG_STIC_SYSTEM_KEY
 dodgy_cert:
 	pr_err("Problem parsing in-kernel X.509 certificate list\n");
 	return 0;
+#endif
 }
 late_initcall(load_system_certificate_list);
 

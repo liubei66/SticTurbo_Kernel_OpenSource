@@ -2,7 +2,6 @@
  * linux/include/linux/cpufreq.h
  *
  * Copyright (C) 2001 Russell King
- * Copyright (C) 2019 XiaoMi, Inc.
  *           (C) 2002 - 2003 Dominik Brodowski <linux@brodo.de>
  *
  * This program is free software; you can redistribute it and/or modify
@@ -121,6 +120,15 @@ struct cpufreq_policy {
 	bool			fast_switch_possible;
 	bool			fast_switch_enabled;
 
+	/*
+	 * Remote DVFS flag (Not added to the driver structure as we don't want
+	 * to access another structure from scheduler hotpath).
+	 *
+	 * Should be set if CPUs can do DVFS on behalf of other CPUs from
+	 * different cpufreq policies.
+	 */
+	bool			dvfs_possible_from_any_cpu;
+
 	 /* Cached frequency lookup from cpufreq_driver_resolve_freq. */
 	unsigned int cached_target_freq;
 	int cached_resolved_idx;
@@ -133,7 +141,7 @@ struct cpufreq_policy {
 
 	/* cpufreq-stats */
 	struct cpufreq_stats	*stats;
-	struct cpufreq_stats	*gov_stats;
+
 	/* For cpufreq driver's internal use */
 	void			*driver_data;
 };
@@ -202,21 +210,12 @@ static inline void disable_cpufreq(void) { }
 void cpufreq_stats_create_table(struct cpufreq_policy *policy);
 void cpufreq_stats_free_table(struct cpufreq_policy *policy);
 void cpufreq_stats_record_transition(struct cpufreq_policy *policy,
-					unsigned int new_freq);
-void cpufreq_gov_stats_create_table(struct cpufreq_policy *policy);
-void cpufreq_gov_stats_free_table(struct cpufreq_policy *policy);
-void cpufreq_gov_stats_record_transition(struct cpufreq_policy *policy,
-					unsigned int new_freq);
+				     unsigned int new_freq);
 #else
 static inline void cpufreq_stats_create_table(struct cpufreq_policy *policy) { }
 static inline void cpufreq_stats_free_table(struct cpufreq_policy *policy) { }
 static inline void cpufreq_stats_record_transition(struct cpufreq_policy *policy,
 						   unsigned int new_freq) { }
-static inline void cpufreq_gov_stats_create_table(struct cpufreq_policy *policy) { }
-static inline void cpufreq_gov_stats_free_table(struct cpufreq_policy *policy) { }
-static inline void cpufreq_gov_stats_record_transition(struct cpufreq_policy *policy,
-						   unsigned int new_freq) { }
-
 #endif /* CONFIG_CPU_FREQ_STAT */
 
 /*********************************************************************
@@ -609,6 +608,17 @@ extern struct cpufreq_governor cpufreq_gov_interactive;
 extern struct cpufreq_governor cpufreq_gov_sched;
 #define CPUFREQ_DEFAULT_GOVERNOR	(&cpufreq_gov_sched)
 #endif
+
+static inline bool cpufreq_this_cpu_can_update(struct cpufreq_policy *policy)
+{
+	/*
+	 * Allow remote callbacks if:
+	 * - dvfs_possible_from_any_cpu flag is set
+	 * - the local and remote CPUs share cpufreq policy
+	 */
+	return policy->dvfs_possible_from_any_cpu ||
+		cpumask_test_cpu(smp_processor_id(), policy->cpus);
+}
 
 /*********************************************************************
  *                     FREQUENCY TABLE HELPERS                       *

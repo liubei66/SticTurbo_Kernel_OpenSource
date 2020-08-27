@@ -1,5 +1,5 @@
 /* Copyright (c) 2013-2017, The Linux Foundation. All rights reserved.
- * Copyright (C) 2019 XiaoMi, Inc.
+ * Copyright (C) 2016 XiaoMi, Inc.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -309,9 +309,6 @@ static int64_t of_batterydata_convert_battery_id_kohm(int batt_id_uv,
 	}
 	resistor_value_kohm = div64_s64(rpull_up * 1000000LL + denom/2, denom);
 
-	pr_debug("batt id voltage = %d, resistor value = %lld\n",
-			batt_id_uv, resistor_value_kohm);
-
 	return resistor_value_kohm;
 }
 
@@ -374,17 +371,18 @@ struct device_node *of_batterydata_get_best_profile(
 				}
 			}
 		}
-		rc = of_property_read_string(node, "qcom,battery-type",
-							&battery_type);
-		if (!rc && strcmp(battery_type, "itech_3000mah") == 0)
-				generic_node = node;
+		rc = of_property_read_string(node, "qcom,battery-type",	&battery_type);
+		if (!rc && strcmp(battery_type, "atl_3400mah") == 0)
+			generic_node = node;
 	}
 
 	if (best_node == NULL) {
-		/* now that best_node is null, there is no need to
-		 * check whether generic node is null. */
+		/*
+		 * Now that best_node is null, there is no need to
+		 * check whether generic node is null.
+                 */
 		best_node = generic_node;
-		pr_err("No battery data found,use generic one\n");
+		pr_err("No battery data found, using generic one\n");
 		return best_node;
 	}
 

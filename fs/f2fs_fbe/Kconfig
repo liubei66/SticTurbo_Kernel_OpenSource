@@ -1,0 +1,10 @@
+config FS_F2FS_FBE
+	tristate "FS F2FS Encryption"
+	select CRYPTO
+	select CRYPTO_AES
+	select CRYPTO_CBC
+	select CRYPTO_ECB
+	select CRYPTO_XTS
+	select CRYPTO_CTS
+	select CRYPTO_CTR
+	select KEYS

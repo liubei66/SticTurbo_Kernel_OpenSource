@@ -161,18 +161,6 @@ static struct kobj_type iommu_group_ktype = {
 	.release = iommu_group_release,
 };
 
-/**
- * iommu_group_alloc - Allocate a new group
- * @name: Optional name to associate with group, visible in sysfs
- *
- * This function is called by an iommu driver to allocate a new iommu
- * group.  The iommu group represents the minimum granularity of the iommu.
- * Upon successful return, the caller holds a reference to the supplied
- * group in order to hold the group until devices are added.  Use
- * iommu_group_put() to release this extra reference count, allowing the
- * group to be automatically reclaimed once it has no devices or external
- * references.
- */
 struct iommu_group *iommu_group_alloc(void)
 {
 	struct iommu_group *group;
@@ -204,15 +192,10 @@ struct iommu_group *iommu_group_alloc(void)
 
 	group->devices_kobj = kobject_create_and_add("devices", &group->kobj);
 	if (!group->devices_kobj) {
-		kobject_put(&group->kobj); /* triggers .release & free */
+		kobject_put(&group->kobj);
 		return ERR_PTR(-ENOMEM);
 	}
 
-	/*
-	 * The devices_kobj holds a reference on the group kobject, so
-	 * as long as that exists so will the group.  We can therefore
-	 * use the devices_kobj for reference counting.
-	 */
 	kobject_put(&group->kobj);
 
 	pr_debug("Allocated group %d\n", group->id);
@@ -253,10 +236,6 @@ EXPORT_SYMBOL_GPL(iommu_group_get_by_id);
 /**
  * iommu_group_get_iommudata - retrieve iommu_data registered for a group
  * @group: the group
- *
- * iommu drivers can store data in the group for use when doing iommu
- * operations.  This function provides a way to retrieve it.  Caller
- * should hold a group reference.
  */
 void *iommu_group_get_iommudata(struct iommu_group *group)
 {
@@ -269,10 +248,6 @@ EXPORT_SYMBOL_GPL(iommu_group_get_iommudata);
  * @group: the group
  * @iommu_data: new data
  * @release: release function for iommu_data
- *
- * iommu drivers can store data in the group for use when doing iommu
- * operations.  This function provides a way to set the data after
- * the group has been allocated.  Caller should hold a group reference.
  */
 void iommu_group_set_iommudata(struct iommu_group *group, void *iommu_data,
 			       void (*release)(void *iommu_data))
@@ -286,9 +261,6 @@ EXPORT_SYMBOL_GPL(iommu_group_set_iommudata);
  * iommu_group_set_name - set name for a group
  * @group: the group
  * @name: name
- *
- * Allow iommu driver to set a name for a group.  When set it will
- * appear in a name attribute file under the group in sysfs.
  */
 int iommu_group_set_name(struct iommu_group *group, const char *name)
 {
@@ -336,7 +308,6 @@ static int iommu_group_create_direct_mappings(struct iommu_group *group,
 
 	iommu_get_dm_regions(dev, &mappings);
 
-	/* We need to consider overlapping regions for different devices */
 	list_for_each_entry(entry, &mappings, list) {
 		dma_addr_t start, end, addr;
 
@@ -443,6 +414,7 @@ err_put_group:
 	mutex_unlock(&group->mutex);
 	dev->iommu_group = NULL;
 	kobject_put(group->devices_kobj);
+	sysfs_remove_link(group->devices_kobj, device->name);
 err_free_name:
 	kfree(device->name);
 err_remove_link:
@@ -1701,9 +1673,9 @@ int iommu_request_dm_for_dev(struct device *dev)
 	int ret;
 
 	/* Device must already be in a group before calling this function */
-	group = iommu_group_get_for_dev(dev);
-	if (IS_ERR(group))
-		return PTR_ERR(group);
+	group = iommu_group_get(dev);
+	if (!group)
+		return -EINVAL;
 
 	mutex_lock(&group->mutex);
 

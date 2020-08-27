@@ -16,8 +16,7 @@
 #include <linux/workqueue.h>
 #include <linux/sysfs.h>
 #include <asm/unaligned.h>
-/*add for sdm845 request*/
-#include <idtp9220.h>
+#include "idtp9220.h"
 #include <linux/regmap.h>
 #include <linux/spinlock.h>
 #include <linux/of_gpio.h>
@@ -112,10 +111,6 @@ struct idtp9220_device_info {
 
 void idtp922x_request_adapter(struct idtp9220_device_info *di);
 static void idtp9220_set_charging_param(struct idtp9220_device_info *di);
-
-/*static int idt_signal_strength = 0;
-module_param_named(ss, idt_signal_strength, int, 0600);
-*/
 
 static int idt_signal_range = 2;
 module_param_named(signal_range, idt_signal_range, int, 0644);
@@ -232,14 +227,6 @@ void idtp922x_set_pmi_icl(struct idtp9220_device_info *di, int mA)
 	power_supply_set_property(di->dc_psy, POWER_SUPPLY_PROP_CURRENT_MAX, &val);
 }
 
-/* Adapter Type */
-/* Adapter_list = {0x00:'ADAPTER_UNKNOWN',  */
-/*            0x01:'SDP 500mA',  */
-/*            0x02:'CDP 1.1A',  */
-/*            0x03:'DCP 1.5A',  */
-/*            0x05:'QC2.0',  */
-/*            0x06:'QC3.0',  */
-/*            0x07:'PD',} */
 void idtp922x_request_adapter(struct idtp9220_device_info *di)
 {
 	ProPkt_Type pkt;
@@ -301,9 +288,6 @@ static int idtp9220_get_ilim(struct idtp9220_device_info *di)
 
 	return ilim_ma;
 }
-
-
-
 
 static int idtp9220_get_freq(struct idtp9220_device_info *di)
 {
@@ -408,7 +392,7 @@ static ssize_t chip_vout_store(struct device *dev,
 		return count;
 	}
 
-	di->bus.write(di, REG_VOUT_SET, index);
+	idtp9220_set_vout(di, index);
 
 	return count;
 }
@@ -503,8 +487,7 @@ static int idtp9220_set_present(struct idtp9220_device_info *di, int enable)
 	int ret = 0;
 
 	dev_info(di->dev, "[idtp] dc plug %s\n", enable ? "in" : "out");
-	if (enable)
-	{
+	if (enable) {
 		di->dcin_present = true;
 	} else {
 		di->status = NORMAL_MODE;
@@ -733,9 +716,9 @@ static void idtp9220_chg_detect_work(struct work_struct *work)
 
 	dev_info(di->dev, "[idt] enter %s\n", __func__);
 
-	/*set idtp9220 into sleep mode when usbin*/
+	/* Set idtp9220 into sleep mode when usbin */
 	power_supply_get_property(di->usb_psy,
-			POWER_SUPPLY_PROP_PRESENT, &val);
+			POWER_SUPPLY_PROP_ONLINE, &val);
 	if (val.intval) {
 		dev_info(di->dev, "[idt] usb_online:%d set chip disable\n", val.intval);
 		idtp9220_set_enable_mode(di, false);
@@ -761,7 +744,7 @@ static void idtp922x_set_fod_reg(struct idtp9220_device_info *di)
 	int vout;
 
 	if (!di)
-		return ;
+		return;
 
 	vout = idtp9220_get_vout(di);
 	dev_info(di->dev, "[idt] %s: vout_now = %dmV\n",__func__, vout);
@@ -781,20 +764,7 @@ static void idtp922x_set_fod_reg(struct idtp9220_device_info *di)
 			di->bus.write(di, 0x71, 0x46);
 			di->bus.write(di, 0x72, 0x7D);
 			di->bus.write(di, 0x73, 0x32);
-		} /*else {			//5V
-			di->bus.write(di, 0x68, 0xAE);
-			di->bus.write(di, 0x69, 0x1B);
-			di->bus.write(di, 0x6A, 0x94);
-			di->bus.write(di, 0x6B, 0x21);
-			di->bus.write(di, 0x6C, 0x8F);
-			di->bus.write(di, 0x6D, 0x1F);
-			di->bus.write(di, 0x6E, 0x94);
-			di->bus.write(di, 0x6F, 0x11);
-			di->bus.write(di, 0x70, 0x8E);
-			di->bus.write(di, 0x71, 0x23);
-			di->bus.write(di, 0x72, 0x8E);
-			di->bus.write(di, 0x73, 0x23);
-		}*/
+		}
 	} else {			/*D5X 9V*/
 		if (vout >= 9000) {
 			di->bus.write(di, 0x68, 0xAE);
@@ -813,13 +783,6 @@ static void idtp922x_set_fod_reg(struct idtp9220_device_info *di)
 	}
 
 	di->fod_flag = true;
-/*
-		for(i=0x68; i<0x74; i++) {
-			di->bus.read(di, i , &val);
-			dev_info(di->dev, "[idt] addr: 0x%x data: 0x%x\n", i,val);
-		}
-	dev_info(di->dev, "[idt] %s:9v fod set done\n", __func__);
-*/
 }
 
 static void idtp9220_fod_work(struct work_struct *work)
@@ -875,7 +838,7 @@ static void idtp9220_set_charging_param(struct idtp9220_device_info *di)
 	int dcin_ave = 0;
 	int icl_exchange_current = 0;
 
-	switch(di->tx_charger_type) {
+	switch (di->tx_charger_type) {
 		case ADAPTER_QC2:
 			adapter_vol = ADAPTER_QC_VOL;
 			icl_curr = di->qc2_icl;
@@ -1215,7 +1178,9 @@ static void idtp9220_irq_work(struct work_struct *work)
 			dev_info(di->dev, "[idt]adapter type: %d\n", recive_data[1]);
 			di->tx_charger_type = recive_data[1];
 			schedule_delayed_work(&di->chg_monitor_work,
-								msecs_to_jiffies(0));
+								msecs_to_jiffies(1000));
+			if (di->wireless_psy)
+				power_supply_changed(di->wireless_psy);
 			break;
 		default:
 			dev_info(di->dev, "[idt] unsupport cmd: %x\n", recive_data[0]);
@@ -1230,6 +1195,7 @@ out:
 	}
 	return;
 }
+
 static void idtp9220_get_property_names(struct idtp9220_device_info *di)
 {
 	di->batt_psy = power_supply_get_by_name("battery");
@@ -1402,7 +1368,6 @@ static void idtp9220_sram_update_work(struct work_struct *work)
 	u8 buffer[size];
 	int i = 0;
 
-
 	di->bus.read(di, 0x4D, &data);
 	dev_info(di->dev, "[idtp] %s: 0x4D data:%x, (data & BIT(4)):%lu\n", __func__, data, (data & BIT(4)));
 	if (!(data & BIT(4)))
@@ -1413,11 +1378,9 @@ static void idtp9220_sram_update_work(struct work_struct *work)
 
 	while(size--)
 	{
-		if (idt_firmware_sram[i] == buffer[i])
-		{
+		if (idt_firmware_sram[i] == buffer[i]) {
 			printk("buffer[%d]:0x%x", i, buffer[i]);
-		} else
-		{
+		} else {
 			printk("[idt] sram data is not right\n");
 			return;
 		}
@@ -1451,12 +1414,12 @@ static int wireless_fb_notifier_cb(struct notifier_block *self,
 			blank = evdata->data;
 			if (*blank == DRM_BLANK_UNBLANK) {
 				di->screen_on = true;
-				pr_info("%s: screen_on\n", __func__);
+				pr_debug("%s: screen_on\n", __func__);
 				if (di->status == FULL_MODE)
 					idtp922x_set_pmi_icl(di, DC_FUL_CURRENT);
 			} else if (*blank == DRM_BLANK_POWERDOWN) {
 				di->screen_on = false;
-				pr_info("%s: screen_off\n", __func__);
+				pr_debug("%s: screen_off\n", __func__);
 				if (di->status == FULL_MODE)
 					idtp922x_set_pmi_icl(di, SCREEN_OFF_FUL_CURRENT);
 			}
@@ -1538,17 +1501,6 @@ static int idtp9220_probe(struct i2c_client *client,
 		goto cleanup;
 	}
 
-/*
- *	this func write config to otp when init, due to the config will be
- *	write to otp in factory, so delete it.
- *
-
-	if (!program_fw(di, 0x0000, idt_firmware_otp, sizeof(idt_firmware_otp))) {
-		dev_err(&client->dev, "program fw failed.\n");
-		goto cleanup;
-	}
-*/
-
 	if (sysfs_create_group(&client->dev.kobj, &sysfs_group_attrs)) {
 		dev_err(&client->dev, "create sysfs attrs failed!\n");
 		ret = -EIO;
@@ -1565,7 +1517,7 @@ static int idtp9220_probe(struct i2c_client *client,
 	INIT_DELAYED_WORK(&di->request_adapter_retry_work, idtp9220_request_adapter_retry_work);
 
 #ifdef CONFIG_DRM
-		if (&di->wireless_fb_notif) {
+		if (&di->wireless_fb_notif != NULL) {
 			di->wireless_fb_notif.notifier_call = wireless_fb_notifier_cb;
 			rc = drm_register_client(&di->wireless_fb_notif);
 			if (rc < 0) {
@@ -1582,7 +1534,7 @@ static int idtp9220_probe(struct i2c_client *client,
 	schedule_delayed_work(&di->chg_detect_work, 5 * HZ);
 
 #ifdef IDTP9220_SRAM_UPDATE
-	INIT_DELAYED_WORK(&di->sram_update_work,idtp9220_sram_update_work);
+	INIT_DELAYED_WORK(&di->sram_update_work, idtp9220_sram_update_work);
 	schedule_delayed_work(&di->sram_update_work, 10 * HZ);
 #endif
 	return 0;

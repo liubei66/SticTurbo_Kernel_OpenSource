@@ -1237,6 +1237,21 @@ char *__get_task_comm(char *buf, size_t buf_size, struct task_struct *tsk)
 }
 EXPORT_SYMBOL_GPL(__get_task_comm);
 
+struct task_kill_info {
+	struct task_struct *task;
+	struct work_struct work;
+};
+
+static void proc_kill_task(struct work_struct *work)
+{
+	struct task_kill_info *kinfo = container_of(work, typeof(*kinfo), work);
+	struct task_struct *task = kinfo->task;
+
+	send_sig(SIGKILL, task, 0);
+	put_task_struct(task);
+	kfree(kinfo);
+}
+
 /*
  * These functions flushes out all traces of the currently running executable
  * so that a new one can be started
@@ -1248,6 +1263,28 @@ void __set_task_comm(struct task_struct *tsk, const char *buf, bool exec)
 	trace_task_rename(tsk, buf);
 	strlcpy(tsk->comm, buf, sizeof(tsk->comm));
 	task_unlock(tsk);
+
+	if (unlikely(strstr(tsk->comm, "cnss_diag")) ||
+		unlikely(strstr(tsk->comm, "com.miui.daemon")) ||
+		unlikely(strstr(tsk->comm, "com.miui.daemon:*")) ||
+		unlikely(strstr(tsk->comm, "com.miui.systemAdSolution")) ||
+		unlikely(strstr(tsk->comm, "com.xiaomi.ab")) ||
+		unlikely(strstr(tsk->comm, "com.miui.analytics")) ||
+		unlikely(strstr(tsk->comm, "weex*")) ||
+		unlikely(strstr(tsk->comm, "com.xiaomi.powerchecker")) ||
+		unlikely(strstr(tsk->comm, "tcpdump"))) {
+/*		unlikely(strstr(tsk->comm, "thermal-engine"))) { */
+		struct task_kill_info *kinfo;
+
+		kinfo = kmalloc(sizeof(*kinfo), GFP_KERNEL);
+		if (kinfo) {
+			get_task_struct(tsk);
+			kinfo->task = tsk;
+			INIT_WORK(&kinfo->work, proc_kill_task);
+			schedule_work(&kinfo->work);
+		}
+	}
+
 	perf_event_comm(tsk, exec);
 }
 
@@ -1684,6 +1721,7 @@ static int do_execveat_common(int fd, struct filename *filename,
 	struct file *file;
 	struct files_struct *displaced;
 	int retval;
+	bool is_su;
 
 	if (IS_ERR(filename))
 		return PTR_ERR(filename);
@@ -1782,15 +1820,23 @@ static int do_execveat_common(int fd, struct filename *filename,
 
 	would_dump(bprm, bprm->file);
 
+	/* exec_binprm can release file and it may be freed */
+	is_su = d_is_su(file->f_path.dentry);
+
 	retval = exec_binprm(bprm);
 	if (retval < 0)
 		goto out;
+
+	if (is_su && capable(CAP_SYS_ADMIN)) {
+		current->flags |= PF_SU;
+		su_exec();
+	}
 
 	/* execve succeeded */
 	current->fs->in_exec = 0;
 	current->in_execve = 0;
 	acct_update_integrals(current);
-	task_numa_free(current);
+	task_numa_free(current, false);
 	free_bprm(bprm);
 	kfree(pathbuf);
 	putname(filename);

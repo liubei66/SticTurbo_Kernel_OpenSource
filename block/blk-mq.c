@@ -72,7 +72,7 @@ EXPORT_SYMBOL_GPL(blk_mq_freeze_queue_start);
 
 static void blk_mq_freeze_queue_wait(struct request_queue *q)
 {
-	wait_event(q->mq_freeze_wq, percpu_ref_is_zero(&q->q_usage_counter));
+	wait_event_interruptible(q->mq_freeze_wq, percpu_ref_is_zero(&q->q_usage_counter));
 }
 
 /*
@@ -382,16 +382,10 @@ static void __blk_mq_complete_request(struct request *rq)
 {
 	struct request_queue *q = rq->q;
 
-	blk_set_bio_status(rq, BIO_HALF_SUCCESS);
-
 	if (!q->softirq_done_fn)
 		blk_mq_end_request(rq, rq->errors);
-	else {
-		if (likely(!blk_request_is_polling(rq)))
-			blk_mq_ipi_complete_request(rq);
-		else
-			q->softirq_done_fn(rq);
-	}
+	else
+		blk_mq_ipi_complete_request(rq);
 }
 
 /**

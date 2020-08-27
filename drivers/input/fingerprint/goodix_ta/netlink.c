@@ -2,7 +2,7 @@
  * netlink interface
  *
  * Copyright (c) 2017 Goodix
- * Copyright (C) 2019 XiaoMi, Inc.
+ * Copyright (C) 2018 XiaoMi, Inc.
  */
 #include <linux/init.h>
 #include <linux/module.h>
@@ -17,7 +17,7 @@
 int stringlength(char *s);
 void sendnlmsg(char *message);
 static int pid = -1;
-struct sock *nl_sk;
+struct sock *nl_sk = NULL;
 
 void sendnlmsg(char *message)
 {
@@ -93,6 +93,4 @@ void netlink_exit(void)
 		netlink_kernel_release(nl_sk);
 		nl_sk = NULL;
 	}
-	pr_info("self module exited\n");
 }
-

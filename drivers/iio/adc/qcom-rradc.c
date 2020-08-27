@@ -889,7 +889,6 @@ static int rradc_do_batt_id_conversion(struct rradc_chip *chip,
 
 	rc = rradc_read_channel_with_continuous_mode(chip, prop, buf);
 	if (rc < 0) {
-		pr_err("Error reading in continuous mode:%d\n", rc);
 		ret = rc;
 	}
 
@@ -939,7 +938,6 @@ static int rradc_do_conversion(struct rradc_chip *chip,
 
 		rc = rradc_read_channel_with_continuous_mode(chip, prop, buf);
 		if (rc < 0) {
-			pr_err("Error reading in continuous mode:%d\n", rc);
 			goto fail;
 		}
 
@@ -963,7 +961,6 @@ static int rradc_do_conversion(struct rradc_chip *chip,
 
 		rc = rradc_read_channel_with_continuous_mode(chip, prop, buf);
 		if (rc < 0) {
-			pr_err("Error reading in continuous mode:%d\n", rc);
 			goto fail;
 		}
 
