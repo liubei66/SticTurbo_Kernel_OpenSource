@@ -1,5 +1,5 @@
 /* Copyright (c) 2014-2015, 2017, The Linux Foundation. All rights reserved.
- * Copyright (C) 2019 XiaoMi, Inc.
+ * Copyright (C) 2018 XiaoMi, Inc.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -2028,7 +2028,7 @@ static void qpnp_hap_td_enable(struct timed_output_dev *dev, int value)
 				 hap->timeout_ms : value);
 		hap->state = 1;
 		if (value == 7)
-			value = (hap->wave_play_rate_us / 1000) * 2 -1;
+			value = (hap->wave_play_rate_us / 1000) * 2 - 1;
 		hap->vibration_time = value;
 		hrtimer_start(&hap->hap_timer,
 			      ktime_set(value / 1000, (value % 1000) * 1000000),
@@ -2784,11 +2784,12 @@ static int qpnp_haptic_probe(struct platform_device *pdev)
 	hap = devm_kzalloc(&pdev->dev, sizeof(*hap), GFP_KERNEL);
 	if (!hap)
 		return -ENOMEM;
-		hap->regmap = dev_get_regmap(pdev->dev.parent, NULL);
-		if (!hap->regmap) {
-			dev_err(&pdev->dev, "Couldn't get parent's regmap\n");
-			return -EINVAL;
-		}
+
+	hap->regmap = dev_get_regmap(pdev->dev.parent, NULL);
+	if (!hap->regmap) {
+		dev_err(&pdev->dev, "Couldn't get parent's regmap\n");
+		return -EINVAL;
+	}
 
 	hap->pdev = pdev;
 

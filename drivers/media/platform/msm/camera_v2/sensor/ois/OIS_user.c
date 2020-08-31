@@ -6,7 +6,7 @@
 * Rule: Use TAB 4
 *
 * Copyright(c)	Rohm Co.,Ltd. All rights reserved
-* Copyright (C) 2019 XiaoMi, Inc.
+* Copyright (C) 2018 XiaoMi, Inc.
 **************************************************************************/
 /***** ROHM Confidential ***************************************************/
 #ifndef OIS_USER_C
@@ -14,76 +14,10 @@
 #endif
 
 #include "OIS_head.h"
-#if 0
-#include "usb_func.h"
-#include "winbase.h"
-#endif
 
 /* Following Variables that depend on user's environment RHM_HT 2013.03.13 add */
 OIS_UWORD FOCUS_VAL = 0x0122; /* Focus Value */
 
-#ifdef OIS_GYRO_ST
-OIS_UBYTE open_flag = 0;
-/*********************************************************
-* ST Gyro - Disable SPI2
-* ---------------------------------------------------------
-* <Function>
-* To Disable SPI2 of ST gyro.
-* <Input>
-* none
-*
-* <Output>
-* none
-*
-*********************************************************/
-void Disable_SPI2_ST(void)
-{
-	OIS_UWORD u16_data = 0;
-	OIS_UBYTE loop = 10;
-
-	if (!open_flag) {
-		goto OUT;
-	} else {
-		I2C_OIS_mem_write(0x7F, 0x0080);  /*Stop SPI Communication */
-
-		I2C_OIS_per_write(0x18, 0x400F);  /*To Read CTRL1_OIS(0x70) register in LSM6DSM */
-		I2C_OIS_per_write(0x1B, 0xF000);
-		I2C_OIS_per_write(0x1C, 0xF000);
-
-		u16_data = I2C_OIS_per__read(0x1C);  /*To Read P_0x1C and check if LSB of data is 0xB1 */
-		u16_data &= 0x00FF;
-
-		if (u16_data == 0xB1) {
-			while (loop) {
-				I2C_OIS_per_write(0x18, 0x000F);  /* To Write OIS_EN_SPI2 = 0 in CTRL1_OIS register */
-				I2C_OIS_per_write(0x1B, 0x70B0);
-				I2C_OIS_per_write(0x1C, 0x70B0);
-
-				I2C_OIS_per_write(0x18, 0x400F);  /*To Check OIS_EN_SPI2 = 0, Read CTRL1_OIS(0x70) register; */
-				I2C_OIS_per_write(0x1B, 0xF000);
-				I2C_OIS_per_write(0x1C, 0xF000);
-
-				u16_data = I2C_OIS_per__read(0x1C);	/* Read P_0x1C and check if LSB of data is 0x00. */
-				u16_data &= 0x00FF;
-
-				if (u16_data == 0x00) {
-					pr_debug("%s:%d:loop = %d\n", __func__, __LINE__, loop);
-					break;
-				}
-				if (!loop) {
-					pr_debug("%s:%d:loop = %d\n", __func__, __LINE__, loop);
-					break;
-				}
-				loop--;
-				msleep(10);
-			}
-		}
-	}
-
-OUT:
-	return;
-}
-#endif
 /*********************************************************
 * VCOSET function
 * ---------------------------------------------------------
@@ -117,26 +51,6 @@ void VCOSET0(void)
 
 void VCOSET1(void)
 {
-#if 0
-	OIS_UWORD CLK_PS = 23880; /* Input Frequency [kHz] of CLK/PS terminal (Depend on your system) RHM_HT 2013.05.09 Change 12M -> 6.75M */
-	OIS_UWORD FVCO_1 = 27000; /* Target Frequency [kHz] */
-	OIS_UWORD FREF   = 25; /* Reference Clock Frequency [kHz] */
-
-	OIS_UWORD DIV_N  = CLK_PS / FREF - 1; /* calc DIV_N */
-	OIS_UWORD DIV_M  = FVCO_1 / FREF - 1; /* calc DIV_M */
-
-	I2C_OIS_per_write(0x62, DIV_N); /* Divider for internal reference clock */
-	I2C_OIS_per_write(0x63, DIV_M); /* Divider for internal PLL clock */
-	I2C_OIS_per_write(0x64, 0x4060); /* Loop Filter */
-
-	I2C_OIS_per_write(0x60, 0x3011); /* PLL */
-	I2C_OIS_per_write(0x65, 0x0080);
-	I2C_OIS_per_write(0x61, 0x8002); /* VCOON */
-	I2C_OIS_per_write(0x61, 0x8003); /* Circuit ON */
-	I2C_OIS_per_write(0x61, 0x8809); /* PLL ON */
-
-	Wait(30);                      /* Wait for PLL lock */
-#endif
 	I2C_OIS_per_write(0x05, 0x000C); /* Prepare for PLL clock as master clock */
 	I2C_OIS_per_write(0x05, 0x000D); /* Change to PLL clock */
 }
@@ -156,7 +70,7 @@ void WR_I2C(OIS_UBYTE slvadr, OIS_UBYTE size, OIS_UBYTE *dat)
 OIS_UWORD RD_I2C(OIS_UBYTE slvadr, OIS_UBYTE size, OIS_UBYTE *dat)
 {
 	OIS_UWORD read_data = 0;
-	OIS_UWORD addr = ((dat[0] << 8) | dat[1]);
+	OIS_UWORD addr = ((dat[0] << 8) | dat[size-1]);
 
 	g_i2c_ctrl->i2c_client.addr_type = MSM_CAMERA_I2C_WORD_ADDR;
 	g_i2c_ctrl->i2c_client.i2c_func_tbl->i2c_read(&g_i2c_ctrl->i2c_client, addr, &read_data, MSM_CAMERA_I2C_WORD_DATA);
@@ -276,37 +190,8 @@ void get_FADJ_MEM_from_non_volatile_memory(void)
 	/* if (fadj_got) return; */
 
 	memcpy((void *)buf, (void *)g_cal_fadj_data, 43);
-#if 0
-	sid = g_i2c_ctrl->i2c_client.cci_client->sid;
-	g_i2c_ctrl->i2c_client.cci_client->sid = 0x50;
-	g_i2c_ctrl->i2c_client.addr_type = MSM_CAMERA_I2C_BYTE_ADDR;
-	g_i2c_ctrl->i2c_client.i2c_func_tbl->i2c_read_seq(&g_i2c_ctrl->i2c_client, 0x00, buf, 120);
-#endif
-#if 0
-	pr_debug("ois module ");
-	for (i = 0; i < 12; i++) {
-		pr_debug("%02x ", buf[i]);
-	}
-	pr_debug("\n");
-	pr_debug("ois fadj ");
-	for (i = 2; i < 14; i++) {
-		pr_debug("%02x ", buf[i]);
-	}
-	pr_debug("\n");
-#endif
-#if 0
-	g_i2c_ctrl->i2c_client.i2c_func_tbl->i2c_read_seq(&g_i2c_ctrl->i2c_client, 0x27, buf, 8);
-	pr_info("ois sn %02x %02x %02x %02x %02x %02x %02x %02x ", buf[0], buf[1], buf[2], buf[3], buf[4], buf[5], buf[6], buf[7]);
-#endif
-	memcpy((void*) data, (void *) (&buf[0x05]), 38);
+	memcpy((void *) data, (void *) (&buf[0x05]), 38);
 	/* g_i2c_ctrl->i2c_client.i2c_func_tbl->i2c_read_seq(&g_i2c_ctrl->i2c_client, 0x3A, data, 38); */
-#if 0
-	pr_debug("ois fadj ");
-	for (i = 0; i < 16; i++) {
-		pr_debug("%02x ", data[i]);
-	}
-	pr_debug("\n");
-#endif
 	pr_debug("ois fadj 0x%04x 0x%04x 0x%04x\n", FADJ_MEM.gl_CURDAT, FADJ_MEM.gl_HALOFS_X, FADJ_MEM.gl_HALOFS_Y);
 	/* g_i2c_ctrl->i2c_client.cci_client->sid = sid; */
 

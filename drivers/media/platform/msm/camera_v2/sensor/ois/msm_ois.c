@@ -1,5 +1,4 @@
 /* Copyright (c) 2014-2017, The Linux Foundation. All rights reserved.
- * Copyright (C) 2019 XiaoMi, Inc.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -18,9 +17,12 @@
 #include "msm_sd.h"
 #include "msm_ois.h"
 #include "msm_cci.h"
+
+#ifdef CONFIG_MACH_XIAOMI_MSM8998
 #include "OIS_head.h"
 #include "OIS_user.c"
 #include "OIS_func.c"
+#endif
 
 DEFINE_MSM_MUTEX(msm_ois_mutex);
 /*#define MSM_OIS_DEBUG*/
@@ -31,15 +33,18 @@ DEFINE_MSM_MUTEX(msm_ois_mutex);
 #define CDBG(fmt, args...) pr_debug(fmt, ##args)
 #endif
 
-#ifdef _CHIRON_OIS
+#ifdef CONFIG_MACH_CHIRON
 bool ois_spi_work_flag = true;
 bool ois_check_flag = false;
 #endif
+
 static struct v4l2_file_operations msm_ois_v4l2_subdev_fops;
 static int32_t msm_ois_power_up(struct msm_ois_ctrl_t *o_ctrl);
 static int32_t msm_ois_power_down(struct msm_ois_ctrl_t *o_ctrl);
 
+#ifdef CONFIG_MACH_XIAOMI_MSM8998
 static void msm_ois_FW_download(struct work_struct *ois_work);
+#endif
 
 static struct i2c_driver msm_ois_i2c_driver;
 
@@ -81,7 +86,9 @@ static int32_t msm_ois_download(struct msm_ois_ctrl_t *o_ctrl)
 	struct device *dev = &(o_ctrl->pdev->dev);
 	enum msm_camera_i2c_reg_addr_type save_addr_type;
 
+#ifdef CONFIG_MACH_XIAOMI_MSM8998
 	return 1; /* disable ois download lib.so */
+#endif
 
 	CDBG("Enter\n");
 	save_addr_type = o_ctrl->i2c_client.addr_type;
@@ -349,16 +356,15 @@ static int32_t msm_ois_power_down(struct msm_ois_ctrl_t *o_ctrl)
 {
 	int32_t rc = 0;
 	enum msm_sensor_power_seq_gpio_t gpio;
+
+#ifdef CONFIG_MACH_XIAOMI_MSM8998
 	struct device_node *src_node = NULL;
 	int i = 0;
 	const char *ois_name;
 	struct device_node *of_node = o_ctrl->pdev->dev.of_node;
+#endif
 
 	CDBG("Enter\n");
-
-#ifdef OIS_GYRO_ST
-	Disable_SPI2_ST();
-#endif
 	if (o_ctrl->ois_state != OIS_DISABLE_STATE) {
 
 		rc = msm_ois_vreg_control(o_ctrl, 0);
@@ -402,7 +408,9 @@ static int32_t msm_ois_power_down(struct msm_ois_ctrl_t *o_ctrl)
 
 		o_ctrl->i2c_tbl_index = 0;
 		o_ctrl->ois_state = OIS_OPS_INACTIVE;
-	} else {
+	}
+#ifdef CONFIG_MACH_XIAOMI_MSM8998
+	else {
 		if (of_gpio_count(of_node)) {
 			for (gpio = SENSOR_GPIO_AF_PWDM; gpio < SENSOR_GPIO_MAX;
 				gpio++) {
@@ -463,13 +471,14 @@ static int32_t msm_ois_power_down(struct msm_ois_ctrl_t *o_ctrl)
 				of_node_put(src_node);
 				src_node = NULL;
 			}
-		}
+				}
 	}
-
+#endif
 	CDBG("Exit\n");
 	return rc;
 }
 
+#ifdef CONFIG_MACH_XIAOMI_MSM8998
 void msm_ois_shift_gain(int distance)
 {
 	if ((g_i2c_ctrl->ois_state != OIS_OPS_ACTIVE) || (g_i2c_ctrl == NULL))
@@ -488,16 +497,8 @@ static void msm_ois_FW_download(struct work_struct *ois_work)
 	struct msm_camera_cci_client *cci_client = NULL;
 	struct msm_ois_ctrl_t *o_ctrl = NULL;
 	int rc = 0;
-#if 0
-	uint8_t data_x[2] = {0};
-	uint8_t data_y[2] = {0};
-	int i = 20;
-	char fail_count = 0;
-#endif
 	CDBG("ois Enter, work:%p\n", ois_work);
-#ifdef _CHIRON_OIS
-	CDBG("ois Enter for _CHIRON_OIS");
-#endif
+
 	o_ctrl = container_of(ois_work, struct msm_ois_ctrl_t, ois_work);
 
 	mutex_lock(o_ctrl->ois_mutex);
@@ -532,62 +533,13 @@ static void msm_ois_FW_download(struct work_struct *ois_work)
 
 exit:
 	mutex_unlock(o_ctrl->ois_mutex);
-#if 0
-		while (true) {
-			rc = o_ctrl->i2c_client.i2c_func_tbl->i2c_read_seq(&o_ctrl->i2c_client, 0x8455, data_x, 2);
-			 if (rc < 0)
-				pr_err("ois: read 0x8455 fail\n");
-			pr_err("ois: 0x8455 X axle H = 0x%x, L = 0x%x\n", data_x[0], data_x[1]);
-			 if ((!data_x[0]) & (!data_x[1])) {
-				fail_count++;
-				pr_err("ois: X axle error\n");
-			}
-			rc = o_ctrl->i2c_client.i2c_func_tbl->i2c_read_seq(&o_ctrl->i2c_client, 0x8456, data_y, 2);
-			 if (rc < 0)
-				pr_err("ois: read 0x8456 fail\n");
-			pr_err("ois:0x8456  Y axle H = 0x%x, L = 0x%x\n", data_y[0], data_y[1]);
-			if ((!data_y[0]) & (!data_y[1])) {
-				fail_count++;
-				pr_err("ois: Y axle error\n");
-			}
-			rc = o_ctrl->i2c_client.i2c_func_tbl->i2c_read_seq(&o_ctrl->i2c_client, 0x8406, data_x, 2);
-			 if (rc < 0)
-				pr_err("ois: read 0x8406 fail\n");
-			pr_err("ois: 0x8406 X axle H = 0x%x, L = 0x%x\n", data_x[0], data_x[1]);
-			 if ((!data_x[0]) & (!data_x[1])) {
-				fail_count++;
-				pr_err("ois: X axle error\n");
-			}
-			rc = o_ctrl->i2c_client.i2c_func_tbl->i2c_read_seq(&o_ctrl->i2c_client, 0x8486, data_y, 2);
-			 if (rc < 0)
-				pr_err("ois: read 0x8486 fail\n");
-			pr_err("ois: 0x8486 Y axle H = 0x%x, L = 0x%x\n", data_y[0], data_y[1]);
-			if ((!data_y[0]) & (!data_y[1])) {
-				fail_count++;
-				pr_err("ois: Y axle error\n");
-			}
-			i--;
-			if (!i) {
-				if (fail_count > 50) {
-					ois_spi_work_flag = false;
-					pr_err("%d: check ois spi interface fail\n", __LINE__);
-				} else {
-					ois_spi_work_flag = true;
-					CDBG("%d: check ois spi interface success\n", __LINE__);
-				}
-				ois_check_flag = true;
-				break;
-			}
-			msleep(20);
-		}
-#endif
 	CDBG("Exit\n");
 }
+#endif
 
 static int msm_ois_init(struct msm_ois_ctrl_t *o_ctrl)
 {
 	int rc = 0;
-
 	CDBG("Enter\n");
 
 	if (!o_ctrl) {
@@ -601,9 +553,9 @@ static int msm_ois_init(struct msm_ois_ctrl_t *o_ctrl)
 		if (rc < 0)
 			pr_err("cci_init failed\n");
 	}
-
 	o_ctrl->ois_state = OIS_OPS_ACTIVE;
 
+#ifdef CONFIG_MACH_XIAOMI_MSM8998
 	if (g_i2c_ctrl == NULL) {
 		g_i2c_ctrl = o_ctrl;
 		o_ctrl->ois_work_queue = alloc_workqueue("ois_FW_download", WQ_HIGHPRI|WQ_UNBOUND, 0);
@@ -618,6 +570,7 @@ static int msm_ois_init(struct msm_ois_ctrl_t *o_ctrl)
 	}
 
 error_alloc_workqueue:
+#endif
 
 	CDBG("Exit\n");
 	return rc;
@@ -867,9 +820,9 @@ static int msm_ois_close(struct v4l2_subdev *sd,
 		pr_err("failed\n");
 		return -EINVAL;
 	}
-
 	mutex_lock(o_ctrl->ois_mutex);
 
+#ifdef CONFIG_MACH_XIAOMI_MSM8998
 	if (o_ctrl->ois_work_queue) {
 		mutex_unlock(o_ctrl->ois_mutex);
 		destroy_workqueue(o_ctrl->ois_work_queue);
@@ -878,6 +831,7 @@ static int msm_ois_close(struct v4l2_subdev *sd,
 	}
 
 	g_i2c_ctrl = NULL;
+#endif
 
 	if (o_ctrl->ois_device_type == MSM_CAMERA_PLATFORM_DEVICE &&
 		o_ctrl->ois_state != OIS_DISABLE_STATE) {
@@ -887,9 +841,7 @@ static int msm_ois_close(struct v4l2_subdev *sd,
 			pr_err("cci_init failed\n");
 	}
 	o_ctrl->ois_state = OIS_DISABLE_STATE;
-
 	mutex_unlock(o_ctrl->ois_mutex);
-
 	CDBG("Exit\n");
 	return rc;
 }
@@ -1198,8 +1150,10 @@ static int32_t msm_ois_platform_probe(struct platform_device *pdev)
 		(&pdev->dev)->of_node);
 	if (rc < 0) {
 		pr_err("%s: No/Error OIS GPIO\n", __func__);
+#ifdef CONFIG_MACH_XIAOMI_MSM8998
 	} else if (!msm_ois_t->gconf) {
 		pr_err("%s: %d: OIS no GPIO control\n", __func__, __LINE__);
+#endif
 	} else {
 		msm_ois_t->cam_pinctrl_status = 1;
 		rc = msm_camera_pinctrl_init(

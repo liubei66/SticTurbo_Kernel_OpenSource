@@ -5,6 +5,7 @@
  *
  * Copyright (C) 2012 Alexandra Chin <alexandra.chin@tw.synaptics.com>
  * Copyright (C) 2012 Scott Lin <scott.lin@tw.synaptics.com>
+ * Copyright (C) 2018 XiaoMi, Inc.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -58,40 +59,6 @@ static struct platform_device *synaptics_dsx_i2c_device;
 #ifdef CONFIG_OF
 static void dump_dt(struct device *dev, struct synaptics_dsx_board_data *bdata)
 {
-#if 0
-	int i, j;
-	char tmp[256] = {0};
-	dev_dbg(dev, "START of device tree dump:\n");
-	dev_dbg(dev, "power_gpio = %d\n", bdata->power_gpio);
-	dev_dbg(dev, "reset_gpio = %d\n", bdata->reset_gpio);
-	dev_dbg(dev, "irq_gpio = %d\n", bdata->irq_gpio);
-	dev_dbg(dev, "power_on_state = %d\n", (int)bdata->power_on_state);
-	dev_dbg(dev, "reset_on_state = %d\n", (int)bdata->reset_on_state);
-	dev_dbg(dev, "power_delay_ms = %d\n", (int)bdata->power_delay_ms);
-	dev_dbg(dev, "reset_delay_ms = %d\n", (int)bdata->reset_delay_ms);
-	dev_dbg(dev, "reset_active_ms = %d\n", (int)bdata->reset_active_ms);
-	dev_dbg(dev, "cut_off_power = %d\n", (int)bdata->cut_off_power);
-	dev_dbg(dev, "swap_axes = %d\n", (int)bdata->swap_axes);
-	dev_dbg(dev, "x_flip = %d\n", (int)bdata->x_flip);
-	dev_dbg(dev, "y_flip = %d\n", (int)bdata->y_flip);
-	dev_dbg(dev, "ub_i2c_addr = %d\n", (int)bdata->ub_i2c_addr);
-	dev_dbg(dev, "lockdown_area = %d\n", (int)bdata->lockdown_area);
-
-	for (i = 0; i < bdata->tp_id_num; i++)
-		snprintf(tmp, 256, "%s %d", tmp, bdata->tp_id_bytes[i]);
-	dev_dbg(dev, "tp_id_bytes =%s\n", tmp);
-
-	dev_dbg(dev, "config_array_size = %d\n", (int)bdata->config_array_size);
-	for (i = 0; i < bdata->config_array_size; i++) {
-		memset(tmp, 0, sizeof(tmp));
-		for (j = 0; j < bdata->tp_id_num; j++)
-			snprintf(tmp, 256, "%s 0x%0x", tmp, bdata->config_array[i].tp_ids[j]);
-		dev_dbg(dev, "config[%d].tp_id =%s", i, tmp);
-
-		dev_dbg(dev, "config[%d].fw_name = %s\n", i, bdata->config_array[i].fw_name);
-	}
-	dev_dbg(dev, "END of device tree dump\n");
-#endif
 }
 
 static int parse_dt(struct device *dev, struct synaptics_dsx_board_data *bdata)
@@ -779,7 +746,7 @@ static void synaptics_rmi4_i2c_check_addr(struct synaptics_rmi4_data *rmi4_data,
 static int synaptics_rmi4_i2c_set_page(struct synaptics_rmi4_data *rmi4_data,
 		unsigned short addr)
 {
-	int retval;
+	int retval = -EIO;
 	unsigned char retry;
 	unsigned char buf[PAGE_SELECT_LEN];
 	unsigned char page;
@@ -840,10 +807,8 @@ static int synaptics_rmi4_i2c_read(struct synaptics_rmi4_data *rmi4_data,
 	mutex_lock(&rmi4_data->rmi4_io_ctrl_mutex);
 
 	retval = synaptics_rmi4_i2c_set_page(rmi4_data, addr);
-	if (retval != PAGE_SELECT_LEN) {
-		retval = -EIO;
+	if (retval != PAGE_SELECT_LEN)
 		goto exit;
-	}
 
 	msg[0].addr = hw_if.board_data->i2c_addr;
 	msg[0].flags = 0;

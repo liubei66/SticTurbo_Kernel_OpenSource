@@ -879,6 +879,7 @@ blk_init_allocated_queue(struct request_queue *q, request_fn_proc *rfn,
 
 fail:
 	blk_free_flush_queue(q->fq);
+	q->fq = NULL;
 	return NULL;
 }
 EXPORT_SYMBOL(blk_init_allocated_queue);
@@ -1262,7 +1263,7 @@ retry:
 	trace_block_sleeprq(q, bio, rw_flags & 1);
 
 	spin_unlock_irq(q->queue_lock);
-	io_schedule();
+	io_schedule_timeout(5*HZ);
 
 	/*
 	 * After sleeping, we become a "batching" process and will be able

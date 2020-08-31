@@ -1,5 +1,4 @@
-/* Copyright (c) 2010-2014, 2016, 2018 The Linux Foundation.
- * Copyright (C) 2019 XiaoMi, Inc.
+/* Copyright (c) 2010-2014, 2016, 2018-2019 The Linux Foundation.
  * All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
@@ -27,6 +26,7 @@
 #include <linux/platform_device.h>
 #include <linux/sysfs.h>
 #include <linux/device.h>
+#include <linux/of.h>
 #include <linux/slab.h>
 #include <soc/qcom/subsystem_restart.h>
 #include <soc/qcom/scm.h>
@@ -37,9 +37,11 @@
 #include <linux/qdsp6v2/dsp_debug.h>
 #include <linux/qdsp6v2/audio_notifier.h>
 #include <linux/ipc_logging.h>
+#include <linux/of_device.h>
 
 #define APR_PKT_IPC_LOG_PAGE_CNT 2
 
+static struct device *apr_dev_ptr;
 static struct apr_q6 q6;
 static struct apr_client client[APR_DEST_MAX][APR_CLIENT_MAX];
 static void *apr_pkt_ctx;
@@ -48,6 +50,7 @@ static wait_queue_head_t modem_wait;
 static bool is_modem_up;
 static bool is_initial_modem_boot;
 static bool is_initial_adsp_boot;
+static bool is_child_devices_loaded;
 /* Subsystem restart: QDSP6 data, functions */
 static struct workqueue_struct *apr_reset_workqueue;
 static void apr_reset_deregister(struct work_struct *work);
@@ -58,6 +61,7 @@ struct apr_reset_work {
 };
 
 static bool apr_cf_debug;
+static struct delayed_work add_chld_dev_work;
 
 #ifdef CONFIG_DEBUG_FS
 static struct dentry *debugfs_apr_debug;
@@ -264,6 +268,11 @@ int apr_set_q6_state(enum apr_subsys_state state)
 	if (state < APR_SUBSYS_DOWN || state > APR_SUBSYS_LOADED)
 		return -EINVAL;
 	atomic_set(&q6.q6_state, state);
+	if (state == APR_SUBSYS_LOADED && !is_child_devices_loaded) {
+		schedule_delayed_work(&add_chld_dev_work,
+				msecs_to_jiffies(100));
+		is_child_devices_loaded = true;
+	}
 	return 0;
 }
 EXPORT_SYMBOL_GPL(apr_set_q6_state);
@@ -280,11 +289,27 @@ static void apr_adsp_down(unsigned long opcode)
 	dispatch_event(opcode, APR_DEST_QDSP6);
 }
 
+static void apr_add_child_devices(struct work_struct *work)
+{
+	int ret;
+
+	ret = of_platform_populate(apr_dev_ptr->of_node,
+			NULL, NULL, apr_dev_ptr);
+	if (ret)
+		dev_err(apr_dev_ptr, "%s: failed to add child nodes, ret=%d\n",
+			__func__, ret);
+}
+
 static void apr_adsp_up(void)
 {
 	if (apr_cmpxchg_q6_state(APR_SUBSYS_DOWN, APR_SUBSYS_LOADED) ==
 							APR_SUBSYS_DOWN)
 		wake_up(&dsp_wait);
+	if (!is_child_devices_loaded) {
+		schedule_delayed_work(&add_chld_dev_work,
+				msecs_to_jiffies(100));
+		is_child_devices_loaded = true;
+	}
 }
 
 int apr_wait_for_device_up(int dest_id)
@@ -448,7 +473,6 @@ struct apr_svc *apr_register(char *dest, char *svc_name, apr_fn svc_fn,
 	if (!dest || !svc_name || !svc_fn)
 		return NULL;
 
-	pr_err("%s: enter\n", __func__);
 	if (!strcmp(dest, "ADSP"))
 		domain_id = APR_DOMAIN_ADSP;
 	else if (!strcmp(dest, "MODEM")) {
@@ -499,7 +523,6 @@ struct apr_svc *apr_register(char *dest, char *svc_name, apr_fn svc_fn,
 	}
 
 	clnt = &client[dest_id][client_id];
-	pr_err("%s: apr client handle[%p]\n", __func__, clnt->handle);
 	mutex_lock(&clnt->m_lock);
 	if (!clnt->handle && can_open_channel) {
 		clnt->handle = apr_tal_open(client_id, dest_id,
@@ -510,7 +533,6 @@ struct apr_svc *apr_register(char *dest, char *svc_name, apr_fn svc_fn,
 			mutex_unlock(&clnt->m_lock);
 			goto done;
 		}
-		pr_err("%s: done apr_tal_open. apr client handle[%p]\n", __func__, clnt->handle);
 	}
 	mutex_unlock(&clnt->m_lock);
 	svc = &clnt->svc[svc_idx];
@@ -527,9 +549,6 @@ struct apr_svc *apr_register(char *dest, char *svc_name, apr_fn svc_fn,
 	svc->dest_domain = domain_id;
 	svc->pkt_owner = APR_PKT_OWNER_DRIVER;
 
-	pr_err("%s: svc_name = %s, src_port = 0x%x, clnt->svc_cnt = %d, svc->port_cnt = %d, svc->svc_cnt = %d\n",
-		__func__, svc_name, src_port, clnt->svc_cnt,
-		svc->port_cnt, svc->svc_cnt);
 	if (src_port != 0xFFFFFFFF) {
 		temp_port = ((src_port >> 8) * 8) + (src_port & 0xFF);
 		pr_debug("port = %d t_port = %d\n", src_port, temp_port);
@@ -553,8 +572,6 @@ struct apr_svc *apr_register(char *dest, char *svc_name, apr_fn svc_fn,
 			svc->svc_cnt++;
 		}
 	}
-	pr_err("%s: clnt->svc_cnt = %d, svc->port_cnt = %d, svc->svc_cnt = %d\n",
-		__func__, clnt->svc_cnt, svc->port_cnt, svc->svc_cnt);
 
 	mutex_unlock(&svc->m_lock);
 done:
@@ -610,6 +627,12 @@ void apr_cb_func(void *buf, int len, void *priv)
 		pr_err("APR: Wrong paket size\n");
 		return;
 	}
+
+	if (hdr->pkt_size < hdr_size) {
+		pr_err("APR: Packet size less than header size\n");
+		return;
+	}
+
 	msg_type = hdr->hdr_field;
 	msg_type = (msg_type >> 0x08) & 0x0003;
 	if (msg_type >= APR_MSG_TYPE_MAX && msg_type != APR_BASIC_RSP_RESULT) {
@@ -725,7 +748,7 @@ int apr_get_svc(const char *svc_name, int domain_id, int *client_id,
 	struct apr_svc_table *tbl;
 	int ret = 0;
 
-	if ((domain_id == APR_DOMAIN_ADSP)) {
+	if (domain_id == APR_DOMAIN_ADSP) {
 		tbl = (struct apr_svc_table *)&svc_tbl_qdsp6;
 		size = ARRAY_SIZE(svc_tbl_qdsp6);
 	} else if (domain_id == APR_DOMAIN_SDSP) {
@@ -762,10 +785,111 @@ static void apr_reset_deregister(struct work_struct *work)
 			container_of(work, struct apr_reset_work, work);
 
 	handle = apr_reset->handle;
+	pr_debug("%s:handle[%pK]\n", __func__, handle);
 	apr_deregister(handle);
-	pr_err("%s: done. handle[%p]\n", __func__, handle);
 	kfree(apr_reset);
 }
+
+/**
+ * apr_start_rx_rt - Clients call to vote for thread
+ * priority upgrade whenever needed.
+ *
+ * @handle: APR service handle
+ *
+ * Returns 0 on success or error otherwise.
+ */
+int apr_start_rx_rt(void *handle)
+{
+	int rc = 0;
+	struct apr_svc *svc = handle;
+	uint16_t dest_id = 0;
+	uint16_t client_id = 0;
+
+	if (!svc) {
+		pr_err("%s: Invalid APR handle\n", __func__);
+		return -EINVAL;
+	}
+
+	mutex_lock(&svc->m_lock);
+	dest_id = svc->dest_id;
+	client_id = svc->client_id;
+
+	if ((client_id >= APR_CLIENT_MAX) || (dest_id >= APR_DEST_MAX)) {
+		pr_err("%s: %s invalid. client_id = %u, dest_id = %u\n",
+			__func__,
+			client_id >= APR_CLIENT_MAX ? "Client ID" : "Dest ID",
+			client_id, dest_id);
+		rc = -EINVAL;
+		goto exit;
+	}
+
+	if (!client[dest_id][client_id].handle) {
+		pr_err("%s: Client handle is NULL\n", __func__);
+		rc = -EINVAL;
+		goto exit;
+	}
+
+	rc = apr_tal_start_rx_rt(client[dest_id][client_id].handle);
+	if (rc)
+		pr_err("%s: failed to set RT thread priority for APR RX. rc = %d\n",
+			__func__, rc);
+
+exit:
+	mutex_unlock(&svc->m_lock);
+	return rc;
+}
+EXPORT_SYMBOL(apr_start_rx_rt);
+
+/**
+ * apr_end_rx_rt - Clients call to unvote for thread
+ * priority upgrade (perviously voted with
+ * apr_start_rx_rt()).
+ *
+ * @handle: APR service handle
+ *
+ * Returns 0 on success or error otherwise.
+ */
+int apr_end_rx_rt(void *handle)
+{
+	int rc = 0;
+	struct apr_svc *svc = handle;
+	uint16_t dest_id = 0;
+	uint16_t client_id = 0;
+
+	if (!svc) {
+		pr_err("%s: Invalid APR handle\n", __func__);
+		return -EINVAL;
+	}
+
+	mutex_lock(&svc->m_lock);
+	dest_id = svc->dest_id;
+	client_id = svc->client_id;
+
+	if ((client_id >= APR_CLIENT_MAX) || (dest_id >= APR_DEST_MAX)) {
+		pr_err("%s: %s invalid. client_id = %u, dest_id = %u\n",
+			__func__,
+			client_id >= APR_CLIENT_MAX ? "Client ID" : "Dest ID",
+			client_id, dest_id);
+		rc = -EINVAL;
+		goto exit;
+	}
+
+	if (!client[dest_id][client_id].handle) {
+		pr_err("%s: Client handle is NULL\n", __func__);
+		rc = -EINVAL;
+		goto exit;
+	}
+
+	rc = apr_tal_end_rx_rt(client[dest_id][client_id].handle);
+	if (rc)
+		pr_err("%s: failed to reset RT thread priority for APR RX. rc = %d\n",
+			__func__, rc);
+
+exit:
+	mutex_unlock(&svc->m_lock);
+	return rc;
+}
+EXPORT_SYMBOL(apr_end_rx_rt);
 
 int apr_deregister(void *handle)
 {
@@ -773,9 +897,6 @@ int apr_deregister(void *handle)
 	struct apr_client *clnt;
 	uint16_t dest_id;
 	uint16_t client_id;
-	struct apr_svc_table *tbl;
-	int size;
-	int i = 0;
 
 	if (!handle)
 		return -EINVAL;
@@ -791,26 +912,6 @@ int apr_deregister(void *handle)
 	dest_id = svc->dest_id;
 	client_id = svc->client_id;
 	clnt = &client[dest_id][client_id];
-	pr_err("%s: clnt = %p, svc->dest_id = %d, svc->client_id = %d, svc->id = %d\n",
-		__func__, clnt,	svc->dest_id, svc->client_id, svc->id);
-
-	if (dest_id == APR_DEST_QDSP6) {
-		tbl = (struct apr_svc_table *)&svc_tbl_qdsp6;
-		size = ARRAY_SIZE(svc_tbl_qdsp6);
-	} else {
-		tbl = (struct apr_svc_table *)&svc_tbl_voice;
-		size = ARRAY_SIZE(svc_tbl_voice);
-	}
-	for (i = 0; i < size; i++) {
-		if (svc->id == tbl[i].id) {
-			pr_err("%s: svc_name = %s\n", __func__, tbl[i].name);
-			break;
-		}
-	}
-
-	pr_err("%s: client[dest_id][client_id].svc_cnt = %d, svc->port_cnt = %d, svc->svc_cnt = %d\n",
-		__func__, client[dest_id][client_id].svc_cnt,
-		svc->port_cnt, svc->svc_cnt);
 
 	if (svc->svc_cnt > 0) {
 		if (svc->port_cnt)
@@ -818,12 +919,11 @@ int apr_deregister(void *handle)
 		svc->svc_cnt--;
 		if (!svc->svc_cnt) {
 			client[dest_id][client_id].svc_cnt--;
-			pr_err("%s: service is reset %p\n", __func__, svc);
+			pr_debug("%s: service is reset %pK\n", __func__, svc);
 		}
 	}
 
 	if (!svc->svc_cnt) {
-		pr_err("%s: resetting svc parmas %p\n", __func__, svc);
 		svc->priv = NULL;
 		svc->id = 0;
 		svc->fn = NULL;
@@ -831,11 +931,8 @@ int apr_deregister(void *handle)
 		svc->client_id = 0;
 		svc->need_reset = 0x0;
 	}
-	pr_err("%s: client[dest_id][client_id].handle = %p, client[dest_id][client_id].svc_cnt = %d\n",
-		__func__, client[dest_id][client_id].handle, client[dest_id][client_id].svc_cnt);
 	if (client[dest_id][client_id].handle &&
 	    !client[dest_id][client_id].svc_cnt) {
-	    pr_err("%s: calling apr_tal_close. handle[%p]\n", __func__, client[dest_id][client_id].handle);
 		apr_tal_close(client[dest_id][client_id].handle);
 		client[dest_id][client_id].handle = NULL;
 	}
@@ -850,7 +947,7 @@ void apr_reset(void *handle)
 
 	if (!handle)
 		return;
-	pr_err("%s: handle[%p]\n", __func__, handle);
+	pr_debug("%s: handle[%pK]\n", __func__, handle);
 
 	if (apr_reset_workqueue == NULL) {
 		pr_err("%s: apr_reset_workqueue is NULL\n", __func__);
@@ -986,7 +1083,23 @@ static struct notifier_block modem_service_nb = {
 	.priority = 0,
 };
 
-static int __init apr_init(void)
+static void apr_cleanup(void)
+{
+	int i, j, k;
+
+	if (apr_reset_workqueue)
+		destroy_workqueue(apr_reset_workqueue);
+	mutex_destroy(&q6.lock);
+	for (i = 0; i < APR_DEST_MAX; i++) {
+		for (j = 0; j < APR_CLIENT_MAX; j++) {
+			mutex_destroy(&client[i][j].m_lock);
+			for (k = 0; k < APR_SVC_MAX; k++)
+				mutex_destroy(&client[i][j].svc[k].m_lock);
+		}
+	}
+}
+
+static int apr_probe(struct platform_device *pdev)
 {
 	int i, j, k;
 
@@ -1004,10 +1117,12 @@ static int __init apr_init(void)
 	if (!apr_reset_workqueue)
 		return -ENOMEM;
 
+#ifdef CONFIG_IPC_LOGGING
 	apr_pkt_ctx = ipc_log_context_create(APR_PKT_IPC_LOG_PAGE_CNT,
 						"apr", 0);
 	if (!apr_pkt_ctx)
 		pr_err("%s: Unable to create ipc log context\n", __func__);
+#endif
 
 	is_initial_modem_boot = true;
 	is_initial_adsp_boot = true;
@@ -1016,9 +1131,49 @@ static int __init apr_init(void)
 	subsys_notif_register("apr_modem", AUDIO_NOTIFIER_MODEM_DOMAIN,
 			      &modem_service_nb);
 
+	apr_dev_ptr = &pdev->dev;
+	INIT_DELAYED_WORK(&add_chld_dev_work, apr_add_child_devices);
+	return 0;
+}
+
+static int apr_remove(struct platform_device *pdev)
+{
+	apr_cleanup();
+	return 0;
+}
+
+static const struct of_device_id apr_machine_of_match[]  = {
+	{ .compatible = "qcom,msm-audio-apr", },
+	{},
+};
+
+static struct platform_driver apr_driver = {
+	.probe = apr_probe,
+	.remove = apr_remove,
+	.driver = {
+		.name = "audio_apr",
+		.owner = THIS_MODULE,
+		.of_match_table = apr_machine_of_match,
+	}
+};
+
+static int __init apr_init(void)
+{
+	platform_driver_register(&apr_driver);
+	apr_dummy_init();
 	return 0;
 }
 device_initcall(apr_init);
+
+static void __exit apr_exit(void)
+{
+	apr_dummy_exit();
+	platform_driver_unregister(&apr_driver);
+}
+__exitcall(apr_exit);
+
+MODULE_DESCRIPTION("APR DRIVER");
+MODULE_DEVICE_TABLE(of, apr_machine_of_match);
 
 static int __init apr_late_init(void)
 {

@@ -643,7 +643,7 @@ static const struct file_operations nfc_dev_fops = {
  * This function will block NFCC to enter FW download mode.
  */
 
-#if 0
+#ifndef CONFIG_MACH_XIAOMI_MSM8998
 /* Check for availability of NQ_ NFC controller hardware */
 static int nfcc_hw_check(struct i2c_client *client, struct nqx_dev *nqx_dev)
 {
@@ -1073,7 +1073,7 @@ static int nqx_probe(struct i2c_client *client,
 	nqx_disable_irq(nqx_dev);
 
 	/* Do not perform nfcc_hw_check, make sure that nfcc is present */
-#if 0
+#ifndef CONFIG_MACH_XIAOMI_MSM8998
 	/*
 	 * To be efficient we need to test whether nfcc hardware is physically
 	 * present before attempting further hardware initialisation.

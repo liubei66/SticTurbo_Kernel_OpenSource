@@ -87,12 +87,20 @@ void __init_rwsem(struct rw_semaphore *sem, const char *name,
 	sem->owner = NULL;
 	osq_lock_init(&sem->osq);
 #endif
-#ifdef CONFIG_RWSEM_PRIO_AWARE
-	sem->m_count = 0;
-#endif
 }
 
 EXPORT_SYMBOL(__init_rwsem);
+
+enum rwsem_waiter_type {
+	RWSEM_WAITING_FOR_WRITE,
+	RWSEM_WAITING_FOR_READ
+};
+
+struct rwsem_waiter {
+	struct list_head list;
+	struct task_struct *task;
+	enum rwsem_waiter_type type;
+};
 
 enum rwsem_wake_type {
 	RWSEM_WAKE_ANY,		/* Wake whatever's at head of wait list */
@@ -208,7 +216,6 @@ struct rw_semaphore __sched *rwsem_down_read_failed(struct rw_semaphore *sem)
 	long count, adjustment = -RWSEM_ACTIVE_READ_BIAS;
 	struct rwsem_waiter waiter;
 	struct task_struct *tsk = current;
-	bool is_first_waiter = false;
 
 	/* set up my own style of waitqueue */
 	waiter.task = tsk;
@@ -218,9 +225,7 @@ struct rw_semaphore __sched *rwsem_down_read_failed(struct rw_semaphore *sem)
 	raw_spin_lock_irq(&sem->wait_lock);
 	if (list_empty(&sem->wait_list))
 		adjustment += RWSEM_WAITING_BIAS;
-
-	/* is_first_waiter == true means we are first in the queue */
-	is_first_waiter = rwsem_list_add_per_prio(&waiter, sem);
+	list_add_tail(&waiter.list, &sem->wait_list);
 
 	/* we're now waiting on the lock, but no longer actively locking */
 	count = rwsem_atomic_update(adjustment, sem);
@@ -232,8 +237,7 @@ struct rw_semaphore __sched *rwsem_down_read_failed(struct rw_semaphore *sem)
 	 */
 	if (count == RWSEM_WAITING_BIAS ||
 	    (count > RWSEM_WAITING_BIAS &&
-	     (adjustment != -RWSEM_ACTIVE_READ_BIAS ||
-	     is_first_waiter)))
+	     adjustment != -RWSEM_ACTIVE_READ_BIAS))
 		sem = __rwsem_do_wake(sem, RWSEM_WAKE_ANY);
 
 	raw_spin_unlock_irq(&sem->wait_lock);
@@ -435,7 +439,6 @@ struct rw_semaphore __sched *rwsem_down_write_failed(struct rw_semaphore *sem)
 	long count;
 	bool waiting = true; /* any queued threads before us */
 	struct rwsem_waiter waiter;
-	bool is_first_waiter = false;
 
 	/* undo write bias from down_write operation, stop active locking */
 	count = rwsem_atomic_update(-RWSEM_ACTIVE_WRITE_BIAS, sem);
@@ -457,11 +460,7 @@ struct rw_semaphore __sched *rwsem_down_write_failed(struct rw_semaphore *sem)
 	if (list_empty(&sem->wait_list))
 		waiting = false;
 
-	/*
-	 * is_first_waiter == true means we are first in the queue,
-	 * so there is no read locks that were queued ahead of us.
-	 */
-	is_first_waiter = rwsem_list_add_per_prio(&waiter, sem);
+	list_add_tail(&waiter.list, &sem->wait_list);
 
 	/* we're now waiting on the lock, but no longer actively locking */
 	if (waiting) {
@@ -472,7 +471,7 @@ struct rw_semaphore __sched *rwsem_down_write_failed(struct rw_semaphore *sem)
 		 * no active writers, the lock must be read owned; so we try to
 		 * wake any read locks that were queued ahead of us.
 		 */
-		if (!is_first_waiter && count > RWSEM_WAITING_BIAS)
+		if (count > RWSEM_WAITING_BIAS)
 			sem = __rwsem_do_wake(sem, RWSEM_WAKE_READERS);
 
 	} else
@@ -512,38 +511,30 @@ struct rw_semaphore *rwsem_wake(struct rw_semaphore *sem)
 	unsigned long flags;
 
 	/*
-	 * If a spinner is present, there is a chance that the load of
-	 * rwsem_has_spinner() in rwsem_wake() can be reordered with
-	 * respect to decrement of rwsem count in __up_write() leading
-	 * to wakeup being missed.
-	 *
-	 * spinning writer                  up_write caller
-	 * ---------------                  -----------------------
-	 * [S] osq_unlock()                 [L] osq
-	 *  spin_lock(wait_lock)
-	 *  sem->count=0xFFFFFFFF00000001
-	 *            +0xFFFFFFFF00000000
-	 *  count=sem->count
-	 *  MB
-	 *                                   sem->count=0xFFFFFFFE00000001
-	 *                                             -0xFFFFFFFF00000001
-	 *                                   RMB
-	 *                                   spin_trylock(wait_lock)
-	 *                                   return
-	 * rwsem_try_write_lock(count)
-	 * spin_unlock(wait_lock)
-	 * schedule()
-	 *
-	 * Reordering of atomic_long_sub_return_release() in __up_write()
-	 * and rwsem_has_spinner() in rwsem_wake() can cause missing of
-	 * wakeup in up_write() context. In spinning writer, sem->count
-	 * and local variable count is 0XFFFFFFFE00000001. It would result
-	 * in rwsem_try_write_lock() failing to acquire rwsem and spinning
-	 * writer going to sleep in rwsem_down_write_failed().
-	 *
-	 * The smp_rmb() here is to make sure that the spinner state is
-	 * consulted after sem->count is updated in up_write context.
-	 */
+	* __rwsem_down_write_failed_common(sem)
+	*   rwsem_optimistic_spin(sem)
+	*     osq_unlock(sem->osq)
+	*   ...
+	*   atomic_long_add_return(&sem->count)
+	*
+	*      - VS -
+	*
+	*              __up_write()
+	*                if (atomic_long_sub_return_release(&sem->count) < 0)
+	*                  rwsem_wake(sem)
+	*                    osq_is_locked(&sem->osq)
+	*
+	* And __up_write() must observe !osq_is_locked() when it observes the
+	* atomic_long_add_return() in order to not miss a wakeup.
+	*
+	* This boils down to:
+	*
+	* [S.rel] X = 1                [RmW] r0 = (Y += 0)
+	*         MB                         RMB
+	* [RmW]   Y += 1               [L]   r1 = X
+	*
+	* exists (r0=1 /\ r1=0)
+	*/
 	smp_rmb();
 
 	/*

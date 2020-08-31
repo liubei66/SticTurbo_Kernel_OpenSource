@@ -1,6 +1,5 @@
 /*
  * Copyright (C) 2014 Davidlohr Bueso.
- * Copyright (C) 2019 XiaoMi, Inc.
  */
 #include <linux/sched.h>
 #include <linux/mm.h>

@@ -1583,6 +1583,27 @@ static void sdhci_notify_halt(struct mmc_host *mmc, bool halt)
 	}
 }
 
+static int sdhci_reg_temp_callback(struct mmc_host *mmc)
+{
+	struct sdhci_host *host = mmc_priv(mmc);
+
+	return host->ops->reg_temp_callback(host);
+}
+
+static int sdhci_check_temp(struct mmc_host *mmc)
+{
+	struct sdhci_host *host = mmc_priv(mmc);
+
+	return host->ops->check_temp(host);
+}
+
+static int sdhci_dereg_temp_callback(struct mmc_host *mmc)
+{
+	struct sdhci_host *host = mmc_priv(mmc);
+
+	return host->ops->dereg_temp_callback(host);
+}
+
 static inline void sdhci_update_power_policy(struct sdhci_host *host,
 		enum sdhci_power_policy policy)
 {
@@ -2513,7 +2534,7 @@ static int sdhci_execute_tuning(struct mmc_host *mmc, u32 opcode)
 		spin_lock_irqsave(&host->lock, flags);
 
 		if (!host->tuning_done) {
-			pr_info(DRIVER_NAME ": Timeout waiting for "
+			pr_debug(DRIVER_NAME ": Timeout waiting for "
 				"Buffer Read Ready interrupt during tuning "
 				"procedure, falling back to fixed sampling "
 				"clock\n");
@@ -2769,6 +2790,9 @@ static const struct mmc_host_ops sdhci_ops = {
 	.notify_load	= sdhci_notify_load,
 	.notify_halt	= sdhci_notify_halt,
 	.force_err_irq	= sdhci_force_err_irq,
+	.check_temp     = sdhci_check_temp,
+	.dereg_temp_callback    = sdhci_dereg_temp_callback,
+	.reg_temp_callback      = sdhci_reg_temp_callback,
 };
 
 /*****************************************************************************\

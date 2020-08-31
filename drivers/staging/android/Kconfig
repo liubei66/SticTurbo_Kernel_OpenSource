@@ -47,6 +47,14 @@ config ANDROID_LOW_MEMORY_KILLER_AUTODETECT_OOM_ADJ_VALUES
 	  /sys/module/lowmemorykiller/parameters/adj and convert them
 	  to oom_score_adj values.
 
+config ANDROID_LMK_ADJ_RBTREE
+	bool "Use RBTREE for Android Low Memory Killer"
+	depends on ANDROID_LOW_MEMORY_KILLER
+	default N
+	---help---
+	  Use oom_score_adj rbtree to select the best proecss to kill
+	  when system in low memory status.
+
 config SYNC
 	bool "Synchronization framework"
 	default n
@@ -99,6 +107,13 @@ config ANDROID_VSOC
 	  a 'cuttlefish' Android image inside QEmu. The driver interacts with
 	  a QEmu ivshmem device. If built as a module, it will be called vsoc.
 
+config SYNC_DEBUG
+	bool "Debug software synchronization"
+	default n
+	depends on SYNC
+	---help---
+	  This makes the sync driver keep track of fence names.
+	  
 config MULTIPLE_LMK
        bool "Multiple lowmemorykiller"
        default n
@@ -106,8 +121,6 @@ config MULTIPLE_LMK
         Provide multiple kill in LMK routine
 
 source "drivers/staging/android/ion/Kconfig"
-
-source "drivers/staging/android/fiq_debugger/Kconfig"
 
 endif # if ANDROID
 

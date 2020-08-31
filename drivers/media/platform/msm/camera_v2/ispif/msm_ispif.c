@@ -1,5 +1,4 @@
 /* Copyright (c) 2013-2017, 2019 The Linux Foundation. All rights reserved.
- * Copyright (C) 2019 XiaoMi, Inc.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -1417,16 +1416,13 @@ static int msm_ispif_stop_frame_boundary(struct ispif_device *ispif,
 			goto end;
 		}
 
-#if 0
 		rc = readl_poll_timeout(ispif->base + intf_addr, stop_flag,
 					(stop_flag & 0xF) == 0xF,
 					ISPIF_TIMEOUT_SLEEP_US,
-					ISPIF_TIMEOUT_ALL_US);
-#else
-		rc = readl_poll_timeout(ispif->base + intf_addr, stop_flag,
-					(stop_flag & 0xF) == 0xF,
-					ISPIF_TIMEOUT_SLEEP_US,
+#ifdef CONFIG_MACH_XIAOMI_MSM8998
 					(params->reserved_param ? params->reserved_param : ISPIF_TIMEOUT_ALL_US));
+#else
+					ISPIF_TIMEOUT_ALL_US);
 #endif
 		if (rc < 0)
 			goto end;

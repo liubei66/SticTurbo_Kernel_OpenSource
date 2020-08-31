@@ -905,6 +905,58 @@ config HAVE_UNSTABLE_SCHED_CLOCK
 config GENERIC_SCHED_CLOCK
 	bool
 
+menu "Scheduler features"
+
+choice
+	bool "Configure PELT speed for load/utilization tracking"
+	default PELT_HALFLIFE_16
+	help
+	  Allows to choose one of the possible values for the PELT half-life to
+	  be used for the update of the load and utilization of tasks and CPUs.
+	  The half-life is the amount of [ms] required by the PELT signal to
+	  build up to 50% load/utilization.
+	  The higher the half-life the longer it takes for a task to be
+	  represented as a big one.
+
+	  If not sure, use the default of 32 ms.
+
+config PELT_HALFLIFE_32
+	bool "32 ms, default"
+	help
+	  A 32ms PELT half-life is the default value usually suitable for
+	  server/enterprise class of workloads where tasks can normally
+	  runs for tens or hundreds of milliseconds.
+
+	  If not sure, use this option
+
+config PELT_HALFLIFE_16
+	bool "16 ms, faster"
+	help
+	  A 16ms PELT half-life is suggested for mobile/interactive workloads
+	  where tasks usually run with a 60Hz activation cadence.
+
+	  If not sure, use the default of 32 ms
+
+config PELT_HALFLIFE_12
+	bool "12 ms, very fast"
+	help
+	  A 16ms PELT half-life is suggested for mobile/interactive workloads
+	  where tasks usually run with a 90Hz activation cadence.
+
+	  If not sure, use the default of 32 ms
+
+config PELT_HALFLIFE_8
+	bool "8 ms, more fast"
+	help
+	  An 8ms PELT half-life is suggested for mobile/interactive workloads
+	  where tasks usually run with a 120Hz activation cadence.
+
+	  If not sure, use the default of 32 ms
+
+endchoice
+
+endmenu # Scheduler features"
+
 #
 # For architectures that want to enable the support for NUMA-affine scheduler
 # balancing logic:
@@ -1017,14 +1069,6 @@ config CPUSETS
 	  This is primarily useful on large SMP or NUMA systems.
 
 	  Say N if unsure.
-
-config CPUSET_EXCLUSIVE_IND
-	bool "Independent cpu_exclusive support"
-	depends on CPUSETS
-	default n
-	help
-	  This option can stop the tasks of a cpuset using the cpus of itself
-	  child cpuset with cpu_exclusive enabled.
 
 config PROC_PID_CPUSET
 	bool "Include legacy /proc/<pid>/cpuset file"
@@ -1167,6 +1211,7 @@ config FAIR_GROUP_SCHED
 config CFS_BANDWIDTH
 	bool "CPU bandwidth provisioning for FAIR_GROUP_SCHED"
 	depends on FAIR_GROUP_SCHED
+	depends on !SCHED_WALT
 	default n
 	help
 	  This option allows users to define CPU bandwidth rates (limits) for
@@ -1224,33 +1269,6 @@ config CGROUP_WRITEBACK
 	default y
 
 endif # CGROUPS
-
-config SCHED_HMP
-	bool "Scheduler support for heterogenous multi-processor systems"
-	depends on SMP && FAIR_GROUP_SCHED
-	help
-	  This feature will let the scheduler optimize task placement on
-	  systems made of heterogeneous cpus i.e cpus that differ either
-	  in their instructions per-cycle capability or the maximum
-	  frequency they can attain.
-
-config SCHED_HMP_CSTATE_AWARE
-	bool "CPU C-state aware scheduler"
-	depends on SCHED_HMP
-	help
-	  This feature will let the HMP scheduler optimize task placement
-	  with CPUs C-state. If this is enabled, scheduler places tasks
-	  onto the shallowest C-state CPU among the most power efficient CPUs.
-
-config SCHED_CORE_CTL
-	bool "QTI Core Control"
-	depends on SMP
-	help
-	  This options enables the core control functionality in
-	  the scheduler. Core control automatically offline and
-	  online cores based on cpu load and utilization.
-
-	  If unsure, say N here.
 
 config CHECKPOINT_RESTORE
 	bool "Checkpoint/restore support" if EXPERT
@@ -1363,6 +1381,33 @@ config SCHED_TUNE
 
 	  If unsure, say N.
 
+config STUNE_ASSIST
+	bool "SchedTune configuration helper"
+	depends on SCHED_TUNE
+	depends on ANDROID
+	help
+	  This option enables in-kernel overrides for SchedTune values.
+
+	  If unsure, say N.
+
+config CPUSETS_ASSIST
+	bool "Cpuset configuration helper"
+	depends on CPUSETS
+	depends on ANDROID
+	help
+	  This option enables in-kernel overrides for cpuset values.
+
+	  If unsure, say N.
+
+config DYNAMIC_STUNE_BOOST
+	bool "Dynamic SchedTune boosting support"
+	depends on SCHED_TUNE && CGROUP_SCHEDTUNE
+	help
+	  This option extends the SchedTune framework and provides APIs to
+	  activate and reset SchedTune boosting from anywhere in the kernel.
+
+	  If unsure, say N.
+
 config DEFAULT_USE_ENERGY_AWARE
 	bool "Default to enabling the Energy Aware Scheduler feature"
 	default n
@@ -1465,6 +1510,32 @@ config CC_OPTIMIZE_FOR_SIZE
 
 endchoice
 
+config HAVE_LD_DEAD_CODE_DATA_ELIMINATION
+	bool
+	help
+	  This requires that the arch annotates or otherwise protects
+	  its external entry points from being discarded. Linker scripts
+	  must also merge .text.*, .data.*, and .bss.* correctly into
+	  output sections. Care must be taken not to pull in unrelated
+	  sections (e.g., '.text.init'). Typically '.' in section names
+	  is used to distinguish them from label names / C identifiers.
+
+config LD_DEAD_CODE_DATA_ELIMINATION
+	bool "Dead code and data elimination (EXPERIMENTAL)"
+	depends on HAVE_LD_DEAD_CODE_DATA_ELIMINATION
+	depends on EXPERT
+	help
+	  Enable this if you want to do dead code and data elimination with
+	  the linker by compiling with -ffunction-sections -fdata-sections,
+	  and linking with --gc-sections.
+
+	  This can reduce on disk and in-memory size of the kernel
+	  code and static data, particularly for small configs and
+	  on small systems. This has the possibility of introducing
+	  silently broken kernel if the required annotations are not
+	  present. This option is not well tested yet, so use at your
+	  own risk.
+
 config SYSCTL
 	bool
 
@@ -1503,8 +1574,6 @@ config BPF
 
 menuconfig EXPERT
 	bool "Configure standard kernel features (expert users)"
-	# Unhide debug options, to make the on-by-default options visible
-	select DEBUG_KERNEL
 	help
 	  This option allows certain base kernel options and settings
           to be disabled or tweaked. This is for specialized

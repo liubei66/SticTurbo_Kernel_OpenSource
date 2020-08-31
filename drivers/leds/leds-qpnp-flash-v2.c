@@ -1,5 +1,5 @@
 /* Copyright (c) 2016-2018, The Linux Foundation. All rights reserved.
- * Copyright (C) 2019 XiaoMi, Inc.
+ * Copyright (C) 2018 XiaoMi, Inc.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -1130,9 +1130,12 @@ static int qpnp_flash_led_switch_set(struct flash_switch_data *snode, bool on)
 	int rc, i, addr_offset;
 	u8 val, mask;
 
+	pr_err("snode->enabled = %d, on = %d", snode->enabled, on);
 	if (snode->enabled == on) {
-		pr_debug("Switch node is already %s!\n",
+		pr_err("Switch node is already %s!\n",
 			on ? "enabled" : "disabled");
+		if (on)
+			qpnp_flash_led_switch_disable(snode);
 		return 0;
 	}
 
@@ -1210,8 +1213,10 @@ static int qpnp_flash_led_switch_set(struct flash_switch_data *snode, bool on)
 		rc = qpnp_flash_led_masked_write(led,
 				FLASH_LED_REG_MOD_CTRL(led->base),
 				FLASH_LED_MOD_CTRL_MASK, FLASH_LED_MOD_ENABLE);
-		if (rc < 0)
+		if (rc < 0) {
+			pr_err("qpnp_flash_led_masked_write fail\n");
 			return rc;
+		}
 	}
 	led->enable++;
 
@@ -1242,14 +1247,16 @@ static int qpnp_flash_led_switch_set(struct flash_switch_data *snode, bool on)
 	rc = qpnp_flash_led_masked_write(led,
 					FLASH_LED_EN_LED_CTRL(led->base),
 					snode->led_mask, val);
-	if (rc < 0)
+	if (rc < 0) {
+		pr_err("qpnp_flash_led_masked_write fail\n");
 		return rc;
+	}
 
 	snode->enabled = true;
 	return 0;
 }
 
-int qpnp_flash_led_prepare(struct led_trigger *trig, int options,
+static int qpnp_flash_led_prepare_v2(struct led_trigger *trig, int options,
 					int *max_current)
 {
 	struct led_classdev *led_cdev;
@@ -2250,6 +2257,7 @@ static int qpnp_flash_led_probe(struct platform_device *pdev)
 	if (!led->pdata)
 		return -ENOMEM;
 
+	qpnp_flash_led_prepare = qpnp_flash_led_prepare_v2;
 	rc = qpnp_flash_led_parse_common_dt(led, node);
 	if (rc < 0) {
 		pr_err("Failed to parse common flash LED device tree\n");

@@ -738,8 +738,16 @@ int mdss_mdp_resource_control(struct mdss_mdp_ctl *ctl, u32 sw_event)
 	int rc = 0;
 	bool schedule_off = false;
 
+	if (!ctl) {
+		pr_err("%s invalid ctl\n", __func__);
+		rc = -EINVAL;
+		goto exit;
+	}
+
 	/* Get both controllers in the correct order for dual displays */
-	mdss_mdp_get_split_display_ctls(&ctl, &sctl);
+	rc = mdss_mdp_get_split_display_ctls(&ctl, &sctl);
+	if (rc)
+		goto exit;
 
 	ctx = (struct mdss_mdp_cmd_ctx *) ctl->intf_ctx[MASTER_CTX];
 	if (!ctx) {
@@ -1187,7 +1195,7 @@ static int mdss_mdp_cmd_wait4readptr(struct mdss_mdp_cmd_ctx *ctx)
 {
 	int rc = 0;
 
-	rc = wait_event_timeout(ctx->rdptr_waitq,
+	rc = wait_event_interruptible_timeout(ctx->rdptr_waitq,
 			atomic_read(&ctx->rdptr_cnt) == 0,
 			KOFF_TIMEOUT);
 	if (rc <= 0) {
@@ -1371,6 +1379,7 @@ static void mdss_mdp_cmd_pingpong_done(void *arg)
 		return;
 	}
 
+	vsync_time = ktime_get();
 	mdss_mdp_ctl_perf_set_transaction_status(ctl,
 		PERF_HW_MDP_STATE, PERF_STATUS_DONE);
 
@@ -2060,7 +2069,7 @@ static int __mdss_mdp_wait4pingpong(struct mdss_mdp_cmd_ctx *ctx)
 	s64 time;
 
 	do {
-		rc = wait_event_timeout(ctx->pp_waitq,
+		rc = wait_event_interruptible_timeout(ctx->pp_waitq,
 				atomic_read(&ctx->koff_cnt) == 0,
 				KOFF_TIMEOUT);
 		time = ktime_to_ms(ktime_get());
@@ -3130,6 +3139,13 @@ static int mdss_mdp_cmd_kickoff(struct mdss_mdp_ctl *ctl, void *arg)
 		else if (ctx->lineptr_enabled)
 			mdss_mdp_cmd_lineptr_ctrl(ctl, false);
 	}
+
+#ifdef CONFIG_MACH_SAGIT
+	/* Don't let the CPU servicing the MDP IRQs enter deep idle */
+	if (!cancel_work_sync(&mdata->pm_unset_work))
+		pm_qos_update_request(&mdata->pm_irq_req, 100);
+	WRITE_ONCE(mdata->pm_irq_set, true);
+#endif
 
 	/* Kickoff */
 	__mdss_mdp_kickoff(ctl, sctl, ctx);

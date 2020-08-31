@@ -5,11 +5,11 @@ config RC_CORE
 	default y
 
 config SPI_PEELIR
-        tristate "PEELIR"
-        default y
+	tristate "PEELIR"
+	default n
 
-        ---help---
-          Enable this option if you use peelir
+	---help---
+	   Enable this option if you use peelir
 
 source "drivers/media/rc/keymaps/Kconfig"
 

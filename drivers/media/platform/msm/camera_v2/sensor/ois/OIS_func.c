@@ -4,25 +4,15 @@
 * Rule: Use TAB 4
 *
 * Copyright(c)	Rohm Co.,Ltd. All rights reserved
-* Copyright (C) 2019 XiaoMi, Inc.
+* Copyright (C) 2018 XiaoMi, Inc.
 **************************************************************************/
 /***** ROHM Confidential ***************************************************/
-#if 0
-+#define _USE_MATH_DEFINES /* RHM_HT 2013.03.24 Add for using "M_PI" in math.h (VS2008) */
-+#include <math.h>
-+#include <conio.h>
-+#include <ctype.h>
-#endif
 
 #include "OIS_head.h"
 #include "OIS_defi.h"
-#if defined _CHIRON_OIS
+#ifdef CONFIG_MACH_CHIRON
 #include "OIS_prog_chiron.h"
 #include "OIS_coef_chiron.h"
-#elif defined OIS_GYRO_ST
-/*#ifdef OIS_GYRO_ST*/
-#include "OIS_prog_ST.h"
-#include "OIS_coef_ST.h"
 #else
 #include "OIS_coef.h"
 #include "OIS_prog.h"
@@ -128,7 +118,7 @@ uint8_t func_COEF_DOWNLOAD(OIS_UWORD u16_coef_type)
 uint8_t download(OIS_UWORD u16_type, OIS_UWORD u16_coef_type)
 {
 	/* Data Transfer Size per one I2C access */
-#define DWNLD_TRNS_SIZE	 (32)
+#define DWNLD_TRNS_SIZE     (32)
 	OIS_UBYTE temp[DWNLD_TRNS_SIZE+1];
 	OIS_UWORD block_cnt;
 	OIS_UWORD total_cnt;
@@ -181,8 +171,8 @@ uint8_t download(OIS_UWORD u16_type, OIS_UWORD u16_coef_type)
 }
 
 /* ==> RHM_HT 2015/01/08 Added */
-OIS_UWORD INTG__INPUT;	/* Integral Input value szx_2014/12/24_2 */
-OIS_UWORD KGNTG_VALUE;	/* KgxTG / KgyTG szx_2014/12/24_2 */
+OIS_UWORD INTG__INPUT; 	/* Integral Input value szx_2014/12/24_2 */
+OIS_UWORD KGNTG_VALUE; 	/* KgxTG / KgyTG szx_2014/12/24_2 */
 OIS_UWORD GYRSNS;       /* RHM_HT 2015/01/16  Added */
 /* <== RHM_HT 2015/01/08 Added */
 
@@ -242,18 +232,8 @@ void SET_FADJ_PARAM(const _FACT_ADJ *param)
 **** Scence parameter
 *****************************************************/
 /* #define ANGLE_LIMIT (0x3020) // (0x2BC0 * 1.1) // GYRSNS * limit[deg] */
-#define	ANGLE_LIMIT (OIS_UWORD)((GYRSNS * 11) / 10)	 /* GYRSNS * limit[deg] */
-#if 0
-
-
-
-
-#endif
-#ifdef OIS_GYRO_ST
-#define G_SENSE 114 /* [LSB/dps] for ST LSM6DSM */
-#else
+#define	ANGLE_LIMIT (OIS_UWORD)((GYRSNS * 11) / 10)	/* GYRSNS * limit[deg] */
 #define	G_SENSE	131 /* [LSB/dps] for INVEN ICG20690 */
-#endif
 
 ADJ_STS	func_SET_SCENE_PARAM(OIS_UBYTE u16_scene, OIS_UBYTE u16_mode, OIS_UBYTE filter, OIS_UBYTE range, const _FACT_ADJ *param)
 { /* RHM_HT 2013/04/15 Change "typedef" of return value */
@@ -280,50 +260,50 @@ ADJ_STS	func_SET_SCENE_PARAM(OIS_UBYTE u16_scene, OIS_UBYTE u16_mode, OIS_UBYTE 
 	I2C_OIS_mem_write(_M_EQCTL, u16_dat);
 	/* Scene parameter select */
 	switch (u16_scene) {
-		case _SCENE_NIGHT_1:
-			u16_dat_SCENE_ = u16_dat_SCENE_NIGHT_1;
-			DEBUG_printf("+?²â²?²â²?²â²?²â²?²â²+\n+---_SCENE_NIGHT_1---+\n+?²â²?²â²?²â²?²â²?²â²+\n");
-			break;
-		case _SCENE_NIGHT_2:
-			u16_dat_SCENE_ = u16_dat_SCENE_NIGHT_2;
-			DEBUG_printf("+?²â²?²â²?²â²?²â²?²â²+\n+---_SCENE_NIGHT_2---+\n+?²â²?²â²?²â²?²â²?²â²+\n");
-			break;
-		case _SCENE_NIGHT_3:
-			u16_dat_SCENE_ = u16_dat_SCENE_NIGHT_3;
-			DEBUG_printf("+?²â²?²â²?²â²?²â²?²â²+\n+---_SCENE_NIGHT_3---+\n+?²â²?²â²?²â²?²â²?²â²+\n");
-			break;
-		case _SCENE_D_A_Y_1:
-			u16_dat_SCENE_ = u16_dat_SCENE_D_A_Y_1;
-			DEBUG_printf("+??????????+\n+---_SCENE_D_A_Y_1---+\n+??????????+\n");
-			break;
-		case _SCENE_D_A_Y_2:
-			u16_dat_SCENE_ = u16_dat_SCENE_D_A_Y_2;
-			DEBUG_printf("+??????????+\n+---_SCENE_D_A_Y_2---+\n+??????????+\n");
-			break;
-		case _SCENE_D_A_Y_3:
-			u16_dat_SCENE_ = u16_dat_SCENE_D_A_Y_3;
-			DEBUG_printf("+??????????+\n+---_SCENE_D_A_Y_3---+\n+??????????+\n");
-			break;
-		case _SCENE_SPORT_1:
-			u16_dat_SCENE_ = u16_dat_SCENE_SPORT_1;
-			DEBUG_printf("+??????????+\n+---_SCENE_SPORT_1---+\n+??????????+\n");
-			break;
-		case _SCENE_SPORT_2:
-			u16_dat_SCENE_ = u16_dat_SCENE_SPORT_2;
-			DEBUG_printf("+??????????+\n+---_SCENE_SPORT_2---+\n+??????????+\n");
-			break;
-		case _SCENE_SPORT_3:
-			u16_dat_SCENE_ = u16_dat_SCENE_SPORT_3;
-			DEBUG_printf("+??????????+\n+---_SCENE_SPORT_3---+\n+??????????+\n");
-			break;
-		case _SCENE_TEST___:
-			u16_dat_SCENE_ = u16_dat_SCENE_TEST___;
-			DEBUG_printf("+********************+\n+---dat_SCENE_TEST___+\n+********************+\n");
-			break;
-		default:
-			u16_dat_SCENE_ = u16_dat_SCENE_TEST___;
-			DEBUG_printf("+********************+\n+---dat_SCENE_TEST___+\n+********************+\n");
-			break;
+	case _SCENE_NIGHT_1:
+		u16_dat_SCENE_ = u16_dat_SCENE_NIGHT_1;
+		DEBUG_printf("+?²â²?²â²?²â²?²â²?²â²+\n+---_SCENE_NIGHT_1---+\n+?²â²?²â²?²â²?²â²?²â²+\n");
+		break;
+	case _SCENE_NIGHT_2:
+		u16_dat_SCENE_ = u16_dat_SCENE_NIGHT_2;
+		DEBUG_printf("+?²â²?²â²?²â²?²â²?²â²+\n+---_SCENE_NIGHT_2---+\n+?²â²?²â²?²â²?²â²?²â²+\n");
+		break;
+	case _SCENE_NIGHT_3:
+		u16_dat_SCENE_ = u16_dat_SCENE_NIGHT_3;
+		DEBUG_printf("+?²â²?²â²?²â²?²â²?²â²+\n+---_SCENE_NIGHT_3---+\n+?²â²?²â²?²â²?²â²?²â²+\n");
+		break;
+	case _SCENE_D_A_Y_1:
+		u16_dat_SCENE_ = u16_dat_SCENE_D_A_Y_1;
+		DEBUG_printf("+??????????+\n+---_SCENE_D_A_Y_1---+\n+??????????+\n");
+		break;
+	case _SCENE_D_A_Y_2:
+		u16_dat_SCENE_ = u16_dat_SCENE_D_A_Y_2;
+		DEBUG_printf("+??????????+\n+---_SCENE_D_A_Y_2---+\n+??????????+\n");
+		break;
+	case _SCENE_D_A_Y_3:
+		u16_dat_SCENE_ = u16_dat_SCENE_D_A_Y_3;
+		DEBUG_printf("+??????????+\n+---_SCENE_D_A_Y_3---+\n+??????????+\n");
+		break;
+	case _SCENE_SPORT_1:
+		u16_dat_SCENE_ = u16_dat_SCENE_SPORT_1;
+		DEBUG_printf("+??????????+\n+---_SCENE_SPORT_1---+\n+??????????+\n");
+		break;
+	case _SCENE_SPORT_2:
+		u16_dat_SCENE_ = u16_dat_SCENE_SPORT_2;
+		DEBUG_printf("+??????????+\n+---_SCENE_SPORT_2---+\n+??????????+\n");
+		break;
+	case _SCENE_SPORT_3:
+		u16_dat_SCENE_ = u16_dat_SCENE_SPORT_3;
+		DEBUG_printf("+??????????+\n+---_SCENE_SPORT_3---+\n+??????????+\n");
+		break;
+	case _SCENE_TEST___:
+		u16_dat_SCENE_ = u16_dat_SCENE_TEST___;
+		DEBUG_printf("+********************+\n+---dat_SCENE_TEST___+\n+********************+\n");
+		break;
+	default:
+		u16_dat_SCENE_ = u16_dat_SCENE_TEST___;
+		DEBUG_printf("+********************+\n+---dat_SCENE_TEST___+\n+********************+\n");
+		break;
 	}
 	/* Set parameter to the OIS controller */
 	for (u16_i = 0; u16_i < size_SCENE_tbl; u16_i += 1) {
@@ -363,7 +343,7 @@ ADJ_STS	func_SET_SCENE_PARAM(OIS_UBYTE u16_scene, OIS_UBYTE u16_mode, OIS_UBYTE 
 	/* <== RHM_HT 2013/11/25 Modified */
 
 	/* Enable OIS (if u16_mode = 1) */
-	if ((u16_mode == 1)) {
+	if (u16_mode == 1) {
 		u16_dat = I2C_OIS_mem__read(_M_EQCTL);
 		u16_dat = (u16_dat | 0x0101);
 		I2C_OIS_mem_write(_M_EQCTL, u16_dat);
@@ -382,13 +362,13 @@ ADJ_STS	func_SET_SCENE_PARAM_for_NewGYRO_Fil(OIS_UBYTE u16_scene, OIS_UBYTE u16_
 { /* RHM_HT 2013/04/15 Change "typedef" of return value */
 	OIS_UWORD u16_i;
 	OIS_UWORD u16_dat;
-#if defined _CHIRON_OIS
+#ifdef CONFIG_MACH_CHIRON
 	OIS_ULONG temp_x, temp_y;
 	OIS_UWORD u16_dat_x = 0;
 	OIS_UWORD u16_dat_y = 0;
 #endif
 	OIS_ULONG temp;
-	OIS_UWORD angle_limit;
+	OIS_UWORD angle_limit = 0;
 
 	/* szx_2014/09/19 ---> Modified */
 	/* ==> RHM_HT 2013/11/25 Modified */
@@ -401,10 +381,6 @@ ADJ_STS	func_SET_SCENE_PARAM_for_NewGYRO_Fil(OIS_UBYTE u16_scene, OIS_UBYTE u16_
 	OIS_UWORD u16_dat_SCENE_D_A_Y_3[4] = {0x7F00, 0x7FF0, G_SENSE * 40, 0x0300, }; /* 40dps RHM_HT 2014/11/27 Changed Kgxdr at Xiaomi */
 	OIS_UWORD u16_dat_SCENE_SPORT_1[4] = {0x7FE0, 0x7FF0, G_SENSE * 60, 0x0300, }; /* 60dps RHM_HT 2014/11/27 Changed Kgxdr at Xiaomi */
 	/* szx_2014/12/24 ===> */
-#if 0
-
-
-#endif
 	OIS_UWORD u16_dat_SCENE_SPORT_2[4] = {0x7F40, 0x7FF0, G_SENSE * 60, 0x0100, };  /* video,  60dps RHM_HT 2014/11/27 Changed Kgxdr at Xiaomi */
 	/* szx_2015/01/20 ===> */
 	/* OIS_UWORD u16_dat_SCENE_SPORT_3[4] = {0x7FFF, ANGLE_LIMIT, G_SENSE * 60, 0x0100, }; // 60dps RHM_HT 2014/11/27 Changed Kgxdr at Xiaomi */
@@ -421,53 +397,53 @@ ADJ_STS	func_SET_SCENE_PARAM_for_NewGYRO_Fil(OIS_UBYTE u16_scene, OIS_UBYTE u16_
 	u16_dat = (u16_dat & 0xFEFE);
 	I2C_OIS_mem_write(_M_EQCTL, u16_dat);
 	/* Scene parameter select */
-	switch(u16_scene) {
-		case _SCENE_NIGHT_1:
-			u16_dat_SCENE_ = u16_dat_SCENE_NIGHT_1;
-			DEBUG_printf("+?²â²?²â²?²â²?²â²?²â²+\n+---_SCENE_NIGHT_1---+\n+?²â²?²â²?²â²?²â²?²â²+\n");
-			break;
-		case _SCENE_NIGHT_2:
-			u16_dat_SCENE_ = u16_dat_SCENE_NIGHT_2;
-			DEBUG_printf("+?²â²?²â²?²â²?²â²?²â²+\n+---_SCENE_NIGHT_2---+\n+?²â²?²â²?²â²?²â²?²â²+\n");
-			break;
-		case _SCENE_NIGHT_3:
-			u16_dat_SCENE_ = u16_dat_SCENE_NIGHT_3;
-			DEBUG_printf("+?²â²?²â²?²â²?²â²?²â²+\n+---_SCENE_NIGHT_3---+\n+?²â²?²â²?²â²?²â²?²â²+\n");
-			break;
-		case _SCENE_D_A_Y_1:
-			u16_dat_SCENE_ = u16_dat_SCENE_D_A_Y_1;
-			DEBUG_printf("+??????????+\n+---_SCENE_D_A_Y_1---+\n+??????????+\n");
-			break;
-		case _SCENE_D_A_Y_2:
-			u16_dat_SCENE_ = u16_dat_SCENE_D_A_Y_2;
-			DEBUG_printf("+??????????+\n+---_SCENE_D_A_Y_2---+\n+??????????+\n");
-			break;
-		case _SCENE_D_A_Y_3:
-			u16_dat_SCENE_ = u16_dat_SCENE_D_A_Y_3;
-			DEBUG_printf("+??????????+\n+---_SCENE_D_A_Y_3---+\n+??????????+\n");
-			break;
-		case _SCENE_SPORT_1:
-			u16_dat_SCENE_ = u16_dat_SCENE_SPORT_1;
-			DEBUG_printf("+??????????+\n+---_SCENE_SPORT_1---+\n+??????????+\n");
-			break;
-		case _SCENE_SPORT_2:
-			u16_dat_SCENE_ = u16_dat_SCENE_SPORT_2;
-			angle_limit = (OIS_UWORD)((GYRSNS * 13) / 10);
-			DEBUG_printf("+??????????+\n+---_SCENE_SPORT_2---+\n+??????????+\n");
-			break;
-		case _SCENE_SPORT_3:
-			u16_dat_SCENE_ = u16_dat_SCENE_SPORT_3;
-			angle_limit = (OIS_UWORD)((GYRSNS * 9) / 10);
-			DEBUG_printf("+??????????+\n+---_SCENE_SPORT_3---+\n+??????????+\n");
-			break;
-		case _SCENE_TEST___:
-			u16_dat_SCENE_ = u16_dat_SCENE_TEST___;
-			DEBUG_printf("+********************+\n+---dat_SCENE_TEST___+\n+********************+\n");
-			break;
-		default:
-			u16_dat_SCENE_ = u16_dat_SCENE_TEST___;
-			DEBUG_printf("+********************+\n+---dat_SCENE_TEST___+\n+********************+\n");
-			break;
+	switch (u16_scene) {
+	case _SCENE_NIGHT_1:
+		u16_dat_SCENE_ = u16_dat_SCENE_NIGHT_1;
+		DEBUG_printf("+?²â²?²â²?²â²?²â²?²â²+\n+---_SCENE_NIGHT_1---+\n+?²â²?²â²?²â²?²â²?²â²+\n");
+		break;
+	case _SCENE_NIGHT_2:
+		u16_dat_SCENE_ = u16_dat_SCENE_NIGHT_2;
+		DEBUG_printf("+?²â²?²â²?²â²?²â²?²â²+\n+---_SCENE_NIGHT_2---+\n+?²â²?²â²?²â²?²â²?²â²+\n");
+		break;
+	case _SCENE_NIGHT_3:
+		u16_dat_SCENE_ = u16_dat_SCENE_NIGHT_3;
+		DEBUG_printf("+?²â²?²â²?²â²?²â²?²â²+\n+---_SCENE_NIGHT_3---+\n+?²â²?²â²?²â²?²â²?²â²+\n");
+		break;
+	case _SCENE_D_A_Y_1:
+		u16_dat_SCENE_ = u16_dat_SCENE_D_A_Y_1;
+		DEBUG_printf("+??????????+\n+---_SCENE_D_A_Y_1---+\n+??????????+\n");
+		break;
+	case _SCENE_D_A_Y_2:
+		u16_dat_SCENE_ = u16_dat_SCENE_D_A_Y_2;
+		DEBUG_printf("+??????????+\n+---_SCENE_D_A_Y_2---+\n+??????????+\n");
+		break;
+	case _SCENE_D_A_Y_3:
+		u16_dat_SCENE_ = u16_dat_SCENE_D_A_Y_3;
+		DEBUG_printf("+??????????+\n+---_SCENE_D_A_Y_3---+\n+??????????+\n");
+		break;
+	case _SCENE_SPORT_1:
+		u16_dat_SCENE_ = u16_dat_SCENE_SPORT_1;
+		DEBUG_printf("+??????????+\n+---_SCENE_SPORT_1---+\n+??????????+\n");
+		break;
+	case _SCENE_SPORT_2:
+		u16_dat_SCENE_ = u16_dat_SCENE_SPORT_2;
+		angle_limit = (OIS_UWORD)((GYRSNS * 13) / 10);
+		DEBUG_printf("+??????????+\n+---_SCENE_SPORT_2---+\n+??????????+\n");
+		break;
+	case _SCENE_SPORT_3:
+		u16_dat_SCENE_ = u16_dat_SCENE_SPORT_3;
+		angle_limit = (OIS_UWORD)((GYRSNS * 9) / 10);
+		DEBUG_printf("+??????????+\n+---_SCENE_SPORT_3---+\n+??????????+\n");
+		break;
+	case _SCENE_TEST___:
+		u16_dat_SCENE_ = u16_dat_SCENE_TEST___;
+		DEBUG_printf("+********************+\n+---dat_SCENE_TEST___+\n+********************+\n");
+		break;
+	default:
+		u16_dat_SCENE_ = u16_dat_SCENE_TEST___;
+		DEBUG_printf("+********************+\n+---dat_SCENE_TEST___+\n+********************+\n");
+		break;
 	}
 	/* Set parameter to the OIS controller */
 	for (u16_i = 0; u16_i < size_SCENE_tbl; u16_i += 1) {
@@ -481,7 +457,7 @@ ADJ_STS	func_SET_SCENE_PARAM_for_NewGYRO_Fil(OIS_UBYTE u16_scene, OIS_UBYTE u16_
 	/* u16_dat = temp / ANGLE_LIMIT; */
 	u16_dat = temp / angle_limit;
 
-  #if defined _CHIRON_OIS
+#ifdef CONFIG_MACH_CHIRON
 	temp_x = u16_dat*1064/1000;
 	temp_y = u16_dat*1088/1000;
 	u16_dat_x = temp_x;
@@ -503,7 +479,7 @@ ADJ_STS	func_SET_SCENE_PARAM_for_NewGYRO_Fil(OIS_UBYTE u16_scene, OIS_UBYTE u16_
 	I2C_OIS_mem_write(0x40, 0x7FF0);
 	I2C_OIS_mem_write(0xC0, 0x7FF0);
 
- #if defined _CHIRON_OIS
+#ifdef CONFIG_MACH_CHIRON
 	I2C_OIS_per_write(0xBB, 0x7F30);
 #endif
 	/* szx_2014/12/24 <=== */
@@ -517,22 +493,6 @@ ADJ_STS	func_SET_SCENE_PARAM_for_NewGYRO_Fil(OIS_UBYTE u16_scene, OIS_UBYTE u16_
 		u16_dat &= 0xBFFF;
 		I2C_OIS_mem_write(_M_EQCTL, u16_dat);
 	}
-#if 0
-	/* szx_2014/09/19 ---> */
-	/* Clear the register of the OIS controller */
-	I2C_OIS_mem_write(_M_wDgx02, 0x0000);
-	I2C_OIS_mem_write(_M_wDgx03, 0x0000);
-	I2C_OIS_mem_write(_M_wDgx06, 0x7FFF);
-	I2C_OIS_mem_write(_M_Kgx15,  0x0000);
-
-	I2C_OIS_mem_write(_M_wDgy02, 0x0000);
-	I2C_OIS_mem_write(_M_wDgy03, 0x0000);
-	I2C_OIS_mem_write(_M_wDgy06, 0x7FFF);
-	I2C_OIS_mem_write(_M_Kgy15,  0x0000);
-	/* szx_2014/09/19 <--- */
-	/* Set the pre-Amp offset value (X and Y) */
-	/* ==> RHM_HT 2013/11/25	Modified */
-#endif
 	if (range == 1) {
 		I2C_OIS_per_write(_P_31_ADC_CH1, param->gl_SFTHAL_X);
 		I2C_OIS_per_write(_P_32_ADC_CH2, param->gl_SFTHAL_Y);
@@ -542,7 +502,7 @@ ADJ_STS	func_SET_SCENE_PARAM_for_NewGYRO_Fil(OIS_UBYTE u16_scene, OIS_UBYTE u16_
 	}
 	/* <== RHM_HT 2013/11/25 Modified */
 	/* Enable OIS (if u16_mode = 1) */
-	if ((u16_mode == 1)) { /* OIS ON */
+	if (u16_mode == 1) { /* OIS ON */
 		u16_dat = I2C_OIS_mem__read(_M_EQCTL);
 		u16_dat = (u16_dat & 0xEFFF); /* Clear Halfshutter mode */
 		u16_dat = (u16_dat | 0x0101);

@@ -5,9 +5,7 @@
 /* #define CENTER_OF_HALL_OUT // RHM_HT 2013.03.15 Enable to detect hall output center and set shifted offset value */
 #define ENABLE_GYRO_DRIFT_COMP /* RHM_HT 2013/11/25 Added */
 #define _STR_AREA_ "F:\\DEBUGBMP\\" /* For Image save (Debug purpose) */
-#if 0
-#define OIS_GYRO_ST
-#endif
+
 /* ==> RHM_HT 2013/04/15 Add to the report for error details */
 /* #define OIS_TRUE  0 */
 /* #define OIS_FALSE -1 */
