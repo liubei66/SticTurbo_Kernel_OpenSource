@@ -995,6 +995,8 @@ SYSCALL_DEFINE2(delete_module, const char __user *, name_user,
 	strlcpy(last_unloaded_module, mod->name, sizeof(last_unloaded_module));
 
 	free_module(mod);
+	/* someone could wait for the module in add_unformed_module() */
+	wake_up_all(&module_wq);
 	return 0;
 out:
 	mutex_unlock(&module_mutex);
@@ -1073,7 +1075,7 @@ void __module_get(struct module *module)
 	if (module) {
 		preempt_disable();
 		atomic_inc(&module->refcnt);
-		trace_module_get(module, _RET_IP_);
+//		trace_module_get(module, _RET_IP_);
 		preempt_enable();
 	}
 }
@@ -1087,9 +1089,9 @@ bool try_module_get(struct module *module)
 		preempt_disable();
 		/* Note: here, we can fail to get a reference */
 		if (likely(module_is_live(module) &&
-			   atomic_inc_not_zero(&module->refcnt) != 0))
-			trace_module_get(module, _RET_IP_);
-		else
+			   atomic_inc_not_zero(&module->refcnt) != 0)) {
+//			trace_module_get(module, _RET_IP_);
+		} else
 			ret = false;
 
 		preempt_enable();
@@ -1106,7 +1108,7 @@ void module_put(struct module *module)
 		preempt_disable();
 		ret = atomic_dec_if_positive(&module->refcnt);
 		WARN_ON(ret < 0);	/* Failed to put refcount */
-		trace_module_put(module, _RET_IP_);
+//		trace_module_put(module, _RET_IP_);
 		preempt_enable();
 	}
 }
@@ -2104,7 +2106,7 @@ static void cfi_cleanup(struct module *mod);
 /* Free a module, remove from lists, etc. */
 static void free_module(struct module *mod)
 {
-	trace_module_free(mod);
+//	trace_module_free(mod);
 
 	mod_sysfs_teardown(mod);
 
@@ -2867,7 +2869,7 @@ static int copy_module_from_user(const void __user *umod, unsigned long len,
 
 	/* Suck in entire file: we'll want most of it. */
 	info->hdr = __vmalloc(info->len,
-			GFP_KERNEL | __GFP_HIGHMEM | __GFP_NOWARN, PAGE_KERNEL);
+			GFP_KERNEL | __GFP_NOWARN, PAGE_KERNEL);
 	if (!info->hdr)
 		return -ENOMEM;
 
@@ -3367,8 +3369,7 @@ static bool finished_loading(const char *name)
 	sched_annotate_sleep();
 	mutex_lock(&module_mutex);
 	mod = find_module_all(name, strlen(name), true);
-	ret = !mod || mod->state == MODULE_STATE_LIVE
-		|| mod->state == MODULE_STATE_GOING;
+	ret = !mod || mod->state == MODULE_STATE_LIVE;
 	mutex_unlock(&module_mutex);
 
 	return ret;
@@ -3539,8 +3540,7 @@ again:
 	mutex_lock(&module_mutex);
 	old = find_module_all(mod->name, strlen(mod->name), true);
 	if (old != NULL) {
-		if (old->state == MODULE_STATE_COMING
-		    || old->state == MODULE_STATE_UNFORMED) {
+		if (old->state != MODULE_STATE_LIVE) {
 			/* Wait in case it fails to load. */
 			mutex_unlock(&module_mutex);
 			err = wait_event_interruptible(module_wq,
@@ -3751,7 +3751,7 @@ static int load_module(struct load_info *info, const char __user *uargs,
 	free_copy(info);
 
 	/* Done! */
-	trace_module_load(mod);
+//	trace_module_load(mod);
 
 	return do_init_module(mod);
 

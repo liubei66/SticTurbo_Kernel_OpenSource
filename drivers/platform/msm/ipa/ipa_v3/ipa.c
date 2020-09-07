@@ -2062,6 +2062,11 @@ static long ipa3_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 
 	case IPA_IOC_GET_PHERIPHERAL_EP_INFO:
 		IPADBG("Got IPA_IOC_GET_EP_INFO\n");
+		if (ipa3_ctx->ipa_config_is_auto == false) {
+			IPADBG("not an auto config: returning error\n");
+			retval = -ENOTTY;
+			break;
+		}
 		if (copy_from_user(&ep_info, (const void __user *)arg,
 			sizeof(struct ipa_ioc_get_ep_info))) {
 			IPAERR_RL("copy_from_user fails\n");
@@ -2785,7 +2790,7 @@ static int ipa3_q6_set_ex_path_to_apps(void)
 	/* Set the exception path to AP */
 	for (client_idx = 0; client_idx < IPA_CLIENT_MAX; client_idx++) {
 		ep_idx = ipa3_get_ep_mapping(client_idx);
-		if (ep_idx == -1)
+		if (ep_idx == -1 || (ep_idx >= IPA3_MAX_NUM_PIPES))
 			continue;
 
 		/* disable statuses for all modem controlled prod pipes */
@@ -4158,8 +4163,6 @@ void ipa3_inc_acquire_wakelock(void)
 
 	spin_lock_irqsave(&ipa3_ctx->wakelock_ref_cnt.spinlock, flags);
 	ipa3_ctx->wakelock_ref_cnt.cnt++;
-	if (ipa3_ctx->wakelock_ref_cnt.cnt == 1)
-		__pm_stay_awake(&ipa3_ctx->w_lock);
 	IPADBG_LOW("active wakelock ref cnt = %d\n",
 		ipa3_ctx->wakelock_ref_cnt.cnt);
 	spin_unlock_irqrestore(&ipa3_ctx->wakelock_ref_cnt.spinlock, flags);
@@ -4181,8 +4184,6 @@ void ipa3_dec_release_wakelock(void)
 	ipa3_ctx->wakelock_ref_cnt.cnt--;
 	IPADBG_LOW("active wakelock ref cnt = %d\n",
 		ipa3_ctx->wakelock_ref_cnt.cnt);
-	if (ipa3_ctx->wakelock_ref_cnt.cnt == 0)
-		__pm_relax(&ipa3_ctx->w_lock);
 	spin_unlock_irqrestore(&ipa3_ctx->wakelock_ref_cnt.spinlock, flags);
 }
 
@@ -4945,6 +4946,8 @@ static int ipa3_post_init(const struct ipa3_plat_drv_res *resource_p,
 		}
 		IPADBG("teth_bridge initialized");
 	}
+	
+	ipa3_debugfs_init();
 
 	result = ipa3_uc_interface_init();
 	if (result)
@@ -4974,8 +4977,6 @@ static int ipa3_post_init(const struct ipa3_plat_drv_res *resource_p,
 		IPADBG(":stats init ok\n");
 
 	ipa3_register_panic_hdlr();
-
-	ipa3_debugfs_init();
 
 	mutex_lock(&ipa3_ctx->lock);
 	ipa3_ctx->ipa_initialization_complete = true;
@@ -5079,8 +5080,6 @@ static int ipa3_pil_load_ipa_fws(void)
 	if (IS_ERR_OR_NULL(subsystem_get_retval)) {
 		IPAERR("Unable to trigger PIL process for FW loading\n");
 		return -EINVAL;
-	} else {
-		subsystem_put(subsystem_get_retval);
 	}
 
 	IPADBG("PIL FW loading process is complete\n");
@@ -5141,10 +5140,6 @@ static ssize_t ipa3_write(struct file *file, const char __user *buf,
 
 	IPADBG("user input string %s\n", dbg_buff);
 
-	/* Prevent consequent calls from trying to load the FW again. */
-	if (ipa3_is_ready())
-		return count;
-
 	/* Check MHI configuration on MDM devices */
 	if (!ipa3_is_msm_device()) {
 
@@ -5183,6 +5178,10 @@ static ssize_t ipa3_write(struct file *file, const char __user *buf,
 			return count;
 		}
 	}
+
+	/* Prevent consequent calls from trying to load the FW again. */
+	if (ipa3_is_ready())
+		return count;
 
 	/* Prevent multiple calls from trying to load the FW again. */
 	if (ipa3_ctx->fw_loaded) {
@@ -5364,9 +5363,11 @@ static int ipa3_pre_init(const struct ipa3_plat_drv_res *resource_p,
 		goto fail_mem_ctx;
 	}
 
+#ifdef CONFIG_IPC_LOGGING
 	ipa3_ctx->logbuf = ipc_log_context_create(IPA_IPC_LOG_PAGES, "ipa", 0);
 	if (ipa3_ctx->logbuf == NULL)
 		IPADBG("failed to create IPC log, continue...\n");
+#endif
 
 	/* ipa3_ctx->pdev and ipa3_ctx->uc_pdev will be set in the smmu probes*/
 	ipa3_ctx->master_pdev = ipa_pdev;
@@ -5381,6 +5382,7 @@ static int ipa3_pre_init(const struct ipa3_plat_drv_res *resource_p,
 	ipa3_ctx->modem_cfg_emb_pipe_flt = resource_p->modem_cfg_emb_pipe_flt;
 	ipa3_ctx->ipa_wdi2 = resource_p->ipa_wdi2;
 	ipa3_ctx->ipa_config_is_auto = resource_p->ipa_config_is_auto;
+	ipa3_ctx->use_xbl_boot = resource_p->use_xbl_boot;
 	ipa3_ctx->use_64_bit_dma_mask = resource_p->use_64_bit_dma_mask;
 	ipa3_ctx->wan_rx_ring_size = resource_p->wan_rx_ring_size;
 	ipa3_ctx->lan_rx_ring_size = resource_p->lan_rx_ring_size;
@@ -5953,6 +5955,7 @@ static int get_ipa_dts_configuration(struct platform_device *pdev,
 	ipa_drv_res->modem_cfg_emb_pipe_flt = false;
 	ipa_drv_res->ipa_wdi2 = false;
 	ipa_drv_res->ipa_config_is_auto = false;
+	ipa_drv_res->use_xbl_boot = false;
 	ipa_drv_res->ipa_mhi_dynamic_config = false;
 	ipa_drv_res->use_64_bit_dma_mask = false;
 	ipa_drv_res->use_bw_vote = false;
@@ -6043,6 +6046,12 @@ static int get_ipa_dts_configuration(struct platform_device *pdev,
 	IPADBG(": ipa-config-is-auto = %s\n",
 			ipa_drv_res->ipa_config_is_auto
 			? "True" : "False");
+
+	ipa_drv_res->use_xbl_boot =
+		of_property_read_bool(pdev->dev.of_node,
+		"qcom,use-xbl-boot");
+	IPADBG("Is xbl loading used ? (%s)\n",
+		ipa_drv_res->use_xbl_boot ? "Yes":"No");
 
 	ipa_drv_res->use_64_bit_dma_mask =
 			of_property_read_bool(pdev->dev.of_node,
@@ -6783,6 +6792,32 @@ int ipa3_plat_drv_probe(struct platform_device *pdev_p,
 		cb->dev = dev;
 		smmu_info.present[IPA_SMMU_CB_UC] = true;
 
+		if (ipa3_ctx->use_xbl_boot) {
+			/* Ensure uC probe is the last. */
+			if (!smmu_info.present[IPA_SMMU_CB_AP] ||
+				!smmu_info.present[IPA_SMMU_CB_WLAN]) {
+				IPAERR("AP or WLAN CB probe not done. Defer");
+				return -EPROBE_DEFER;
+			}
+
+			pr_info("Using XBL boot load for IPA FW\n");
+			ipa3_ctx->fw_loaded = true;
+
+			result = ipa3_attach_to_smmu();
+			if (result) {
+				IPAERR("IPA attach to smmu failed %d\n",
+				result);
+				return result;
+			}
+
+			result = ipa3_post_init(&ipa3_res, ipa3_ctx->cdev.dev);
+			if (result) {
+				IPAERR("IPA post init failed %d\n", result);
+				return result;
+			}
+		}
+
+
 		return 0;
 	}
 
@@ -6912,6 +6947,11 @@ int ipa3_ap_resume(struct device *dev)
 struct ipa3_context *ipa3_get_ctx(void)
 {
 	return ipa3_ctx;
+}
+
+bool ipa3_get_lan_rx_napi(void)
+{
+	return false;
 }
 
 static void ipa_gsi_notify_cb(struct gsi_per_notify *notify)

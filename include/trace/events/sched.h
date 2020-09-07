@@ -597,11 +597,11 @@ DEFINE_EVENT(sched_cpu_load, sched_cpu_load_lb,
 TRACE_EVENT(sched_load_to_gov,
 
 	TP_PROTO(struct rq *rq, u64 aggr_grp_load, u32 tt_load,
-		u64 freq_aggr_thresh, u64 load, int policy,
+		int freq_aggr, u64 load, int policy,
 		int big_task_rotation,
 		unsigned int sysctl_sched_little_cluster_coloc_fmin_khz,
 		u64 coloc_boost_load),
-	TP_ARGS(rq, aggr_grp_load, tt_load, freq_aggr_thresh, load, policy,
+	TP_ARGS(rq, aggr_grp_load, tt_load, freq_aggr, load, policy,
 		big_task_rotation, sysctl_sched_little_cluster_coloc_fmin_khz,
 		coloc_boost_load),
 
@@ -610,7 +610,7 @@ TRACE_EVENT(sched_load_to_gov,
 		__field(	int,    policy			)
 		__field(	int,	ed_task_pid		)
 		__field(	u64,    aggr_grp_load		)
-		__field(	u64,    freq_aggr_thresh	)
+		__field(	u64,    freq_aggr		)
 		__field(	u64,    tt_load			)
 		__field(	u64,	rq_ps			)
 		__field(	u64,	grp_rq_ps		)
@@ -629,7 +629,7 @@ TRACE_EVENT(sched_load_to_gov,
 		__entry->policy		= policy;
 		__entry->ed_task_pid	= rq->ed_task ? rq->ed_task->pid : -1;
 		__entry->aggr_grp_load	= aggr_grp_load;
-		__entry->freq_aggr_thresh = freq_aggr_thresh;
+		__entry->freq_aggr	= freq_aggr;
 		__entry->tt_load	= tt_load;
 		__entry->rq_ps		= rq->prev_runnable_sum;
 		__entry->grp_rq_ps	= rq->grp_time.prev_runnable_sum;
@@ -643,9 +643,9 @@ TRACE_EVENT(sched_load_to_gov,
 		__entry->coloc_boost_load = coloc_boost_load;
 	),
 
-	TP_printk("cpu=%d policy=%d ed_task_pid=%d aggr_grp_load=%llu freq_aggr_thresh=%llu tt_load=%llu rq_ps=%llu grp_rq_ps=%llu nt_ps=%llu grp_nt_ps=%llu pl=%llu load=%llu big_task_rotation=%d sysctl_sched_little_cluster_coloc_fmin_khz=%u coloc_boost_load=%llu",
+	TP_printk("cpu=%d policy=%d ed_task_pid=%d aggr_grp_load=%llu freq_aggr=%llu tt_load=%llu rq_ps=%llu grp_rq_ps=%llu nt_ps=%llu grp_nt_ps=%llu pl=%llu load=%llu big_task_rotation=%d sysctl_sched_little_cluster_coloc_fmin_khz=%u coloc_boost_load=%llu",
 		__entry->cpu, __entry->policy, __entry->ed_task_pid,
-		__entry->aggr_grp_load, __entry->freq_aggr_thresh,
+		__entry->aggr_grp_load, __entry->freq_aggr,
 		__entry->tt_load, __entry->rq_ps, __entry->grp_rq_ps,
 		__entry->nt_ps, __entry->grp_nt_ps, __entry->pl, __entry->load,
 		__entry->big_task_rotation,
@@ -735,10 +735,10 @@ TRACE_EVENT(sched_energy_diff,
 TRACE_EVENT(sched_task_util,
 
 	TP_PROTO(struct task_struct *p, int next_cpu, int backup_cpu,
-		 int target_cpu, bool sync, bool need_idle, int fastpath,
+		 int target_cpu, bool need_idle, int fastpath,
 		 bool placement_boost, int rtg_cpu, u64 start_t),
 
-	TP_ARGS(p, next_cpu, backup_cpu, target_cpu, sync, need_idle, fastpath,
+	TP_ARGS(p, next_cpu, backup_cpu, target_cpu, need_idle, fastpath,
 		placement_boost, rtg_cpu, start_t),
 
 	TP_STRUCT__entry(
@@ -749,7 +749,6 @@ TRACE_EVENT(sched_task_util,
 		__field(int, next_cpu			)
 		__field(int, backup_cpu			)
 		__field(int, target_cpu			)
-		__field(bool, sync			)
 		__field(bool, need_idle			)
 		__field(int, fastpath			)
 		__field(bool, placement_boost		)
@@ -765,7 +764,6 @@ TRACE_EVENT(sched_task_util,
 		__entry->next_cpu		= next_cpu;
 		__entry->backup_cpu		= backup_cpu;
 		__entry->target_cpu		= target_cpu;
-		__entry->sync			= sync;
 		__entry->need_idle		= need_idle;
 		__entry->fastpath		= fastpath;
 		__entry->placement_boost	= placement_boost;
@@ -773,8 +771,8 @@ TRACE_EVENT(sched_task_util,
 		__entry->latency		= (sched_clock() - start_t);
 	),
 
-	TP_printk("pid=%d comm=%s util=%lu prev_cpu=%d next_cpu=%d backup_cpu=%d target_cpu=%d sync=%d need_idle=%d fastpath=%d placement_boost=%d rtg_cpu=%d latency=%llu",
-		__entry->pid, __entry->comm, __entry->util, __entry->prev_cpu, __entry->next_cpu, __entry->backup_cpu, __entry->target_cpu, __entry->sync, __entry->need_idle,  __entry->fastpath, __entry->placement_boost, __entry->rtg_cpu, __entry->latency)
+	TP_printk("pid=%d comm=%s util=%lu prev_cpu=%d next_cpu=%d backup_cpu=%d target_cpu=%d need_idle=%d fastpath=%d placement_boost=%d rtg_cpu=%d latency=%llu",
+		__entry->pid, __entry->comm, __entry->util, __entry->prev_cpu, __entry->next_cpu, __entry->backup_cpu, __entry->target_cpu, __entry->need_idle,  __entry->fastpath, __entry->placement_boost, __entry->rtg_cpu, __entry->latency)
 );
 
 #endif
@@ -1566,9 +1564,9 @@ TRACE_EVENT(sched_boost_cpu,
 TRACE_EVENT(sched_tune_tasks_update,
 
 	TP_PROTO(struct task_struct *tsk, int cpu, int tasks, int idx,
-		int boost, int max_boost),
+		int boost, int max_boost, u64 group_ts),
 
-	TP_ARGS(tsk, cpu, tasks, idx, boost, max_boost),
+	TP_ARGS(tsk, cpu, tasks, idx, boost, max_boost, group_ts),
 
 	TP_STRUCT__entry(
 		__array( char,	comm,	TASK_COMM_LEN	)
@@ -1578,6 +1576,7 @@ TRACE_EVENT(sched_tune_tasks_update,
 		__field( int,		idx		)
 		__field( int,		boost		)
 		__field( int,		max_boost	)
+		__field( u64,		group_ts	)
 	),
 
 	TP_fast_assign(
@@ -1588,13 +1587,15 @@ TRACE_EVENT(sched_tune_tasks_update,
 		__entry->idx 		= idx;
 		__entry->boost		= boost;
 		__entry->max_boost	= max_boost;
+		__entry->group_ts	= group_ts;
 	),
 
 	TP_printk("pid=%d comm=%s "
-			"cpu=%d tasks=%d idx=%d boost=%d max_boost=%d",
+			"cpu=%d tasks=%d idx=%d boost=%d max_boost=%d timeout=%llu",
 		__entry->pid, __entry->comm,
 		__entry->cpu, __entry->tasks, __entry->idx,
-		__entry->boost, __entry->max_boost)
+		__entry->boost, __entry->max_boost,
+		__entry->group_ts)
 );
 
 /*

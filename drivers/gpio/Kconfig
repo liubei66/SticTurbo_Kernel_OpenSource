@@ -12,7 +12,6 @@ config ARCH_HAVE_CUSTOM_GPIO_H
 
 menuconfig GPIOLIB
 	bool "GPIO Support"
-	select ANON_INODES
 	help
 	  This enables GPIO support through the generic GPIO library.
 	  You only need to enable this, if you also want to enable
@@ -21,6 +20,14 @@ menuconfig GPIOLIB
 	  If unsure, say N.
 
 if GPIOLIB
+
+config GPIOLIB_FASTPATH_LIMIT
+	int "Maximum number of GPIOs for fast path"
+	range 32 512
+	default 512
+	help
+	   This adjusts the point at which certain APIs will switch from
+	   using a stack allocated buffer to a dynamically allocated buffer.
 
 config OF_GPIO
 	def_bool y
@@ -939,6 +946,7 @@ config GPIO_LP873X
 config GPIO_MAX77620
 	tristate "GPIO support for PMIC MAX77620 and MAX20024"
 	depends on MFD_MAX77620
+	select GPIOLIB_IRQCHIP
 	help
 	  GPIO driver for MAX77620 and MAX20024 PMIC from Maxim Semiconductor.
 	  MAX77620 PMIC has 8 pins that can be configured as GPIOs. The

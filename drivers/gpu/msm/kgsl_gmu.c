@@ -31,7 +31,7 @@
 #define MODULE_PARAM_PREFIX "kgsl_gmu."
 
 static bool nogmu;
-module_param(nogmu, bool, 0444);
+module_param(nogmu, bool, 0);
 MODULE_PARM_DESC(nogmu, "Disable the GMU");
 
 #define GMU_CONTEXT_USER		0

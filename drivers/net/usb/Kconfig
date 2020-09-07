@@ -105,6 +105,14 @@ config USB_RTL8152
 
 	  To compile this driver as a module, choose M here: the
 	  module will be called r8152.
+	  
+config USB_RTL8191SU
+	tristate "Realtek RTL8191SU Based USB Ethernet Adapters"
+	select MII
+	help
+	  This option adds support for Realtek RTL8191SU based USB 2.0
+	  10/100 Ethernet adapters and RTL8191SU based USB 3.0 10/100/1000
+	  Ethernet adapters.
 
 config USB_LAN78XX
 	tristate "Microchip LAN78XX Based USB Ethernet Adapters"

@@ -1,0 +1,3 @@
+config STICKERNEL_MSM_HOTPLUG
+	bool "MSM hotplug driver"
+	default y

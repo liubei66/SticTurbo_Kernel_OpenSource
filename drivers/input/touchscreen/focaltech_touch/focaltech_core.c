@@ -93,10 +93,6 @@ extern const char *dsi_get_display_name(void);
 #if FTS_CHARGER_EN
 extern int fts_charger_mode_set(struct i2c_client *client, bool on);
 #endif
-#ifdef CONFIG_TOUCHSCREEN_XIAOMI_TOUCHFEATURE_SENSOR
-static int fts_palm_enable(struct fts_ts_data *fts_data, int on);
-static int fts_read_palm_data(void);
-#endif
 
 struct device *fts_get_dev(void)
 {
@@ -2163,14 +2159,6 @@ static int fts_ts_probe(struct i2c_client *client, const struct i2c_device_id *i
 	}
 #endif
 
-#if FTS_TEST_EN
-	ret = fts_test_init(client);
-	if (ret) {
-		FTS_ERROR("init production test fail");
-		goto err_debugfs_create;
-	}
-#endif
-
 #if FTS_ESDCHECK_EN
 	ret = fts_esdcheck_init(ts_data);
 	if (ret) {
@@ -2226,6 +2214,7 @@ static int fts_ts_probe(struct i2c_client *client, const struct i2c_device_id *i
 	ts_data->early_suspend.resume = fts_ts_late_resume;
 	register_early_suspend(&ts_data->early_suspend);
 #endif
+
 #ifdef CONFIG_TOUCHSCREEN_XIAOMI_TOUCHFEATURE
 	memset(&xiaomi_touch_interfaces, 0x00, sizeof(struct xiaomi_touch_interface));
 #ifdef CONFIG_TOUCHSCREEN_XIAOMI_TOUCHFEATURE_GAMEMODE
@@ -2243,6 +2232,9 @@ static int fts_ts_probe(struct i2c_client *client, const struct i2c_device_id *i
 #endif
 	xiaomitouch_register_modedata(&xiaomi_touch_interfaces);
 #endif
+
+	update_hardware_info(TYPE_TOUCH, 3);
+	update_hardware_info(TYPE_TP_MAKER, ts_data->lockdown_info[0] - 0x30);
 
 	FTS_FUNC_EXIT();
 	return 0;
@@ -2314,10 +2306,6 @@ static int fts_ts_remove(struct i2c_client *client)
 
 #if FTS_AUTO_UPGRADE_EN
 	fts_fwupg_exit(ts_data);
-#endif
-
-#if FTS_TEST_EN
-	fts_test_exit(client);
 #endif
 
 #if FTS_ESDCHECK_EN

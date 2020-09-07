@@ -1,5 +1,6 @@
 /*
  * Copyright (c) 2013-2018, The Linux Foundation. All rights reserved.
+ * Copyright (C) 2020 Amktiao.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -707,7 +708,8 @@ static int gov_resume(struct devfreq *df)
 }
 
 static int devfreq_bw_hwmon_get_freq(struct devfreq *df,
-					unsigned long *freq)
+					unsigned long *freq,
+					u32 *flag)
 {
 	struct hwmon_node *node = df->data;
 

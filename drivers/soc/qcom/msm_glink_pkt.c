@@ -200,7 +200,7 @@ enum {
 
 static int msm_glink_pkt_debug_mask;
 module_param_named(debug_mask, msm_glink_pkt_debug_mask,
-		int, 0664);
+		int, 0);
 
 static void glink_pkt_queue_rx_intent_worker(struct work_struct *work);
 static void glink_pkt_notify_state_worker(struct work_struct *work);
@@ -210,23 +210,17 @@ static bool glink_pkt_read_avail(struct glink_pkt_dev *devp);
 
 #ifdef DEBUG
 
-#define GLINK_PKT_LOG_STRING(x...) \
-do { \
-	if (glink_pkt_ilctxt) \
-		ipc_log_string(glink_pkt_ilctxt, "<GLINK_PKT>: "x); \
-} while (0)
+#define GLINK_PKT_LOG_STRING(x...) ((void)0)
 
 #define GLINK_PKT_INFO(x...) \
 do { \
 	if (msm_glink_pkt_debug_mask & GLINK_PKT_STATUS) \
 		pr_info("Status: "x); \
-	GLINK_PKT_LOG_STRING(x); \
 } while (0)
 
 #define GLINK_PKT_ERR(x...) \
 do { \
 	pr_err_ratelimited("<GLINK_PKT> err: "x); \
-	GLINK_PKT_LOG_STRING(x); \
 } while (0)
 
 #else
@@ -1518,8 +1512,10 @@ static int __init glink_pkt_init(void)
 		return ret;
 	}
 
+#ifdef CONFIG_IPC_LOGGING
 	glink_pkt_ilctxt = ipc_log_context_create(GLINK_PKT_IPC_LOG_PAGE_CNT,
 						"glink_pkt", 0);
+#endif
 	glink_pkt_wq = create_singlethread_workqueue("glink_pkt_wq");
 	if (!glink_pkt_wq) {
 		GLINK_PKT_ERR("%s: Error creating glink_pkt_wq\n", __func__);

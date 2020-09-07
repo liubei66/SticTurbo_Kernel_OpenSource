@@ -11,6 +11,7 @@
  *  linux/fs/minix/file.c
  *
  *  Copyright (C) 1991, 1992  Linus Torvalds
+ *  Copyright (C) 2020 Amktiao.
  *
  *  ext4 fs regular file handling primitives
  *

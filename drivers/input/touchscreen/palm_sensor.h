@@ -30,4 +30,3 @@ int palmsensor_register_switch(int (*cb)(bool on));
 void palmsensor_update_data(int data);
 
 #endif
-

@@ -48,7 +48,6 @@
 #include "ion_priv.h"
 #include "compat_ion.h"
 
-static kuid_t cam_euid;
 /**
  * struct ion_device - the metadata of the ion device node
  * @dev:		the actual misc device
@@ -549,20 +548,6 @@ static int ion_handle_add(struct ion_client *client, struct ion_handle *handle)
 	return 0;
 }
 
-static bool is_cam_alloc(unsigned int heap_id_mask)
-{
-	if (ION_BIT(20) & heap_id_mask) {
-		if (!cam_euid.val)
-			cam_euid = current_euid();
-		return true;
-	}
-	if (!cam_euid.val)
-		return false;
-	if (uid_eq(current_euid(), cam_euid))
-		return true;
-	return false;
-}
-
 static struct ion_handle *__ion_alloc(
 		struct ion_client *client, size_t len,
 		size_t align, unsigned int heap_id_mask,
@@ -573,11 +558,6 @@ static struct ion_handle *__ion_alloc(
 	struct ion_buffer *buffer = NULL;
 	struct ion_heap *heap;
 	int ret;
-	const unsigned int MAX_DBG_STR_LEN = 64;
-	char dbg_str[MAX_DBG_STR_LEN];
-	unsigned int dbg_str_idx = 0;
-
-	dbg_str[0] = '\0';
 
 	/*
 	 * For now, we don't want to fault in pages individually since
@@ -589,10 +569,6 @@ static struct ion_handle *__ion_alloc(
 
 	pr_debug("%s: len %zu align %zu heap_id_mask %u flags %x\n", __func__,
 		 len, align, heap_id_mask, flags);
-
-	if (is_cam_alloc(heap_id_mask))
-		flags |= ION_FLAG_CAM_ALLOC;
-
 	/*
 	 * traverse the list of heaps available in this system in priority
 	 * order.  If the heap type is supported by the client, and matches the
@@ -622,40 +598,15 @@ static struct ion_handle *__ion_alloc(
 		trace_ion_alloc_buffer_fallback(client->name, heap->name, len,
 						heap_id_mask, flags,
 						PTR_ERR(buffer));
-		if (dbg_str_idx < MAX_DBG_STR_LEN) {
-			unsigned int len_left;
-			int ret_value;
-
-			len_left = MAX_DBG_STR_LEN - dbg_str_idx - 1;
-			ret_value = snprintf(&dbg_str[dbg_str_idx],
-					     len_left, "%s ", heap->name);
-
-			if (ret_value >= len_left) {
-				/* overflow */
-				dbg_str[MAX_DBG_STR_LEN - 1] = '\0';
-				dbg_str_idx = MAX_DBG_STR_LEN;
-			} else if (ret_value >= 0) {
-				dbg_str_idx += ret_value;
-			} else {
-				/* error */
-				dbg_str[MAX_DBG_STR_LEN - 1] = '\0';
-			}
-		}
 	}
 	up_read(&dev->lock);
 
-	if (!buffer) {
-		trace_ion_alloc_buffer_fail(client->name, dbg_str, len,
-					    heap_id_mask, flags, -ENODEV);
+	if (!buffer)
 		return ERR_PTR(-ENODEV);
-	}
 
 	if (IS_ERR(buffer)) {
-		trace_ion_alloc_buffer_fail(client->name, dbg_str, len,
-					    heap_id_mask, flags,
-					    PTR_ERR(buffer));
-		pr_debug("ION is unable to allocate 0x%zx bytes (alignment: 0x%zx) from heap(s) %sfor client %s\n",
-			 len, align, dbg_str, client->name);
+		pr_debug("ION is 0x%zx bytes (alig: 0x%zx)(s) for %s\n",
+			 len, align, client->name);
 		return ERR_CAST(buffer);
 	}
 
@@ -2094,7 +2045,7 @@ void ion_device_add_heap(struct ion_device *dev, struct ion_heap *heap)
 EXPORT_SYMBOL(ion_device_add_heap);
 
 int ion_walk_heaps(struct ion_client *client, int heap_id,
-		   enum ion_heap_type type, void *data,
+		   unsigned int type, void *data,
 		   int (*f)(struct ion_heap *heap, void *data))
 {
 	int ret_val = 0;

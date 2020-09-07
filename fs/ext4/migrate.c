@@ -9,6 +9,7 @@
  * This program is distributed in the hope that it would be useful, but
  * WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+ * Copyright (C) 2020 Amktiao.
  *
  */
 

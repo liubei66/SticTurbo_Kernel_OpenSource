@@ -2,8 +2,8 @@
  * MIPI DSI Bus
  *
  * Copyright (C) 2012-2013, Samsung Electronics, Co., Ltd.
- * Copyright (C) 2019 XiaoMi, Inc.
  * Andrzej Hajda <a.hajda@samsung.com>
+ * Copyright (C) 2018 XiaoMi, Inc.
  *
  * Permission is hereby granted, free of charge, to any person obtaining a
  * copy of this software and associated documentation files (the

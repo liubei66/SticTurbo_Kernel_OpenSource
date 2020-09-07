@@ -1,5 +1,4 @@
 /* Copyright (c) 2011-2017, The Linux Foundation. All rights reserved.
- * Copyright (C) 2019 XiaoMi, Inc.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -24,16 +23,12 @@
 #include <linux/types.h>
 #include <linux/uaccess.h>
 #include <linux/of.h>
-#include <linux/proc_fs.h>
-#include <linux/wait.h>
-#include <linux/freezer.h>
 
 #include <soc/qcom/scm.h>
 #include <soc/qcom/qseecomi.h>
 
-/* QSEE_LOG_BUF_SIZE = 64K */
-#define QSEE_LOG_BUF_SIZE 0x10000
-
+/* QSEE_LOG_BUF_SIZE = 32K */
+#define QSEE_LOG_BUF_SIZE 0x4000
 
 /* TZ Diagnostic Area legacy version number */
 #define TZBSP_DIAG_MAJOR_VERSION_LEGACY	2
@@ -329,21 +324,11 @@ static struct tzdbg tzdbg = {
 static struct tzdbg_log_t *g_qsee_log;
 static uint32_t debug_rw_buf_size;
 
-static DECLARE_WAIT_QUEUE_HEAD(qseelog_waitqueue);
-static atomic_t qseelog_wait = ATOMIC_INIT(0);
-
-void read_qseelog_wakeup(void)
-{
-	if (atomic_read(&qseelog_wait)) {
-		atomic_set(&qseelog_wait, 0);
-		wake_up_all(&qseelog_waitqueue);
-	}
-}
-
 /*
  * Debugfs data structure and functions
  */
 
+#ifdef CONFIG_DEBUG_FS
 static int _disp_tz_general_stats(void)
 {
 	int len = 0;
@@ -614,32 +599,23 @@ static int _disp_log_stats(struct tzdbg_log_t *log,
 		/* end position has overwritten start */
 		log_start->offset = (log->log_pos.offset + 1) % log_len;
 	}
-	if (buf_idx == TZDBG_QSEE_LOG) {
-		while (log_start->offset == log->log_pos.offset) {
-			atomic_set(&qseelog_wait, 1);
-			if (wait_event_freezable(qseelog_waitqueue, atomic_read(&qseelog_wait) == 0)) {
-				/* Some event woke us up, so let's quit */
-				return 0;
-			}
+
+	while (log_start->offset == log->log_pos.offset) {
+		/*
+		 * No data in ring buffer,
+		 * so we'll hang around until something happens
+		 */
+		unsigned long t = msleep_interruptible(50);
+
+		if (t != 0) {
+			/* Some event woke us up, so let's quit */
+			return 0;
 		}
-	} else {
-		while (log_start->offset == log->log_pos.offset) {
-			/*
-			 * No data in ring buffer,
-			 * so we'll hang around until something happens
-			 */
-			unsigned long t = msleep_interruptible(50);
 
-			if (t != 0) {
-				/* Some event woke us up, so let's quit */
-				return 0;
-			}
+		if (buf_idx == TZDBG_LOG)
+			memcpy_fromio((void *)tzdbg.diag_buf, tzdbg.virt_iobase,
+						debug_rw_buf_size);
 
-			if (buf_idx == TZDBG_LOG)
-				memcpy_fromio((void *)tzdbg.diag_buf, tzdbg.virt_iobase,
-							debug_rw_buf_size);
-
-		}
 	}
 
 	max_len = (count > debug_rw_buf_size) ? debug_rw_buf_size : count;
@@ -878,36 +854,7 @@ const struct file_operations tzdbg_fops = {
 	.read    = tzdbgfs_read,
 	.open    = tzdbgfs_open,
 };
-
-
-static ssize_t qsee_log_dump_procfs_read(struct file *file, char __user *buf,
-	size_t count, loff_t *offp)
-{
-	int len = 0;
-
-	len = _disp_qsee_log_stats(count);
-	*offp = 0;
-
-	if (len > count)
-		len = count;
-
-	return simple_read_from_buffer(buf, len, offp,
-				tzdbg.stat[TZDBG_QSEE_LOG].data, len);
-}
-
-
-static int qsee_log_dump_procfs_open(struct inode *inode, struct file *pfile)
-{
-	pfile->private_data = inode->i_private;
-	return 0;
-}
-
-const struct file_operations qsee_log_dump_proc_fops = {
-	.owner   = THIS_MODULE,
-	.read    = qsee_log_dump_procfs_read,
-	.open    = qsee_log_dump_procfs_open,
-};
-
+#endif
 
 static struct ion_client  *g_ion_clnt;
 static struct ion_handle *g_ihandle;
@@ -1002,6 +949,7 @@ err1:
 static int  tzdbgfs_init(struct platform_device *pdev)
 {
 	int rc = 0;
+#ifdef CONFIG_DEBUG_FS
 	int i;
 	struct dentry           *dent_dir;
 	struct dentry           *dent;
@@ -1023,12 +971,8 @@ static int  tzdbgfs_init(struct platform_device *pdev)
 			goto err;
 		}
 	}
-
-	proc_create("qsee_log_dump", 0, NULL, &qsee_log_dump_proc_fops);
-
 	tzdbg.disp_buf = kzalloc(max(debug_rw_buf_size,
 			tzdbg.hyp_debug_rw_buf_size), GFP_KERNEL);
-
 	if (tzdbg.disp_buf == NULL)
 		goto err;
 	platform_set_drvdata(pdev, dent_dir);
@@ -1036,16 +980,19 @@ static int  tzdbgfs_init(struct platform_device *pdev)
 err:
 	debugfs_remove_recursive(dent_dir);
 
+#endif
 	return rc;
 }
 
 static void tzdbgfs_exit(struct platform_device *pdev)
 {
+#ifdef CONFIG_DEBUG_FS
 	struct dentry           *dent_dir;
 
 	kzfree(tzdbg.disp_buf);
 	dent_dir = platform_get_drvdata(pdev);
 	debugfs_remove_recursive(dent_dir);
+#endif
 	if (g_ion_clnt != NULL) {
 		if (!IS_ERR_OR_NULL(g_ihandle)) {
 			ion_unmap_kernel(g_ion_clnt, g_ihandle);
@@ -1206,17 +1153,16 @@ static int tz_log_probe(struct platform_device *pdev)
 
 	tzdbg.diag_buf = (struct tzdbg_t *)ptr;
 
-	if (tzdbgfs_init(pdev))
-		goto err;
+	if (tzdbgfs_init(pdev)) {
+		kfree(tzdbg.diag_buf);
+		tzdbg.diag_buf = NULL;
+	}
 
 	tzdbg_register_qsee_log_buf();
 
 	tzdbg_get_tz_version();
 
 	return 0;
-err:
-	kfree(tzdbg.diag_buf);
-	return -ENXIO;
 }
 
 
