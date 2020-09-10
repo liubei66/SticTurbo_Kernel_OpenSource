@@ -1,6 +1,7 @@
 /*
  * Copyright 2014 Broadcom Corporation
  * Copyright (C) 2019 XiaoMi, Inc.
+ * Copyright (C) 2020 SticKernel tEam.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License, version 2, as
@@ -39,7 +40,6 @@
 #ifdef CONFIG_SENSORS_SSP
 #include <linux/spi/spi.h>
 
-
 extern struct spi_driver *pssp_driver;
 extern bool ssp_dbg;
 extern bool ssp_pkt_dbg;
@@ -58,11 +58,6 @@ extern bool ssi_dbg_rng;
 #endif
 
 void bbd_log_hex(const char*, const unsigned char*, unsigned long);
-
-
-
-
-
 
 #define BBD_BUFF_SIZE (PAGE_SIZE*2)
 struct bbd_cdev_priv {
@@ -102,9 +97,6 @@ static const char *bbd_dev_name[BBD_DEVICE_INDEX] = {
 
 static dev_t devno;
 
-
-
-
 /*
  * The global BBD device which has all necessary information.
  * It's not beautiful but useful when we debug by Trace32.
@@ -134,12 +126,6 @@ static unsigned char legacy_bbd_patch[] = {
 /* Function to push read data into any bbd device's read buf */
 ssize_t bbd_on_read(unsigned int minor,
 					const unsigned char *buf, size_t size);
-
-
-
-
-
-
 
 /**
  * bbd_register -Interface function called from SHMD
@@ -183,7 +169,6 @@ ssize_t bbd_send_packet(unsigned char *buf, size_t size)
 					(unsigned char *)&ss_pkt, size+2); /* +2 for pkt.size */
 }
 EXPORT_SYMBOL(bbd_send_packet);
-
 
 /**
  * bbd_pull_packet - Interface function called
@@ -256,18 +241,8 @@ int bbd_mcu_reset(void)
 }
 EXPORT_SYMBOL(bbd_mcu_reset);
 
-
-
-
-
-
-
-
-
 /**
  * bbd_control - Handles command string from lhd
- *
- *
  */
 ssize_t bbd_control(const char *buf, ssize_t len)
 {
@@ -336,14 +311,6 @@ ssize_t bbd_control(const char *buf, ssize_t len)
 	return len;
 }
 
-
-
-
-
-
-
-
-
 /**
  * bbd_common_open - Common open function for BBD devices
  *
@@ -357,8 +324,6 @@ int bbd_common_open(struct inode *inode, struct file *filp)
 
 	if (minor >= BBD_DEVICE_INDEX)
 		return -ENODEV;
-
-	pr_info("%s", bbd.priv[minor].name);
 
 	if (bbd.priv[minor].busy && minor != BBD_MINOR_CONTROL)
 		return -EBUSY;
@@ -381,15 +346,11 @@ static int bbd_common_release(struct inode *inode, struct file *filp)
 {
 	unsigned int minor = iminor(inode);
 
-
-	pr_info("%s++\n", __func__);
-
 	BUG_ON(minor >= BBD_DEVICE_INDEX);
 	pr_info("%s", bbd.priv[minor].name);
 
 	bbd.priv[minor].busy = false;
 
-	pr_info("%s--\n", __func__);
 	return 0;
 }
 
@@ -477,15 +438,6 @@ static unsigned int bbd_common_poll(struct file *filp, poll_table *wait)
 	return mask;
 }
 
-
-
-
-
-
-
-
-
-
 /**
  * bbd_sensor_write - BBD's RPC calls this function to send sensor packet
  *
@@ -563,11 +515,6 @@ ssize_t bbd_patch_read(struct file *filp, char __user *buf,
 	return rd_size;
 }
 
-
-
-
-
-
 static ssize_t store_sysfs_bbd_control(struct device *dev,
 									   struct device_attribute *attr,
 									   const char *buf, size_t len)
@@ -595,12 +542,6 @@ static struct attribute *bbd_attributes[] = {
 static const struct attribute_group bbd_group = {
 	.attrs = bbd_attributes,
 };
-
-
-
-
-
-
 
 void bbd_log_hex(const char *pIntroduction,
 		const unsigned char *pData,
@@ -696,11 +637,6 @@ ssize_t bbd_request_mcu(bool on)
 }
 EXPORT_SYMBOL(bbd_request_mcu);
 
-
-
-
-
-
 static int bbd_suspend(pm_message_t state)
 {
 	pr_info("[SSPBBD]: %s ++ \n", __func__);
@@ -748,13 +684,6 @@ static int bbd_notifier(struct notifier_block *nb,
 static struct notifier_block bbd_notifier_block = {
 				.notifier_call = bbd_notifier,
 };
-
-
-
-
-
-
-
 
 static const struct file_operations bbd_fops[BBD_DEVICE_INDEX] = {
 	/* bbd shmd file operations */
@@ -809,7 +738,6 @@ int bbd_init(struct device *dev, bool legacy_patch)
 
 	ts1 = ktime_to_timespec(ktime_get_boottime());
 	start = ts1.tv_sec * 1000000000ULL + ts1.tv_nsec;
-
 
 	/* Initialize BBD device */
 	memset(&bbd, 0, sizeof(bbd));
@@ -883,7 +811,6 @@ int bbd_init(struct device *dev, bool legacy_patch)
 		goto free_kobj;
 	}
 
-
 	/* Register PM */
 	ret = register_pm_notifier(&bbd_notifier_block);
 	BUG_ON(ret);
@@ -928,8 +855,6 @@ static void __exit bbd_exit(void)
 {
 	int minor;
 
-	pr_info("%s ++\n", __func__);
-
 #ifdef CONFIG_SENSORS_SSP
 	/* Shutdown SSP first*/
 	pssp_driver->shutdown(&dummy_spi);
@@ -956,5 +881,3 @@ static void __exit bbd_exit(void)
 
 MODULE_AUTHOR("Broadcom");
 MODULE_LICENSE("Dual BSD/GPL");
-
-
