@@ -1,6 +1,5 @@
-/* Copyright (c) 2016-2017 The Linux Foundation. All rights reserved.
+/* Copyright (c) 2016-2019 The Linux Foundation. All rights reserved.
  * Copyright (C) 2019 XiaoMi, Inc.
- *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
  * only version 2 as published by the Free Software Foundation.
@@ -37,21 +36,21 @@ static struct smb_params v1_params = {
 		.name	= "fast charge current",
 		.reg	= FAST_CHARGE_CURRENT_CFG_REG,
 		.min_u	= 0,
-		.max_u	= 3300000,
+		.max_u	= 4500000,
 		.step_u	= 25000,
 	},
 	.fv			= {
 		.name	= "float voltage",
 		.reg	= FLOAT_VOLTAGE_CFG_REG,
 		.min_u	= 3487500,
-		.max_u	= 4400000,
+		.max_u	= 4920000,
 		.step_u	= 7500,
 	},
 	.usb_icl		= {
 		.name	= "usb input current limit",
 		.reg	= USBIN_CURRENT_LIMIT_CFG_REG,
 		.min_u	= 0,
-		.max_u	= 3000000,
+		.max_u	= 4800000,
 		.step_u	= 25000,
 	},
 	.icl_stat		= {
@@ -123,13 +122,6 @@ static struct smb_params v1_params = {
 		.min_u	= 0,
 		.max_u	= 3000000,
 		.step_u	= 25000,
-	},
-	.jeita_fv_comp          = {
-		.name   = "jeita fv reduction",
-		.reg    = JEITA_FVCOMP_CFG_REG,
-		.min_u  = 0,
-		.max_u  = 472500,
-		.step_u = 7500,
 	},
 	.freq_buck		= {
 		.name	= "buck switching frequency",
@@ -213,9 +205,6 @@ module_param_named(
 #define BITE_WDOG_TIMEOUT_8S		0x3
 #define BARK_WDOG_TIMEOUT_MASK		GENMASK(3, 2)
 #define BARK_WDOG_TIMEOUT_SHIFT		2
-#define DEFAULT_CRITICAL_JEITA_CCOMP 2975000
-#define JEITA_SOFT_HOT_CC_COMP          1600000
-#define JEITA_SOFT_COOL_CC_COMP         2225000
 
 static int smb2_parse_dt(struct smb2 *chip)
 {
@@ -292,12 +281,11 @@ static int smb2_parse_dt(struct smb2 *chip)
 	if (rc < 0)
 		chip->dt.wipower_max_uw = -EINVAL;
 
-#ifdef CONFIG_FB
 	if (of_find_property(node, "qcom,thermal-mitigation-dcp", &byte_len)) {
 		chg->thermal_mitigation_dcp = devm_kzalloc(chg->dev, byte_len, GFP_KERNEL);
 
-	if (chg->thermal_mitigation_dcp == NULL)
-		return -ENOMEM;
+		if (chg->thermal_mitigation_dcp == NULL)
+			return -ENOMEM;
 
 		chg->thermal_levels = byte_len / sizeof(u32);
 		rc = of_property_read_u32_array(node,
@@ -307,14 +295,14 @@ static int smb2_parse_dt(struct smb2 *chip)
 		if (rc < 0) {
 			dev_err(chg->dev,
 				"Couldn't read threm limits rc = %d\n", rc);
-		return rc;
+			return rc;
 		}
 	}
 	if (of_find_property(node, "qcom,thermal-mitigation-qc3", &byte_len)) {
 		chg->thermal_mitigation_qc3 = devm_kzalloc(chg->dev, byte_len, GFP_KERNEL);
 
-	if (chg->thermal_mitigation_qc3 == NULL)
-		return -ENOMEM;
+		if (chg->thermal_mitigation_qc3 == NULL)
+			return -ENOMEM;
 
 		chg->thermal_levels = byte_len / sizeof(u32);
 		rc = of_property_read_u32_array(node,
@@ -324,7 +312,7 @@ static int smb2_parse_dt(struct smb2 *chip)
 		if (rc < 0) {
 			dev_err(chg->dev,
 					"Couldn't read threm limits rc = %d\n", rc);
-		return rc;
+			return rc;
 		}
 	}
 	if (of_find_property(node, "qcom,thermal-mitigation-qc2", &byte_len)) {
@@ -344,26 +332,6 @@ static int smb2_parse_dt(struct smb2 *chip)
 			return rc;
 		}
 	}
-#else
-	if (of_find_property(node, "qcom,thermal-mitigation", &byte_len)) {
-		chg->thermal_mitigation = devm_kzalloc(chg->dev, byte_len,
-			GFP_KERNEL);
-
-		if (chg->thermal_mitigation == NULL)
-			return -ENOMEM;
-
-		chg->thermal_levels = byte_len / sizeof(u32);
-		rc = of_property_read_u32_array(node,
-				"qcom,thermal-mitigation",
-				chg->thermal_mitigation,
-				chg->thermal_levels);
-		if (rc < 0) {
-			dev_err(chg->dev,
-				"Couldn't read threm limits rc = %d\n", rc);
-			return rc;
-		}
-	}
-#endif
 
 	of_property_read_u32(node, "qcom,float-option", &chip->dt.float_option);
 	if (chip->dt.float_option < 0 || chip->dt.float_option > 4) {
@@ -394,24 +362,6 @@ static int smb2_parse_dt(struct smb2 *chip)
 					&chg->otg_delay_ms);
 	if (rc < 0)
 		chg->otg_delay_ms = OTG_DEFAULT_DEGLITCH_TIME_MS;
-
-	rc = of_property_read_u32(node, "qcom,fcc-low-temp-delta",
-				&chip->dt.jeita_low_cc_delta);
-	if (rc < 0)
-		chip->dt.jeita_low_cc_delta = DEFAULT_CRITICAL_JEITA_CCOMP;
-	chg->jeita_ccomp_low_delta = chip->dt.jeita_low_cc_delta;
-
-	rc = of_property_read_u32(node, "qcom,fcc-hot-temp-delta",
-				&chip->dt.jeita_hot_cc_delta);
-	if (rc < 0)
-		chip->dt.jeita_hot_cc_delta = JEITA_SOFT_HOT_CC_COMP;
-	chg->jeita_ccomp_hot_delta = chip->dt.jeita_hot_cc_delta;
-
-	rc = of_property_read_u32(node, "qcom,fcc-cool-temp-delta",
-				&chip->dt.jeita_cool_cc_delta);
-	if (rc < 0)
-		chip->dt.jeita_cool_cc_delta = JEITA_SOFT_COOL_CC_COMP;
-	chg->jeita_ccomp_cool_delta = chip->dt.jeita_cool_cc_delta;
 
 	chg->fcc_stepper_mode = of_property_read_bool(node,
 					"qcom,fcc-stepping-enable");
@@ -576,6 +526,9 @@ static int smb2_usb_get_prop(struct power_supply *psy,
 		break;
 	case POWER_SUPPLY_PROP_TYPE_RECHECK:
 		rc = smblib_get_prop_type_recheck(chg, val);
+		break;
+	case 144:
+		rc = -EINVAL;
 		break;
 	default:
 		pr_err("get prop %d is not supported in usb\n", psp);
@@ -1164,9 +1117,13 @@ static int smb2_batt_get_prop(struct power_supply *psy,
 	case POWER_SUPPLY_PROP_CHARGE_FULL:
 	case POWER_SUPPLY_PROP_CYCLE_COUNT:
 	case POWER_SUPPLY_PROP_VOLTAGE_NOW:
-	case POWER_SUPPLY_PROP_CURRENT_NOW:
 	case POWER_SUPPLY_PROP_TEMP:
 		rc = smblib_get_prop_from_bms(chg, psp, val);
+		break;
+	case POWER_SUPPLY_PROP_CURRENT_NOW:
+		rc = smblib_get_prop_from_bms(chg, psp, val);
+		if (!rc)
+			val->intval *= (-1);
 		break;
 	case POWER_SUPPLY_PROP_FCC_STEPPER_ENABLE:
 		val->intval = chg->fcc_stepper_mode;
@@ -1584,30 +1541,6 @@ static int smb2_disable_typec(struct smb_charger *chg)
 	return rc;
 }
 
-static int smb2_init_jeita(struct smb2 *chip)
-{
-	struct smb_charger *chg = &chip->chg;
-	int rc;
-
-	/*set cc compensation to 0.3C*/
-	rc = smblib_set_charge_param(chg, &chg->param.jeita_cc_comp, 2225000);
-	if (rc < 0) {
-		pr_err("Couldn't configure jeita_cc rc = %d\n", rc);
-		return rc;
-	}
-	rc = smblib_set_charge_param(chg, &chg->param.jeita_fv_comp, 300000);
-	if (rc < 0) {
-		pr_err("Couldn't configure jeita_cv rc = %d\n", rc);
-		return rc;
-	}
-	rc = smblib_masked_write(chg, JEITA_EN_CFG_REG,
-					JEITA_EN_COLD_SL_FCV_BIT, 0);
-	if (rc < 0)
-		pr_err("Couldn't disable cold_sl_fcv rc=%d\n", rc);
-
-	return 0;
-}
-
 static int smb2_init_hw(struct smb2 *chip)
 {
 	struct smb_charger *chg = &chip->chg;
@@ -1643,8 +1576,6 @@ static int smb2_init_hw(struct smb2 *chip)
 		chg->param.freq_buck.max_u = chip->dt.max_freq_khz;
 		chg->param.freq_boost.max_u = chip->dt.max_freq_khz;
 	}
-
-	smb2_init_jeita(chip);
 
 	/* set a slower soft start setting for OTG */
 	rc = smblib_masked_write(chg, DC_ENG_SSUPPLY_CFG2_REG,
@@ -1713,14 +1644,6 @@ static int smb2_init_hw(struct smb2 *chip)
 	if (rc < 0) {
 		dev_err(chg->dev,
 			"Couldn't configure QC2.0 to 9V rc=%d\n", rc);
-		return rc;
-	}
-	/* Operate the QC3.0 to limit vbus to 6.6v*/
-	rc = smblib_masked_write(chg, HVDCP_PULSE_COUNT_MAX_REG,
-						PULSE_COUNT_QC3P0_mask, 0x8);
-	if (rc < 0) {
-		dev_err(chg->dev,
-			"Couldn't configure QC3.0 to 6.6V rc=%d\n", rc);
 		return rc;
 	}
 
@@ -2590,7 +2513,7 @@ static int smb2_probe(struct platform_device *pdev)
 		usb_present, chg->real_charger_type,
 		batt_present, batt_health, batt_charge_type);
 
-	schedule_delayed_work(&chg->reg_work, 60 * HZ);
+	queue_delayed_work(system_power_efficient_wq, &chg->reg_work, 60 * HZ);
 	return rc;
 
 cleanup:
@@ -2656,12 +2579,6 @@ static void smb2_shutdown(struct platform_device *pdev)
 #ifdef CONFIG_FB
 static int smblib_suspend(struct device *dev)
 {
-	struct smb2 *chip = dev_get_drvdata(dev);
-	struct smb_charger *chg = &chip->chg;
-
-	cancel_delayed_work(&chg->screen_on_work);
-	chg->checking_in_progress = false;
-
 	return 0;
 }
 

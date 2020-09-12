@@ -1,5 +1,5 @@
-/* Copyright (c) 2012-2017, The Linux Foundation. All rights reserved.
- * Copyright (C) 2019 XiaoMi, Inc.
+/* Copyright (c) 2012-2017, 2019, The Linux Foundation. All rights reserved.
+ * Copyright (C) 2018 XiaoMi, Inc.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -992,9 +992,8 @@ static int __validate_layer_reconfig(struct mdp_input_layer *layer,
 	 * Invalidate any reconfig of CSC block on staged pipe.
 	 */
 	if (!is_csc_db &&
-		((!!pipe->src_fmt->is_yuv != !!layer_src_fmt->is_yuv) ||
 		(pipe->src_fmt->is_yuv && layer_src_fmt->is_yuv &&
-		pipe->csc_coeff_set != layer->color_space))) {
+		pipe->csc_coeff_set != layer->color_space)) {
 		pr_err("CSC reconfig not allowed on staged pipe\n");
 		status = -EINVAL;
 		goto err_exit;
@@ -1385,7 +1384,6 @@ static struct sync_fence *__create_fence(struct msm_fb_data_type *mfd,
 	struct mdss_overlay_private *mdp5_data;
 	struct mdss_mdp_ctl *ctl;
 	struct sync_fence *sync_fence = NULL;
-	char fence_name[32];
 
 	mdp5_data = mfd_to_mdp5_data(mfd);
 
@@ -1400,37 +1398,26 @@ static struct sync_fence *__create_fence(struct msm_fb_data_type *mfd,
 		return ERR_PTR(-EPERM);
 	}
 
-	if (fence_type == MDSS_MDP_RETIRE_FENCE)
-		snprintf(fence_name, sizeof(fence_name), "fb%d_retire",
-			mfd->index);
-	else if (fence_type == MDSS_MDP_RELEASE_FENCE)
-		snprintf(fence_name, sizeof(fence_name), "fb%d_release",
-			mfd->index);
-	else if (fence_type == MDSS_MDP_CWB_RETIRE_FENCE)
-		snprintf(fence_name, sizeof(fence_name), "cwb%d_retire",
-			mfd->index);
-
-
 	if ((fence_type == MDSS_MDP_RETIRE_FENCE) &&
 		(mfd->panel.type == MIPI_CMD_PANEL)) {
 		if (mdp5_data->vsync_timeline) {
 			value = mdp5_data->vsync_timeline->value + 1 +
 				mdp5_data->retire_cnt++;
 			sync_fence = mdss_fb_sync_get_fence(
-				mdp5_data->vsync_timeline, fence_name, value);
+				mdp5_data->vsync_timeline, "", value);
 		} else {
 			return ERR_PTR(-EPERM);
 		}
 	} else if (fence_type == MDSS_MDP_CWB_RETIRE_FENCE) {
 		sync_fence = mdss_fb_sync_get_fence(sync_pt_data->timeline,
-				fence_name, sync_pt_data->timeline_value + 1);
+				"", sync_pt_data->timeline_value + 1);
 	} else {
 		sync_fence = mdss_fb_sync_get_fence(sync_pt_data->timeline,
-				fence_name, value);
+				"", value);
 	}
 
 	if (IS_ERR_OR_NULL(sync_fence)) {
-		pr_err("%s: unable to retrieve release fence\n", fence_name);
+		pr_err("%s: unable to retrieve release fence\n", __func__);
 		goto end;
 	}
 
@@ -1438,7 +1425,7 @@ static struct sync_fence *__create_fence(struct msm_fb_data_type *mfd,
 	*fence_fd = get_unused_fd_flags(0);
 	if (*fence_fd < 0) {
 		pr_err("%s: get_unused_fd_flags failed error:0x%x\n",
-			fence_name, *fence_fd);
+			__func__, *fence_fd);
 		sync_fence_put(sync_fence);
 		sync_fence = NULL;
 		goto end;
@@ -2450,7 +2437,7 @@ static int __validate_layers(struct msm_fb_data_type *mfd,
 
 	struct mdss_mdp_mixer *mixer = NULL;
 	struct mdp_input_layer *layer = NULL, *layer_list;
-	struct mdss_mdp_validate_info_t *validate_info_list = NULL;
+	struct mdss_mdp_validate_info_t validate_info_list[MAX_LAYER_COUNT];
 	bool is_single_layer = false, force_validate;
 	enum layer_pipe_q pipe_q_type;
 	enum layer_zorder_used zorder_used[MDSS_MDP_MAX_STAGE] = {0};
@@ -2462,17 +2449,12 @@ static int __validate_layers(struct msm_fb_data_type *mfd,
 	if (ret)
 		return ret;
 
-	if (!layer_count)
+	if (layer_count <= 0)
 		goto validate_skip;
 
 	layer_list = commit->input_layers;
-
-	validate_info_list = kcalloc(layer_count, sizeof(*validate_info_list),
-				     GFP_KERNEL);
-	if (!validate_info_list) {
-		ret = -ENOMEM;
-		goto end;
-	}
+	memset(validate_info_list, 0,
+	       sizeof(*validate_info_list) * layer_count);
 
 	for (i = 0; i < layer_count; i++) {
 		if (layer_list[i].dst_rect.x >= left_lm_w)
@@ -2763,7 +2745,6 @@ validate_exit:
 	}
 	mutex_unlock(&mdp5_data->list_lock);
 end:
-	kfree(validate_info_list);
 	mutex_unlock(&mdp5_data->ov_lock);
 
 	pr_debug("fb%d validated layers =%d\n", mfd->index, i);
@@ -2799,6 +2780,7 @@ int __is_cwb_requested(uint32_t commit_flags)
 int mdss_mdp_layer_pre_commit(struct msm_fb_data_type *mfd,
 	struct file *file, struct mdp_layer_commit_v1 *commit)
 {
+	struct mdss_mdp_validate_info_t validate_info_list[MAX_LAYER_COUNT];
 	int ret, i;
 	int layer_count = commit->input_layer_cnt;
 	bool validate_failed = false;
@@ -2807,7 +2789,6 @@ int mdss_mdp_layer_pre_commit(struct msm_fb_data_type *mfd,
 	struct mdp_input_layer *layer_list;
 	struct mdss_overlay_private *mdp5_data;
 	struct mdss_mdp_data *src_data[MDSS_MDP_MAX_SSPP];
-	struct mdss_mdp_validate_info_t *validate_info_list;
 	struct mdss_mdp_ctl *sctl = NULL;
 
 	mdp5_data = mfd_to_mdp5_data(mfd);
@@ -2848,10 +2829,8 @@ int mdss_mdp_layer_pre_commit(struct msm_fb_data_type *mfd,
 		return 0;
 	}
 
-	validate_info_list = kcalloc(layer_count, sizeof(*validate_info_list),
-				     GFP_KERNEL);
-	if (!validate_info_list)
-		return -ENOMEM;
+	memset(validate_info_list, 0,
+	       sizeof(*validate_info_list) * layer_count);
 
 	for (i = 0; i < layer_count; i++) {
 		if (!validate_info_list[i].layer) {
@@ -2861,7 +2840,7 @@ int mdss_mdp_layer_pre_commit(struct msm_fb_data_type *mfd,
 			if (IS_ERR_VALUE(ret)) {
 				pr_err("error updating multirect config. ret=%d i=%d\n",
 					ret, i);
-				goto end;
+				return ret;
 			}
 		}
 	}
@@ -2879,7 +2858,7 @@ int mdss_mdp_layer_pre_commit(struct msm_fb_data_type *mfd,
 		ret = __validate_layers(mfd, file, commit);
 		if (ret) {
 			pr_err("__validate_layers failed. rc=%d\n", ret);
-			goto end;
+			return ret;
 		}
 	} else {
 		/*
@@ -2949,8 +2928,6 @@ map_err:
 				mdss_mdp_overlay_buf_free(mfd, src_data[i]);
 		mutex_unlock(&mdp5_data->list_lock);
 	}
-end:
-	kfree(validate_info_list);
 
 	return ret;
 }
@@ -3274,4 +3251,3 @@ done:
 	mdss_mdp_clk_ctrl(MDP_BLOCK_POWER_OFF);
 	return rc;
 }
-

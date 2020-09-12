@@ -4,6 +4,8 @@
  * Copyright (C) 2008 ARM Limited
  * Written by Catalin Marinas <catalin.marinas@arm.com>
  *
+ * Copyright (C) 2020 Amktiao.
+ *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 as
  * published by the Free Software Foundation.
@@ -552,11 +554,10 @@ static struct kmemleak_object *create_object(unsigned long ptr, size_t size,
 	struct kmemleak_object *object, *parent;
 	struct rb_node **link, *rb_parent;
 
-	object = kmem_cache_alloc(object_cache, gfp_kmemleak_mask(gfp));
-	if (!object) {
-		pr_warning("Cannot allocate a kmemleak_object structure\n");
-		kmemleak_disable();
-		return NULL;
+	while (1) {
+		object = kmem_cache_alloc(object_cache, gfp_kmemleak_mask(gfp));
+		if (object)
+			break;
 	}
 
 	INIT_LIST_HEAD(&object->object_list);
@@ -576,7 +577,7 @@ static struct kmemleak_object *create_object(unsigned long ptr, size_t size,
 	if (in_irq()) {
 		object->pid = 0;
 		strncpy(object->comm, "hardirq", sizeof(object->comm));
-	} else if (in_softirq()) {
+	} else if (in_serving_softirq()) {
 		object->pid = 0;
 		strncpy(object->comm, "softirq", sizeof(object->comm));
 	} else {

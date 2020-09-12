@@ -42,6 +42,12 @@ static void ext4_dir_crypt_complete(struct crypto_async_request *req, int res)
 	complete(&ecr->completion);
 }
 
+bool ext4_valid_filenames_enc_mode(uint32_t mode)
+{
+	return (mode == EXT4_ENCRYPTION_MODE_AES_256_CTS ||
+		mode == EXT4_ENCRYPTION_MODE_AES_256_HEH);
+}
+
 static unsigned max_name_len(struct inode *inode)
 {
 	return S_ISLNK(inode->i_mode) ? inode->i_sb->s_blocksize :
@@ -68,7 +74,8 @@ static int ext4_fname_encrypt(struct inode *inode,
 	char iv[EXT4_CRYPTO_BLOCK_SIZE];
 	struct scatterlist src_sg, dst_sg;
 	int padding = 4 << (ci->ci_flags & EXT4_POLICY_FLAGS_PAD_MASK);
-	char *workbuf, buf[32], *alloc_buf = NULL;
+	char *workbuf, *alloc_buf = NULL;
+	char buf[SZ_4K] __aligned(sizeof(long));
 	unsigned lim = max_name_len(inode);
 
 	if (iname->len <= 0 || iname->len > lim)

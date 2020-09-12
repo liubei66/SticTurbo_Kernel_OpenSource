@@ -980,6 +980,10 @@ static int check_fmt(struct file *file, enum v4l2_buf_type type)
 		if (is_sdr && is_tx && ops->vidioc_g_fmt_sdr_out)
 			return 0;
 		break;
+	case V4L2_BUF_TYPE_PRIVATE:
+		if (ops->vidioc_g_fmt_type_private)
+			return 0;
+		break;
 	default:
 		break;
 	}
@@ -1030,10 +1034,12 @@ static int v4l_querycap(const struct v4l2_ioctl_ops *ops,
 	 * Drivers MUST fill in device_caps, so check for this and
 	 * warn if it was forgotten.
 	 */
+/*
 	WARN(!(cap->capabilities & V4L2_CAP_DEVICE_CAPS) ||
 		!cap->device_caps, "Bad caps for driver %s, %x %x",
 		cap->driver, cap->capabilities, cap->device_caps);
 	cap->device_caps |= V4L2_CAP_EXT_PIX_FORMAT;
+*/
 
 	return ret;
 }
@@ -2797,7 +2803,8 @@ long
 video_usercopy(struct file *file, unsigned int cmd, unsigned long arg,
 	       v4l2_kioctl func)
 {
-	char	sbuf[128];
+	char    mbuf_onstack[SZ_512] __aligned(sizeof(long));
+	char	sbuf[SZ_4K] __aligned(sizeof(long));
 	void    *mbuf = NULL;
 	void	*parg = (void *)arg;
 	long	err  = -EINVAL;
@@ -2859,10 +2866,14 @@ video_usercopy(struct file *file, unsigned int cmd, unsigned long arg,
 		 * array) fits into sbuf (so that mbuf will still remain
 		 * unused up to here).
 		 */
-		mbuf = kmalloc(array_size, GFP_KERNEL);
-		err = -ENOMEM;
-		if (NULL == mbuf)
-			goto out_array_args;
+		if (array_size <= ARRAY_SIZE(mbuf_onstack)) {
+			mbuf = mbuf_onstack;
+		} else {
+			mbuf = kmalloc(array_size, GFP_KERNEL);
+			err = -ENOMEM;
+			if (NULL == mbuf)
+				goto out_array_args;
+		}
 		err = -EFAULT;
 		if (copy_from_user(mbuf, user_ptr, array_size))
 			goto out_array_args;
@@ -2905,7 +2916,8 @@ out_array_args:
 	}
 
 out:
-	kfree(mbuf);
+	if (mbuf != mbuf_onstack)
+		kfree(mbuf);
 	return err;
 }
 EXPORT_SYMBOL(video_usercopy);

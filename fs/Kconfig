@@ -10,16 +10,14 @@ config DCACHE_WORD_ACCESS
 
 if BLOCK
 
-source "fs/ext2/Kconfig"
 source "fs/ext4/Kconfig"
 source "fs/jbd2/Kconfig"
 
 config FS_MBCACHE
-# Meta block cache for Extended Attributes (ext2/ext3/ext4)
+# Meta block cache for Extended Attributes (ext4)
 	tristate
-	default y if EXT2_FS=y && EXT2_FS_XATTR
 	default y if EXT4_FS=y
-	default m if EXT2_FS_XATTR || EXT4_FS
+	default m if EXT4_FS
 
 source "fs/reiserfs/Kconfig"
 source "fs/jfs/Kconfig"
@@ -103,6 +101,7 @@ if BLOCK
 menu "DOS/FAT/NT Filesystems"
 
 source "fs/fat/Kconfig"
+source "fs/exfat/Kconfig"
 source "fs/ntfs/Kconfig"
 
 endmenu
@@ -283,6 +282,19 @@ endif # NETWORK_FILESYSTEMS
 
 source "fs/nls/Kconfig"
 source "fs/dlm/Kconfig"
+
+config BLOCK_UNWANTED_APPS
+	bool "Enable blocking of unwanted apps"
+	depends on ANDROID
+	help
+	   This option allows you to block a set of apps/binaries (by name)
+	   from running on devices with your kernel installed. May be useful
+	   if your users are uneducated.
+	   
+config BLOCK_UNWANTED_FILES
+	bool "Allow blocking files from executing from kernel"
+	help
+	  This option allows you to make files from certain folders un-openable.
 
 config FILE_TABLE_DEBUG
 	bool "Enable FILE_TABLE_DEBUG"

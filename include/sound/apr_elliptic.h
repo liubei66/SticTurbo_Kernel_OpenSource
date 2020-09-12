@@ -50,9 +50,9 @@
 #define ELLIPTIC_ULTRASOUND_GAIN			2
 
 #define ELLIPTIC_SYSTEM_CONFIGURATION_SIZE		96
-#define ELLIPTIC_CALIBRATION_DATA_SIZE          64
-#define ELLIPTIC_VERSION_INFO_SIZE              16
-#define ELLIPTIC_BRANCH_INFO_SIZE               32
+#define ELLIPTIC_CALIBRATION_DATA_SIZE		64
+#define ELLIPTIC_VERSION_INFO_SIZE		16
+#define ELLIPTIC_BRANCH_INFO_SIZE		32
 
 #define ELLIPTIC_PORT_ID				SLIMBUS_1_TX
 
@@ -62,10 +62,10 @@ struct afe_ultrasound_set_params_t {
 } __packed;
 
 struct afe_ultrasound_config_command {
-	struct apr_hdr                      hdr;
-	struct afe_port_cmd_set_param_v2    param;
-	struct afe_port_param_data_v2       pdata;
-	struct afe_ultrasound_set_params_t  prot_config;
+	struct apr_hdr	hdr;
+	struct afe_port_cmd_set_param_v2	param;
+	struct afe_port_param_data_v2	pdata;
+	struct afe_ultrasound_set_params_t	prot_config;
 } __packed;
 
 /** Sequence of Elliptic Labs Ultrasound module parameters */
@@ -74,9 +74,9 @@ struct afe_ultrasound_get_params_t {
 } __packed;
 
 struct afe_ultrasound_get_calib {
-	struct afe_port_cmd_get_param_v2   get_param;
-	struct afe_port_param_data_v2      pdata;
-	struct afe_ultrasound_get_params_t res_cfg;
+	struct afe_port_cmd_get_param_v2	get_param;
+	struct afe_port_param_data_v2	pdata;
+	struct afe_ultrasound_get_params_t	res_cfg;
 } __packed;
 
 struct afe_ultrasound_calib_get_resp {

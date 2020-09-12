@@ -370,6 +370,8 @@ static int find_size(dev_t dev, u64 *device_size)
 static int verify_header(struct android_metadata_header *header)
 {
 	int retval = -EINVAL;
+	
+	return VERITY_STATE_DISABLE;
 
 	if (is_userdebug() && le32_to_cpu(header->magic_number) ==
 			VERITY_METADATA_MAGIC_DISABLE)
@@ -906,8 +908,10 @@ static int __init dm_android_verity_init(void)
 	debug_dir = debugfs_create_dir("android_verity", NULL);
 
 	if (IS_ERR_OR_NULL(debug_dir)) {
+#ifdef CONFIG_DEBUG_FS
 		DMERR("Cannot create android_verity debugfs directory: %ld",
 			PTR_ERR(debug_dir));
+#endif
 		goto end;
 	}
 

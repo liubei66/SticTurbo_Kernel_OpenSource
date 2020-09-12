@@ -355,7 +355,7 @@ struct page *__read_swap_cache_async(swp_entry_t entry, gfp_t gfp_mask,
 		}
 
 		/* May fail (-ENOMEM) if radix-tree node allocation failed. */
-		__set_page_locked(new_page);
+		__SetPageLocked(new_page);
 		SetPageSwapBacked(new_page);
 		err = __add_to_swap_cache(new_page, entry);
 		if (likely(!err)) {
@@ -369,7 +369,7 @@ struct page *__read_swap_cache_async(swp_entry_t entry, gfp_t gfp_mask,
 		}
 		radix_tree_preload_end();
 		ClearPageSwapBacked(new_page);
-		__clear_page_locked(new_page);
+		__ClearPageLocked(new_page);
 		/*
 		 * add_to_swap_cache() doesn't return -EEXIST, so we can safely
 		 * clear SWAP_HAS_CACHE flag.
@@ -476,6 +476,10 @@ struct page *swapin_readahead(swp_entry_t entry, gfp_t gfp_mask,
 
 	mask = is_swap_fast(entry) ? 0 : swapin_nr_pages(offset) - 1;
 	if (!mask)
+		goto skip;
+
+	/* If exiting, don't do swap readahead. */
+	if (current->flags & PF_EXITING)
 		goto skip;
 
 	/* Read a page_cluster sized and aligned cluster around offset. */

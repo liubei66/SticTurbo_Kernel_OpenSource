@@ -12,6 +12,7 @@
  * Copyright (c) 2009     Shrikar Archak
  * Copyright (c) 2003-2011 Stony Brook University
  * Copyright (c) 2003-2011 The Research Foundation of SUNY
+ * Copyright (C) 2020 Amktiao.
  *
  * This file is dual licensed.  It may be redistributed and/or modified
  * under the terms of the Apache 2.0 License OR version 2 of the GNU
@@ -34,6 +35,8 @@ enum {
 	Opt_reserved_mb,
 	Opt_gid_derivation,
 	Opt_default_normal,
+	Opt_nocache,
+	Opt_unshared_obb,
 	Opt_err,
 };
 
@@ -47,7 +50,9 @@ static const match_table_t sdcardfs_tokens = {
 	{Opt_multiuser, "multiuser"},
 	{Opt_gid_derivation, "derive_gid"},
 	{Opt_default_normal, "default_normal"},
+	{Opt_unshared_obb, "unshared_obb"},
 	{Opt_reserved_mb, "reserved_mb=%u"},
+	{Opt_nocache, "nocache"},
 	{Opt_err, NULL}
 };
 
@@ -71,6 +76,7 @@ static int parse_options(struct super_block *sb, char *options, int silent,
 	/* by default, gid derivation is off */
 	opts->gid_derivation = false;
 	opts->default_normal = false;
+	opts->nocache = false;
 
 	*debug = 0;
 
@@ -87,7 +93,7 @@ static int parse_options(struct super_block *sb, char *options, int silent,
 
 		switch (token) {
 		case Opt_debug:
-			*debug = 1;
+			*debug = 0;
 			break;
 		case Opt_fsuid:
 			if (match_int(&args[0], &option))
@@ -127,6 +133,12 @@ static int parse_options(struct super_block *sb, char *options, int silent,
 			break;
 		case Opt_default_normal:
 			opts->default_normal = true;
+			break;
+		case Opt_nocache:
+			opts->nocache = true;
+			break;
+		case Opt_unshared_obb:
+			opts->unshared_obb = true;
 			break;
 		/* unknown option */
 		default:
@@ -168,7 +180,7 @@ int parse_options_remount(struct super_block *sb, char *options, int silent,
 
 		switch (token) {
 		case Opt_debug:
-			debug = 1;
+			debug = 0;
 			break;
 		case Opt_gid:
 			if (match_int(&args[0], &option))
@@ -181,13 +193,16 @@ int parse_options_remount(struct super_block *sb, char *options, int silent,
 				return 0;
 			vfsopts->mask = option;
 			break;
+		case Opt_unshared_obb:
 		case Opt_default_normal:
 		case Opt_multiuser:
 		case Opt_userid:
 		case Opt_fsuid:
 		case Opt_fsgid:
 		case Opt_reserved_mb:
-			pr_warn("Option \"%s\" can't be changed during remount\n", p);
+		case Opt_gid_derivation:
+			if (!silent)
+				pr_warn("Option \"%s\" can't be changed during remount\n", p);
 			break;
 		/* unknown option */
 		default:
@@ -264,7 +279,7 @@ static int sdcardfs_read_super(struct vfsmount *mnt, struct super_block *sb,
 
 	pr_info("sdcardfs: dev_name -> %s\n", dev_name);
 	pr_info("sdcardfs: options -> %s\n", (char *)raw_data);
-	pr_info("sdcardfs: mnt -> %p\n", mnt);
+	pr_info("sdcardfs: mnt -> %pK\n", mnt);
 
 	/* parse lower path */
 	err = kern_path(dev_name, LOOKUP_FOLLOW | LOOKUP_DIRECTORY,

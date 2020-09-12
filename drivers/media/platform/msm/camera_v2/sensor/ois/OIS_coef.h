@@ -4,7 +4,7 @@
 * Rule        : Use TAB 4
 *
 * Copyright(c) Rohm Co.,Ltd. All rights reserved
-* Copyright (C) 2019 XiaoMi, Inc.
+* Copyright (C) 2018 XiaoMi, Inc.
 ************************************************************************/
 /***** ROHM Confidential ***************************************************/
 #ifndef OIS_COEF_H

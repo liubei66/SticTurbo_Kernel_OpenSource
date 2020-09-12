@@ -5879,7 +5879,9 @@ static void cpr3_regulator_debugfs_ctrl_add(struct cpr3_controller *ctrl)
 	if (cpr3_debugfs_base == NULL) {
 		cpr3_debugfs_base = debugfs_create_dir("cpr3-regulator", NULL);
 		if (IS_ERR_OR_NULL(cpr3_debugfs_base)) {
+#ifdef CONFIG_DEBUG_FS
 			cpr3_err(ctrl, "cpr3-regulator debugfs base directory creation failed\n");
+#endif
 			cpr3_debugfs_base = NULL;
 			return;
 		}
@@ -6487,11 +6489,12 @@ int cpr3_regulator_unregister(struct cpr3_controller *ctrl)
 	if (ctrl->irq && !cpumask_empty(&ctrl->irq_affinity_mask))
 		unregister_hotcpu_notifier(&ctrl->cpu_hotplug_notifier);
 
-	if (ctrl->ctrl_type == CPR_CTRL_TYPE_CPR4)
+	if (ctrl->ctrl_type == CPR_CTRL_TYPE_CPR4) {
 		rc = cpr3_ctrl_clear_cpr4_config(ctrl);
 		if (rc)
 			cpr3_err(ctrl, "failed to clear CPR4 configuration,rc=%d\n",
 				rc);
+	}
 
 	cpr3_ctrl_loop_disable(ctrl);
 

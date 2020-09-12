@@ -36,10 +36,8 @@
 #define TIMEOUT_TIMER_MS 40000
 #define TEST_MAX_TESTCASE_ROUNDS 15
 
-
 static DEFINE_MUTEX(blk_dev_test_list_lock);
 static LIST_HEAD(blk_dev_test_list);
-
 
 /**
  * test_iosched_mark_test_completion() - Wakeup the debugfs
@@ -49,11 +47,6 @@ void test_iosched_mark_test_completion(struct test_iosched *tios)
 {
 	if (!tios)
 		return;
-
-	pr_info("%s: mark test is completed, test_count=%d, ", __func__,
-		tios->test_count);
-	pr_info("%s: urgent_count=%d, reinsert_count=%d,", __func__,
-		tios->urgent_count, tios->reinsert_count);
 
 	tios->test_state = TEST_COMPLETED;
 	wake_up(&tios->wait_q);
@@ -82,12 +75,6 @@ void check_test_completion(struct test_iosched *tios)
 	if (!list_empty(&tios->test_queue)
 			|| !list_empty(&tios->reinsert_queue)
 			|| !list_empty(&tios->urgent_queue)) {
-		pr_info("%s: Test still not completed,", __func__);
-		pr_info("%s: test_count=%d, reinsert_count=%d", __func__,
-			tios->test_count, tios->reinsert_count);
-		pr_info("%s: dispatched_count=%d, urgent_count=%d", __func__,
-			tios->dispatched_count,
-			tios->urgent_count);
 		goto exit;
 	}
 

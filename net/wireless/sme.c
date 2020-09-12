@@ -106,7 +106,7 @@ static int cfg80211_conn_scan(struct wireless_dev *wdev)
 		return -ENOMEM;
 
 	if (wdev->conn->params.channel) {
-		enum ieee80211_band band = wdev->conn->params.channel->band;
+		enum nl80211_band band = wdev->conn->params.channel->band;
 		struct ieee80211_supported_band *sband =
 			wdev->wiphy->bands[band];
 
@@ -118,11 +118,11 @@ static int cfg80211_conn_scan(struct wireless_dev *wdev)
 		request->rates[band] = (1 << sband->n_bitrates) - 1;
 	} else {
 		int i = 0, j;
-		enum ieee80211_band band;
+		enum nl80211_band band;
 		struct ieee80211_supported_band *bands;
 		struct ieee80211_channel *channel;
 
-		for (band = 0; band < IEEE80211_NUM_BANDS; band++) {
+		for (band = 0; band < NUM_NL80211_BANDS; band++) {
 			bands = wdev->wiphy->bands[band];
 			if (!bands)
 				continue;
@@ -498,7 +498,7 @@ static int cfg80211_sme_get_conn_ies(struct wireless_dev *wdev,
 	if (!buf)
 		return -ENOMEM;
 
-	if (ies_len) {
+	if (ies_len && ies) {
 		static const u8 before_extcapa[] = {
 			/* not listing IEs expected to be created by driver */
 			WLAN_EID_RSN,
@@ -757,6 +757,7 @@ void __cfg80211_connect_result(struct net_device *dev,
 		kzfree(wdev->connect_keys);
 		wdev->connect_keys = NULL;
 		wdev->ssid_len = 0;
+		wdev->conn_owner_nlportid = 0;
 		if (cr->bss) {
 			cfg80211_unhold_bss(bss_from_pub(cr->bss));
 			cfg80211_put_bss(wdev->wiphy, cr->bss);
@@ -1017,8 +1018,7 @@ void __cfg80211_disconnected(struct net_device *dev, const u8 *ie,
 
 	wdev->current_bss = NULL;
 	wdev->ssid_len = 0;
-	kzfree(wdev->connect_keys);
-	wdev->connect_keys = NULL;
+	wdev->conn_owner_nlportid = 0;
 
 	nl80211_send_disconnected(rdev, dev, reason, ie, ie_len, from_ap);
 
@@ -1150,6 +1150,8 @@ int cfg80211_disconnect(struct cfg80211_registered_device *rdev,
 	kzfree(wdev->connect_keys);
 	wdev->connect_keys = NULL;
 
+	wdev->conn_owner_nlportid = 0;
+
 	if (wdev->conn)
 		err = cfg80211_sme_disconnect(wdev, reason);
 	else if (!rdev->ops->disconnect)
@@ -1158,4 +1160,33 @@ int cfg80211_disconnect(struct cfg80211_registered_device *rdev,
 		err = rdev_disconnect(rdev, dev, reason);
 
 	return err;
+}
+
+/*
+ * Used to clean up after the connection / connection attempt owner socket
+ * disconnects
+ */
+void cfg80211_autodisconnect_wk(struct work_struct *work)
+{
+	struct wireless_dev *wdev =
+		container_of(work, struct wireless_dev, disconnect_wk);
+	struct cfg80211_registered_device *rdev = wiphy_to_rdev(wdev->wiphy);
+
+	wdev_lock(wdev);
+
+	if (wdev->conn_owner_nlportid) {
+		/*
+		 * Use disconnect_bssid if still connecting and ops->disconnect
+		 * not implemented.  Otherwise we can use cfg80211_disconnect.
+		 */
+		if (rdev->ops->disconnect || wdev->current_bss)
+			cfg80211_disconnect(rdev, wdev->netdev,
+					    WLAN_REASON_DEAUTH_LEAVING, true);
+		else
+			cfg80211_mlme_deauth(rdev, wdev->netdev,
+					     wdev->disconnect_bssid, NULL, 0,
+					     WLAN_REASON_DEAUTH_LEAVING, false);
+	}
+
+	wdev_unlock(wdev);
 }

@@ -59,7 +59,6 @@ static ssize_t brightness_store(struct device *dev,
 	led_cdev->usr_brightness_req = state;
 
 	ret = size;
-	sysfs_notify(&led_cdev->dev->kobj, NULL, "brightness");
 unlock:
 	mutex_unlock(&led_cdev->led_access);
 	return ret;
@@ -266,11 +265,12 @@ void led_classdev_unregister(struct led_classdev *led_cdev)
 	up_write(&led_cdev->trigger_lock);
 #endif
 
-	cancel_work_sync(&led_cdev->set_brightness_work);
-
 	/* Stop blinking */
 	led_stop_software_blink(led_cdev);
+
 	led_set_brightness(led_cdev, LED_OFF);
+
+	flush_work(&led_cdev->set_brightness_work);
 
 	device_unregister(led_cdev->dev);
 

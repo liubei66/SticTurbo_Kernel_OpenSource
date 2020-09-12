@@ -46,9 +46,17 @@ config IOSCHED_CFQ
 config CFQ_GROUP_IOSCHED
 	bool "CFQ Group Scheduling support"
 	depends on IOSCHED_CFQ && BLK_CGROUP
-	default n
+	default y
 	---help---
 	  Enable group IO scheduling in CFQ.
+	  
+config IOSCHED_FIOPS
+	tristate "IOPS based I/O scheduler"
+	default y
+	
+config IOSCHED_ZEN
+	tristate "ZEN I/O scheduler"
+	default y
 
 choice
 	prompt "Default I/O scheduler"
@@ -65,6 +73,12 @@ choice
 
 	config DEFAULT_NOOP
 		bool "No-op"
+		
+	config DEFAULT_FIOPS
+		bool "FIOPS" if IOSCHED_FIOPS=y
+		
+	config DEFAULT_ZEN
+		bool "ZEN" if IOSCHED_ZEN=y
 
 endchoice
 
@@ -73,6 +87,8 @@ config DEFAULT_IOSCHED
 	default "deadline" if DEFAULT_DEADLINE
 	default "cfq" if DEFAULT_CFQ
 	default "noop" if DEFAULT_NOOP
+	default "fiops" if DEFAULT_FIOPS
+	default "zen" if DEFAULT_ZEN
 
 endmenu
 

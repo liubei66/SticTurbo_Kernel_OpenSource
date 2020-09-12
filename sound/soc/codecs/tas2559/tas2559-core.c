@@ -1,7 +1,7 @@
 /*
 ** =============================================================================
 ** Copyright (c) 2016  Texas Instruments Inc.
-** Copyright (C) 2019 XiaoMi, Inc.
+** Copyright (C) 2017 XiaoMi, Inc.
 **
 ** This program is free software; you can redistribute it and/or modify it under
 ** the terms of the GNU General Public License as published by the Free Software
@@ -865,12 +865,11 @@ static void failsafe(struct tas2559_priv *pTAS2559)
 	if (hrtimer_active(&pTAS2559->mtimer))
 		hrtimer_cancel(&pTAS2559->mtimer);
 
-	if (pTAS2559->mnRestart < RESTART_MAX)
-	{
-		pTAS2559->mnRestart ++;
+	if (pTAS2559->mnRestart < RESTART_MAX) {
+		pTAS2559->mnRestart++;
 		msleep(100);
 		dev_err(pTAS2559->dev, "I2C COMM error, restart SmartAmp.\n");
-		schedule_delayed_work(&pTAS2559->irq_work, msecs_to_jiffies(100));
+		queue_delayed_work(system_power_efficient_wq, &pTAS2559->irq_work, msecs_to_jiffies(100));
 		return;
 	}
 
@@ -905,7 +904,7 @@ static int tas2559_load_coefficient(struct tas2559_priv *pTAS2559,
 {
 	int nResult = 0;
 	struct TPLL *pPLL;
-	struct TProgram *pProgram;
+	struct TProgram *pProgram = NULL;
 	struct TConfiguration *pPrevConfiguration;
 	struct TConfiguration *pNewConfiguration;
 	enum channel chl;
