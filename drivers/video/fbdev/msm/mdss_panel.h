@@ -20,6 +20,9 @@
 #include <linux/stringify.h>
 #include <linux/types.h>
 #include <linux/debugfs.h>
+#include <linux/of_gpio.h>
+#include <linux/gpio.h>
+#include <linux/interrupt.h>
 
 /* panel id type */
 struct panel_id {
@@ -27,8 +30,8 @@ struct panel_id {
 	u16 type;
 };
 
-#define DEFAULT_FRAME_RATE	60
-#define DEFAULT_ROTATOR_FRAME_RATE 120
+#define DEFAULT_FRAME_RATE	62
+#define DEFAULT_ROTATOR_FRAME_RATE 135
 #define ROTATOR_LOW_FRAME_RATE 30
 
 #define MDSS_DSI_MAX_ESC_CLK_RATE_HZ	19200000
@@ -65,7 +68,7 @@ struct panel_id {
 
 static inline const char *mdss_panel2str(u32 panel)
 {
-	static const char const *names[] = {
+	static const char *names[] = {
 #define PANEL_NAME(n) [n ## _PANEL] = __stringify(n)
 		PANEL_NAME(MIPI_VIDEO),
 		PANEL_NAME(MIPI_CMD),
@@ -810,6 +813,8 @@ struct mdss_panel_info {
 	u32 tp_rst_seq_len;
 	u32 vic; /* video identification code */
 	u32 deep_color;
+	bool is_ce_mode; /* CE video format */
+	u8 csc_type;
 	u32 esd_err_irq_gpio;
 	u32 esd_err_irq;
 	u32 esd_interrupt_flags;
@@ -1009,6 +1014,7 @@ struct mdss_panel_data {
 	 * and teardown.
 	 */
 	int (*event_handler) (struct mdss_panel_data *pdata, int e, void *arg);
+	enum mdss_mdp_csc_type (*get_csc_type)(struct mdss_panel_data *pdata);
 	struct device_node *(*get_fb_node)(struct platform_device *pdev);
 
 	struct list_head timings_list;
@@ -1026,6 +1032,7 @@ struct mdss_panel_data {
 	bool panel_disable_mode;
 
 	int panel_te_gpio;
+	bool is_te_irq_enabled;
 	struct completion te_done;
 	void (*panel_dead_report)(void);
 };
@@ -1037,6 +1044,23 @@ struct mdss_panel_debugfs_info {
 	u32 override_flag;
 	struct mdss_panel_debugfs_info *next;
 };
+
+static inline void panel_update_te_irq(struct mdss_panel_data *pdata,
+					bool enable)
+{
+	if (!pdata) {
+		pr_err("Invalid Params\n");
+		return;
+	}
+
+	if (enable && !pdata->is_te_irq_enabled) {
+		enable_irq(gpio_to_irq(pdata->panel_te_gpio));
+		pdata->is_te_irq_enabled = true;
+	} else if (!enable && pdata->is_te_irq_enabled) {
+		disable_irq(gpio_to_irq(pdata->panel_te_gpio));
+		pdata->is_te_irq_enabled = false;
+	}
+}
 
 /**
  * mdss_get_panel_framerate() - get panel frame rate based on panel information
