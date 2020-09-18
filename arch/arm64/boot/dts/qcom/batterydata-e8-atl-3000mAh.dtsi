@@ -1,4 +1,3 @@
-
 qcom,e1_atl_3000mAh {
 	qcom, = <24>;
 	qcom,max-voltage-uv = <4400000>;

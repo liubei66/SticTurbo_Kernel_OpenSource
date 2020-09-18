@@ -1,6 +1,7 @@
 /*
  * Copyright (C) 2011 XiaoMi, Inc.
  * Copyright (C) 2019 XiaoMi, Inc.
+ * Copyright (C) 2020 Amktiao.
  *
  * This software is licensed under the terms of the GNU General Public
  * License version 2, as published by the Free Software Foundation, and
@@ -13,7 +14,7 @@
  *
  */
 #include <linux/input/ft5x46_ts.h>
-#include <linux/hwinfo.h>
+
 #include "ft8716_pramboot.h"
 #ifdef CONFIG_TOUCHSCREEN_XIAOMI_TOUCHFEATURE
 #include <../xiaomi/xiaomi_touch.h>
@@ -201,6 +202,7 @@ struct ft5x46_packet {
 	u16 length;
 	u8  payload[FT5X0X_PACKET_LENGTH];
 };
+
 struct ft5x46_rd_flash_packet {
 	u8 magic;
 	u8 addr_h;
@@ -222,7 +224,7 @@ struct ft5x46_mode_switch {
 static struct ft5x46_keypad_data *vir_keypad;
 struct ft5x46_data *ft_data;
 
-static int ft5x46_recv_byte(struct ft5x46_data *ft5x46, u8 len, ...)
+static int ft5x46_recv_byte(struct ft5x46_data *ft5x46, int len, ...)
 {
 	int error = 0;
 	va_list varg;
@@ -252,7 +254,7 @@ static int ft5x46_recv_block(struct ft5x46_data *ft5x46,
 	return ft5x46->bops->recv(ft5x46->dev, buf, len);
 }
 
-static int ft5x46_send_byte(struct ft5x46_data *ft5x46, u8 len, ...)
+static int ft5x46_send_byte(struct ft5x46_data *ft5x46, int len, ...)
 {
 	va_list varg;
 	u8 i, buf[len];
@@ -1265,7 +1267,6 @@ static int ft8716_load_firmware(struct ft5x46_data *ft5x46,
 	u32 check_off = 0x20;
 	u32 start_addr = 0x00;
 	u8 packet_buf[16 + FT5X0X_PACKET_LENGTH];
-	u8 *tp_maker = NULL;
 
 	const struct firmware *fw;
 	int packet_num;
@@ -1304,10 +1305,6 @@ static int ft8716_load_firmware(struct ft5x46_data *ft5x46,
 			ft8716_reset_firmware(ft5x46);
 			return error;
 		}
-
-		if (tp_maker == NULL)
-			dev_err(ft5x46->dev, "fail to alloc vendor name memory\n");
-
 		ft5x46->lockdown_info_acquired = true;
 		wake_up(&ft5x46->lockdown_info_acquired_wq);
 	}
@@ -1792,10 +1789,10 @@ static irqreturn_t ft5x46_interrupt(int irq, void *dev_id)
 				error = ft5x46_read_gesture(ft5x46);
 				if (error)
 					dev_err(ft5x46->dev, "Failed to read wakeup gesture\n");
-			} else
+			} else {
 				dev_err(ft5x46->dev, "Chip is in suspend, but wakeup gesture is not enabled.\n");
-
-			goto out;
+			}
+		goto out;
 	}
 
 	error = ft5x46_read_touchdata(ft5x46);
@@ -1920,6 +1917,7 @@ out:
 #ifdef CONFIG_TOUCHSCREEN_FT5X46P_PROXIMITY
 	wake_up(&ft5x46->resume_wq);
 #endif
+
 	return 0;
 }
 EXPORT_SYMBOL_GPL(ft5x46_resume);

@@ -5,6 +5,7 @@
  *
  * Copyright (C) 2012 Alexandra Chin <alexandra.chin@tw.synaptics.com>
  * Copyright (C) 2012 Scott Lin <scott.lin@tw.synaptics.com>
+ * Copyright (C) 2018 XiaoMi, Inc.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -502,7 +503,6 @@ static loff_t rmidev_llseek(struct file *filp, loff_t off, int whence)
 	struct synaptics_rmi4_data *rmi4_data = rmidev->rmi4_data;
 
 	if (IS_ERR(dev_data)) {
-		pr_err("%s: Pointer of char device data is invalid", __func__);
 		return -EBADF;
 	}
 
@@ -561,7 +561,6 @@ static ssize_t rmidev_read(struct file *filp, char __user *buf,
 	rmi = &(rmi4_data->rmi4_mod_info);
 
 	if (IS_ERR(dev_data)) {
-		pr_err("%s: Pointer of char device data is invalid", __func__);
 		return -EBADF;
 	}
 
@@ -632,7 +631,6 @@ static ssize_t rmidev_write(struct file *filp, const char __user *buf,
 	struct rmidev_data *dev_data = filp->private_data;
 
 	if (IS_ERR(dev_data)) {
-		pr_err("%s: Pointer of char device data is invalid", __func__);
 		return -EBADF;
 	}
 
@@ -716,7 +714,7 @@ static int rmidev_release(struct inode *inp, struct file *filp)
 	if (dev_data->ref_count < 0)
 		dev_data->ref_count = 0;
 
-//	rmi4_data->reset_device(rmi4_data, false);
+
 	rmi4_data->irq_enable(rmi4_data, true, false);
 
 	rmi4_data->stay_awake = false;
@@ -776,8 +774,6 @@ static int rmidev_create_device_class(void)
 	rmidev_device_class = class_create(THIS_MODULE, DEVICE_CLASS_NAME);
 
 	if (IS_ERR(rmidev_device_class)) {
-		pr_err("%s: Failed to create /dev/%s\n",
-				__func__, CHAR_DEVICE_NAME);
 		return -ENODEV;
 	}
 

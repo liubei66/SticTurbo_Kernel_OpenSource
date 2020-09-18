@@ -1,0 +1,33 @@
+SticTurbo Kernel Control (SticTurbo Kernel)
+
+This kernel module can change the function options of the kernel
+
+What:		/sys/module/stickernel/parameters/sticgame
+Date		2020-08-24 CST
+Contact:	"LiuZiwei"
+Description:
+		Enabling the game space will shield the system and kernel temperature control, and try to improve the graphics performance and overhead delay, and accelerate the game as much as possible.
+
+What:		/sys/module/stickernel/parameters/HBM
+Date		2020-07-11 CST ShenZhen
+Contact:	"LiuZiwei"
+Description:
+		Increase the screen brightness from "4095" to "4360".
+
+What:		/sys/module/stickernel/parameters/CPU_VOLTAGE
+Date		2020-08-10 CST
+Contact:	"CaiWenlong"
+Description:
+		Here you can view the CPU voltage and change the CPU voltage.
+
+What:		/sys/module/stickernel/parameters/sched_power
+Date		2020-08-03 CST ShangHai
+Contact:	"PengZiMing"
+Description:
+		Enable sched power saving mode.
+
+What:		/sys/module/stickernel/parameters/charging_enabled
+Date		2020-08-26 CST
+Contact:	"ZhaoYuenan"
+Description:
+		Enable/disable battery charging.

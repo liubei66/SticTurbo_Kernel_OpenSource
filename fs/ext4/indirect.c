@@ -526,7 +526,6 @@ int ext4_ind_map_blocks(handle_t *handle, struct inode *inode,
 	int count = 0;
 	ext4_fsblk_t first_block = 0;
 
-	trace_ext4_ind_map_blocks_enter(inode, map->m_lblk, map->m_len, flags);
 	J_ASSERT(!(ext4_test_inode_flag(inode, EXT4_INODE_EXTENTS)));
 	J_ASSERT(handle != NULL || (flags & EXT4_GET_BLOCKS_CREATE) == 0);
 	depth = ext4_block_to_path(inode, map->m_lblk, offsets,
@@ -650,7 +649,6 @@ cleanup:
 		partial--;
 	}
 out:
-	trace_ext4_ind_map_blocks_exit(inode, flags, map, err);
 	return err;
 }
 

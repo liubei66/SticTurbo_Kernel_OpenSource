@@ -66,7 +66,7 @@
 #define HASH(addr) (((__force u32)addr^((__force u32)addr>>4))&0xF)
 
 static bool log_ecn_error = true;
-module_param(log_ecn_error, bool, 0644);
+module_param(log_ecn_error, bool, 0);
 MODULE_PARM_DESC(log_ecn_error, "Log packets received with corrupted ECN");
 
 static int ipip6_tunnel_init(struct net_device *dev);
@@ -1856,7 +1856,6 @@ static int __net_init sit_init_net(struct net *net)
 
 err_reg_dev:
 	ipip6_dev_free(sitn->fb_tunnel_dev);
-	free_netdev(sitn->fb_tunnel_dev);
 err_alloc_dev:
 	return err;
 }

@@ -316,6 +316,7 @@ struct xhci_op_regs {
 #define XDEV_U3		(0x3 << 5)
 #define XDEV_INACTIVE	(0x6 << 5)
 #define XDEV_POLLING	(0x7 << 5)
+#define XDEV_RECOVERY	(0x8 << 5)
 #define XDEV_COMP_MODE  (0xa << 5)
 #define XDEV_RESUME	(0xf << 5)
 /* true: port has power (see HCC_PPC) */
@@ -1774,6 +1775,7 @@ static inline int xhci_link_trb_quirk(struct xhci_hcd *xhci)
 }
 
 /* xHCI debugging */
+#ifdef CONFIG_DEBUG_KERNEL
 void xhci_print_ir_set(struct xhci_hcd *xhci, int set_num);
 void xhci_print_registers(struct xhci_hcd *xhci);
 void xhci_dbg_regs(struct xhci_hcd *xhci);
@@ -1793,6 +1795,27 @@ void xhci_dbg_ep_rings(struct xhci_hcd *xhci,
 		struct xhci_virt_ep *ep);
 void xhci_dbg_trace(struct xhci_hcd *xhci, void (*trace)(struct va_format *),
 			const char *fmt, ...);
+#else
+static inline void xhci_print_ir_set(struct xhci_hcd *xhci, int set_num) {}
+static inline void xhci_print_registers(struct xhci_hcd *xhci) {}
+static inline void xhci_dbg_regs(struct xhci_hcd *xhci) {}
+static inline void xhci_print_run_regs(struct xhci_hcd *xhci) {}
+static inline void xhci_print_trb_offsets(struct xhci_hcd *xhci, union xhci_trb *trb) {}
+static inline void xhci_debug_trb(struct xhci_hcd *xhci, union xhci_trb *trb) {}
+static inline void xhci_debug_segment(struct xhci_hcd *xhci, struct xhci_segment *seg) {}
+static inline void xhci_debug_ring(struct xhci_hcd *xhci, struct xhci_ring *ring) {}
+static inline void xhci_dbg_erst(struct xhci_hcd *xhci, struct xhci_erst *erst) {}
+static inline void xhci_dbg_cmd_ptrs(struct xhci_hcd *xhci) {}
+static inline void xhci_dbg_ring_ptrs(struct xhci_hcd *xhci, struct xhci_ring *ring) {}
+static inline void xhci_dbg_ctx(struct xhci_hcd *xhci, struct xhci_container_ctx *ctx, unsigned int last_ep) {}
+static inline char *xhci_get_slot_state(struct xhci_hcd *xhci,
+		struct xhci_container_ctx *ctx) { return ""; }
+static inline void xhci_dbg_ep_rings(struct xhci_hcd *xhci,
+		unsigned int slot_id, unsigned int ep_index,
+		struct xhci_virt_ep *ep) {}
+static inline void xhci_dbg_trace(struct xhci_hcd *xhci, void (*trace)(struct va_format *),
+			const char *fmt, ...) {}
+#endif
 
 /* xHCI memory management */
 void xhci_mem_cleanup(struct xhci_hcd *xhci);
@@ -1880,6 +1903,7 @@ int xhci_run(struct usb_hcd *hcd);
 void xhci_stop(struct usb_hcd *hcd);
 void xhci_shutdown(struct usb_hcd *hcd);
 int xhci_gen_setup(struct usb_hcd *hcd, xhci_get_quirks_t get_quirks);
+void xhci_shutdown(struct usb_hcd *hcd);
 void xhci_init_driver(struct hc_driver *drv,
 		      const struct xhci_driver_overrides *over);
 

@@ -9,7 +9,6 @@
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  */
-#include <linux/debugfs.h>
 #include <linux/err.h>
 #include <linux/fs.h>
 #include <linux/gfp.h>
@@ -253,10 +252,11 @@ struct deferred_cmd {
 	void *data;
 };
 
+static struct kmem_cache *kmem_deferred_cmd_pool;
+
 static uint32_t negotiate_features_v1(struct glink_transport_if *if_ptr,
 				      const struct glink_core_version *version,
 				      uint32_t features);
-static void register_debugfs_info(struct edge_info *einfo);
 
 static struct edge_info *edge_infos[NUM_SMEM_SUBSYSTEMS];
 static DEFINE_MUTEX(probe_lock);
@@ -264,26 +264,16 @@ static struct glink_core_version versions[] = {
 	{1, TRACER_PKT_FEATURE, negotiate_features_v1},
 };
 
-#define SMEM_IPC_LOG(einfo, str, id, param1, param2) do { \
-	if ((glink_xprt_debug_mask & QCOM_GLINK_DEBUG_ENABLE) \
-		&& (einfo->debug_mask & QCOM_GLINK_DEBUG_ENABLE)) \
-		ipc_log_string(einfo->log_ctx, \
-				"%s: Rx:%x:%x Tx:%x:%x Cmd:%x P1:%x P2:%x\n", \
-				str, einfo->rx_ch_desc->read_index, \
-				einfo->rx_ch_desc->write_index, \
-				einfo->tx_ch_desc->read_index, \
-				einfo->tx_ch_desc->write_index, \
-				id, param1, param2); \
-} while (0) \
+#define SMEM_IPC_LOG(einfo, str, id, param1, param2) ((void)0)
 
 enum {
 	QCOM_GLINK_DEBUG_ENABLE = 1U << 0,
 	QCOM_GLINK_DEBUG_DISABLE = 1U << 1,
 };
 
-static unsigned int glink_xprt_debug_mask = QCOM_GLINK_DEBUG_ENABLE;
+static unsigned int glink_xprt_debug_mask;
 module_param_named(debug_mask, glink_xprt_debug_mask,
-		   uint, 0664);
+		   uint, 0);
 
 /**
  * send_irq() - send an irq to a remote entity as an event signal
@@ -841,7 +831,7 @@ static bool queue_cmd(struct edge_info *einfo, void *cmd, void *data)
 	struct command *_cmd = cmd;
 	struct deferred_cmd *d_cmd;
 
-	d_cmd = kmalloc(sizeof(*d_cmd), GFP_ATOMIC);
+	d_cmd = kmem_cache_alloc(kmem_deferred_cmd_pool, GFP_ATOMIC);
 	if (!d_cmd) {
 		GLINK_ERR("%s: Discarding cmd %d\n", __func__, _cmd->id);
 		return false;
@@ -948,6 +938,7 @@ static void __rx_worker(struct edge_info *einfo, bool atomic_ctx)
 	char trash[FIFO_ALIGNMENT];
 	struct deferred_cmd *d_cmd;
 	void *cmd_data;
+	bool ret = false;
 
 	rcu_id = srcu_read_lock(&einfo->use_ref);
 
@@ -956,15 +947,22 @@ static void __rx_worker(struct edge_info *einfo, bool atomic_ctx)
 		return;
 	}
 
+	spin_lock_irqsave(&einfo->rx_lock, flags);
 	if (!einfo->rx_fifo) {
-		if (!get_rx_fifo(einfo))
+		ret = get_rx_fifo(einfo);
+		if (!ret) {
+			spin_unlock_irqrestore(&einfo->rx_lock, flags);
+			srcu_read_unlock(&einfo->use_ref, rcu_id);
 			return;
-		einfo->xprt_if.glink_core_if_ptr->link_up(&einfo->xprt_if);
+		}
 	}
+	spin_unlock_irqrestore(&einfo->rx_lock, flags);
+	if (ret)
+		einfo->xprt_if.glink_core_if_ptr->link_up(&einfo->xprt_if);
 
-	if ((atomic_ctx) && ((einfo->tx_resume_needed)
-	    || (einfo->tx_blocked_signal_sent)
-	    || (waitqueue_active(&einfo->tx_blocked_queue)))) /* tx waiting ?*/
+	if ((atomic_ctx) && ((einfo->tx_resume_needed) ||
+		(einfo->tx_blocked_signal_sent) ||
+		(waitqueue_active(&einfo->tx_blocked_queue)))) /* tx waiting ?*/
 		tx_wakeup_worker(einfo);
 
 	/*
@@ -997,7 +995,7 @@ static void __rx_worker(struct edge_info *einfo, bool atomic_ctx)
 			cmd.param1 = d_cmd->param1;
 			cmd.param2 = d_cmd->param2;
 			cmd_data = d_cmd->data;
-			kfree(d_cmd);
+			kmem_cache_free(kmem_deferred_cmd_pool, d_cmd);
 			SMEM_IPC_LOG(einfo, "kthread", cmd.id, cmd.param1,
 								cmd.param2);
 		} else {
@@ -1568,14 +1566,22 @@ static void tx_cmd_ch_remote_close_ack(struct glink_transport_if *if_ptr,
 static void subsys_up(struct glink_transport_if *if_ptr)
 {
 	struct edge_info *einfo;
+	unsigned long flags;
+	bool ret = false;
 
 	einfo = container_of(if_ptr, struct edge_info, xprt_if);
 	einfo->in_ssr = false;
+	spin_lock_irqsave(&einfo->rx_lock, flags);
 	if (!einfo->rx_fifo) {
-		if (!get_rx_fifo(einfo))
+		ret = get_rx_fifo(einfo);
+		if (!ret) {
+			spin_unlock_irqrestore(&einfo->rx_lock, flags);
 			return;
-		einfo->xprt_if.glink_core_if_ptr->link_up(&einfo->xprt_if);
+		}
 	}
+	spin_unlock_irqrestore(&einfo->rx_lock, flags);
+	if (ret)
+		einfo->xprt_if.glink_core_if_ptr->link_up(&einfo->xprt_if);
 }
 
 /**
@@ -1603,7 +1609,7 @@ static int ssr(struct glink_transport_if *if_ptr)
 						struct deferred_cmd, list_node);
 		list_del(&cmd->list_node);
 		kfree(cmd->data);
-		kfree(cmd);
+		kmem_cache_free(kmem_deferred_cmd_pool, cmd);
 	}
 
 	einfo->tx_resume_needed = false;
@@ -2595,7 +2601,6 @@ static int glink_smem_native_probe(struct platform_device *pdev)
 		GLINK_ERR("%s: unable to create log context for [%s:%s]\n",
 			__func__, einfo->xprt_cfg.edge,
 			einfo->xprt_cfg.name);
-	register_debugfs_info(einfo);
 	/* fake an interrupt on this edge to see if the remote side is up */
 	irq_handler(0, einfo);
 	return 0;
@@ -2851,7 +2856,6 @@ static int glink_rpm_native_probe(struct platform_device *pdev)
 		GLINK_ERR("%s: unable to create log context for [%s:%s]\n",
 			__func__, einfo->xprt_cfg.edge,
 			einfo->xprt_cfg.name);
-	register_debugfs_info(einfo);
 	einfo->xprt_if.glink_core_if_ptr->link_up(&einfo->xprt_if);
 	return 0;
 
@@ -3103,7 +3107,6 @@ static int glink_mailbox_probe(struct platform_device *pdev)
 		GLINK_ERR("%s: unable to create log context for [%s:%s]\n",
 			__func__, einfo->xprt_cfg.edge,
 			einfo->xprt_cfg.name);
-	register_debugfs_info(einfo);
 
 	writel_relaxed(mbox_cfg_size, mbox_size);
 	cfg_p_addr = smem_virt_to_phys(mbox_cfg);
@@ -3140,101 +3143,6 @@ missing_key:
 edge_info_alloc_fail:
 	return rc;
 }
-
-#if defined(CONFIG_DEBUG_FS)
-/**
- * debug_edge() - generates formatted text output displaying current edge state
- * @s:	File to send the output to.
- */
-static void debug_edge(struct seq_file *s)
-{
-	struct edge_info *einfo;
-	struct glink_dbgfs_data *dfs_d;
-
-	dfs_d = s->private;
-	einfo = dfs_d->priv_data;
-
-/*
- * formatted, human readable edge state output, ie:
- * TX/RX fifo information:
-ID|EDGE      |TX READ   |TX WRITE  |TX SIZE   |RX READ   |RX WRITE  |RX SIZE
--------------------------------------------------------------------------------
-01|mpss      |0x00000128|0x00000128|0x00000800|0x00000256|0x00000256|0x00001000
- *
- * Interrupt information:
- * EDGE      |TX INT    |RX INT
- * --------------------------------
- * mpss      |0x00000006|0x00000008
- */
-	seq_puts(s, "TX/RX fifo information:\n");
-	seq_printf(s, "%2s|%-10s|%-10s|%-10s|%-10s|%-10s|%-10s|%-10s\n",
-								"ID",
-								"EDGE",
-								"TX READ",
-								"TX WRITE",
-								"TX SIZE",
-								"RX READ",
-								"RX WRITE",
-								"RX SIZE");
-	seq_puts(s,
-		"-------------------------------------------------------------------------------\n");
-	if (!einfo)
-		return;
-
-	seq_printf(s, "%02i|%-10s|", einfo->remote_proc_id,
-					einfo->xprt_cfg.edge);
-	if (!einfo->rx_fifo)
-		seq_puts(s, "Link Not Up\n");
-	else
-		seq_printf(s, "0x%08X|0x%08X|0x%08X|0x%08X|0x%08X|0x%08X\n",
-						einfo->tx_ch_desc->read_index,
-						einfo->tx_ch_desc->write_index,
-						einfo->tx_fifo_size,
-						einfo->rx_ch_desc->read_index,
-						einfo->rx_ch_desc->write_index,
-						einfo->rx_fifo_size);
-
-	seq_puts(s, "\nInterrupt information:\n");
-	seq_printf(s, "%-10s|%-10s|%-10s\n", "EDGE", "TX INT", "RX INT");
-	seq_puts(s, "--------------------------------\n");
-	seq_printf(s, "%-10s|0x%08X|0x%08X\n", einfo->xprt_cfg.edge,
-						einfo->tx_irq_count,
-						einfo->rx_irq_count);
-}
-
-/**
- * register_debugfs_info() - initialize debugfs device entries
- * @einfo:	Pointer to specific edge_info for which register is called.
- */
-static void register_debugfs_info(struct edge_info *einfo)
-{
-	struct glink_dbgfs dfs;
-	char *curr_dir_name;
-	int dir_name_len;
-
-	dir_name_len = strlen(einfo->xprt_cfg.edge) +
-				strlen(einfo->xprt_cfg.name) + 2;
-	curr_dir_name = kmalloc(dir_name_len, GFP_KERNEL);
-	if (!curr_dir_name) {
-		GLINK_ERR("%s: Memory allocation failed\n", __func__);
-		return;
-	}
-
-	snprintf(curr_dir_name, dir_name_len, "%s_%s",
-				einfo->xprt_cfg.edge, einfo->xprt_cfg.name);
-	dfs.curr_name = curr_dir_name;
-	dfs.par_name = "xprt";
-	dfs.b_dir_create = false;
-	glink_debugfs_create("XPRT_INFO", debug_edge,
-					&dfs, einfo, false);
-	kfree(curr_dir_name);
-}
-
-#else
-static void register_debugfs_info(struct edge_info *einfo)
-{
-}
-#endif /* CONFIG_DEBUG_FS */
 
 static const struct of_device_id smem_match_table[] = {
 	{ .compatible = "qcom,glink-smem-native-xprt" },
@@ -3281,6 +3189,8 @@ static struct platform_driver glink_mailbox_driver = {
 static int __init glink_smem_native_xprt_init(void)
 {
 	int rc;
+
+	kmem_deferred_cmd_pool = KMEM_CACHE(deferred_cmd, SLAB_HWCACHE_ALIGN | SLAB_PANIC);
 
 	rc = platform_driver_register(&glink_smem_native_driver);
 	if (rc) {

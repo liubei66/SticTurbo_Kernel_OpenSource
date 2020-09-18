@@ -846,15 +846,12 @@ static void update_curr_dl(struct rq *rq)
 	}
 
 	/* kick cpufreq (see the comment in kernel/sched/sched.h). */
-	cpufreq_update_this_cpu(rq, SCHED_CPUFREQ_DL);
+	cpufreq_update_util(rq, SCHED_CPUFREQ_DL);
 
 	schedstat_set(curr->se.statistics.exec_max,
 		      max(curr->se.statistics.exec_max, delta_exec));
 
 	curr->se.sum_exec_runtime += delta_exec;
-#ifdef CONFIG_PACKAGE_RUNTIME_INFO
-	update_task_runtime_info(curr, delta_exec, cpu_of(rq));
-#endif
 	account_group_exec_runtime(curr, delta_exec);
 
 	curr->se.exec_start = rq_clock_task(rq);
@@ -1942,6 +1939,7 @@ const struct sched_class dl_sched_class = {
 	.update_curr		= update_curr_dl,
 #ifdef CONFIG_SCHED_WALT
 	.fixup_walt_sched_stats	= fixup_walt_sched_stats_common,
+	.fixup_cumulative_runnable_avg = walt_fixup_cumulative_runnable_avg,
 #endif
 };
 

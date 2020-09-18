@@ -1780,14 +1780,14 @@ EXPORT_SYMBOL(net_disable_timestamp);
 
 static inline void net_timestamp_set(struct sk_buff *skb)
 {
-	skb->tstamp.tv64 = 0;
+	skb->tstamp = 0;
 	if (static_key_false(&netstamp_needed))
 		__net_timestamp(skb);
 }
 
 #define net_timestamp_check(COND, SKB)			\
 	if (static_key_false(&netstamp_needed)) {		\
-		if ((COND) && !(SKB)->tstamp.tv64)	\
+		if ((COND) && !(SKB)->tstamp)	\
 			__net_timestamp(SKB);		\
 	}						\
 
@@ -2975,9 +2975,7 @@ static int xmit_one(struct sk_buff *skb, struct net_device *dev,
 		dev_queue_xmit_nit(skb, dev);
 
 	len = skb->len;
-	trace_net_dev_start_xmit(skb, dev);
 	rc = netdev_start_xmit(skb, dev, txq, more);
-	trace_net_dev_xmit(skb, rc, dev, len);
 
 	return rc;
 }
@@ -3006,9 +3004,7 @@ static int xmit_list(struct sk_buff *list, struct net_device *dev,
 	}
 
 	len = list->len;
-	trace_net_dev_start_xmit(list, dev);
 	rc = netdev_start_xmit(list, dev, txq, false);
-	trace_net_dev_xmit(list, rc, dev, len);
 
 	return rc;
 }
@@ -3030,7 +3026,7 @@ struct sk_buff *dev_hard_start_xmit(struct sk_buff *first, struct net_device *de
 		}
 
 		skb = next;
-		if (netif_xmit_stopped(txq) && skb) {
+		if (netif_tx_queue_stopped(txq) && skb) {
 			rc = NETDEV_TX_BUSY;
 			break;
 		}
@@ -3081,10 +3077,6 @@ static struct sk_buff *validate_xmit_skb(struct sk_buff *skb, struct net_device 
 	if (netif_needs_gso(skb, features)) {
 		struct sk_buff *segs;
 
-		__be16 src_port = tcp_hdr(skb)->source;
-		__be16 dest_port = tcp_hdr(skb)->dest;
-
-		trace_print_skb_gso(skb, src_port, dest_port);
 		segs = skb_gso_segment(skb, features);
 		if (IS_ERR(segs)) {
 			goto out_kfree_skb;
@@ -3494,7 +3486,6 @@ static int __dev_queue_xmit(struct sk_buff *skb, void *accel_priv,
 	txq = netdev_pick_tx(dev, skb, accel_priv);
 	q = rcu_dereference_bh(txq->qdisc);
 
-	trace_net_dev_queue(skb);
 	if (q->enqueue) {
 		rc = __dev_xmit_skb(skb, q, dev, txq);
 		goto out;
@@ -3928,7 +3919,6 @@ static int netif_rx_internal(struct sk_buff *skb)
 
 	net_timestamp_check(netdev_tstamp_prequeue, skb);
 
-	trace_netif_rx(skb);
 #ifdef CONFIG_RPS
 	if (static_key_false(&rps_needed)) {
 		struct rps_dev_flow voidflow, *rflow = &voidflow;
@@ -3972,7 +3962,6 @@ static int netif_rx_internal(struct sk_buff *skb)
 
 int netif_rx(struct sk_buff *skb)
 {
-	trace_netif_rx_entry(skb);
 
 	return netif_rx_internal(skb);
 }
@@ -3981,8 +3970,6 @@ EXPORT_SYMBOL(netif_rx);
 int netif_rx_ni(struct sk_buff *skb)
 {
 	int err;
-
-	trace_netif_rx_ni_entry(skb);
 
 	preempt_disable();
 	err = netif_rx_internal(skb);
@@ -4011,10 +3998,6 @@ static __latent_entropy void net_tx_action(struct softirq_action *h)
 			clist = clist->next;
 
 			WARN_ON(atomic_read(&skb->users));
-			if (likely(get_kfree_skb_cb(skb)->reason == SKB_REASON_CONSUMED))
-				trace_consume_skb(skb);
-			else
-				trace_kfree_skb(skb, net_tx_action);
 
 			if (skb->fclone != SKB_FCLONE_UNAVAILABLE)
 				__kfree_skb(skb);
@@ -4243,8 +4226,6 @@ static int __netif_receive_skb_core(struct sk_buff *skb, bool pfmemalloc)
 	int (*embms_recv)(struct sk_buff *skb);
 
 	net_timestamp_check(!netdev_tstamp_prequeue, skb);
-
-	trace_netif_receive_skb(skb);
 
 	orig_dev = skb->dev;
 
@@ -4477,7 +4458,6 @@ static int netif_receive_skb_internal(struct sk_buff *skb)
  */
 int netif_receive_skb(struct sk_buff *skb)
 {
-	trace_netif_receive_skb_entry(skb);
 
 	return netif_receive_skb_internal(skb);
 }
@@ -4840,7 +4820,6 @@ static gro_result_t napi_skb_finish(gro_result_t ret, struct sk_buff *skb)
 gro_result_t napi_gro_receive(struct napi_struct *napi, struct sk_buff *skb)
 {
 	skb_mark_napi_id(skb, napi);
-	trace_napi_gro_receive_entry(skb);
 
 	skb_gro_reset_offset(skb);
 
@@ -4964,8 +4943,6 @@ gro_result_t napi_gro_frags(struct napi_struct *napi)
 
 	if (!skb)
 		return GRO_DROP;
-
-	trace_napi_gro_frags_entry(skb);
 
 	return napi_frags_finish(napi, skb, dev_gro_receive(napi, skb));
 }
@@ -5219,7 +5196,6 @@ bool sk_busy_loop(struct sock *sk, int nonblock)
 
 			if (test_bit(NAPI_STATE_SCHED, &napi->state)) {
 				rc = napi->poll(napi, BUSY_POLL_BUDGET);
-				trace_napi_poll(napi, rc, BUSY_POLL_BUDGET);
 				if (rc == BUSY_POLL_BUDGET) {
 					napi_complete_done(napi, rc);
 					napi_schedule(napi);
@@ -5386,7 +5362,6 @@ static int napi_poll(struct napi_struct *n, struct list_head *repoll)
 
 		sd->current_napi = n;
 		work = n->poll(n, weight);
-		trace_napi_poll(n, work, weight);
 	}
 
 	WARN_ON_ONCE(work > weight);
@@ -6716,7 +6691,8 @@ static int __dev_set_mtu(struct net_device *dev, int new_mtu)
 	if (ops->ndo_change_mtu)
 		return ops->ndo_change_mtu(dev, new_mtu);
 
-	dev->mtu = new_mtu;
+	/* Pairs with all the lockless reads of dev->mtu in the stack */
+	WRITE_ONCE(dev->mtu, new_mtu);
 	return 0;
 }
 
@@ -7485,6 +7461,8 @@ int register_netdevice(struct net_device *dev)
 	ret = notifier_to_errno(ret);
 	if (ret) {
 		rollback_registered(dev);
+		rcu_barrier();
+
 		dev->reg_state = NETREG_UNREGISTERED;
 	}
 	/*
@@ -7638,7 +7616,6 @@ static void netdev_wait_allrefs(struct net_device *dev)
 			pr_emerg("unregister_netdevice: waiting for %s to become free. Usage count = %d\n",
 				 dev->name, refcnt);
 			warning_time = jiffies;
-			break;
 		}
 	}
 }
@@ -8185,17 +8162,12 @@ out:
 }
 EXPORT_SYMBOL_GPL(dev_change_net_namespace);
 
-static int dev_cpu_callback(struct notifier_block *nfb,
-			    unsigned long action,
-			    void *ocpu)
+static int dev_cpu_dead(unsigned int oldcpu)
 {
 	struct sk_buff **list_skb;
 	struct sk_buff *skb;
-	unsigned int cpu, oldcpu = (unsigned long)ocpu;
+	unsigned int cpu;
 	struct softnet_data *sd, *oldsd, *remsd;
-
-	if (action != CPU_DEAD && action != CPU_DEAD_FROZEN)
-		return NOTIFY_OK;
 
 	local_irq_disable();
 	cpu = smp_processor_id();
@@ -8253,7 +8225,7 @@ static int dev_cpu_callback(struct notifier_block *nfb,
 		input_queue_head_incr(oldsd);
 	}
 
-	return NOTIFY_OK;
+	return 0;
 }
 
 
@@ -8436,6 +8408,8 @@ static void __net_exit default_device_exit(struct net *net)
 
 		/* Push remaining network devices to init_net */
 		snprintf(fb_name, IFNAMSIZ, "dev%d", dev->ifindex);
+		if (__dev_get_by_name(&init_net, fb_name))
+			snprintf(fb_name, IFNAMSIZ, "dev%%d");
 		err = dev_change_net_namespace(dev, &init_net, fb_name);
 		if (err) {
 			pr_emerg("%s: failed to move %s to init_net: %d\n",
@@ -8590,7 +8564,9 @@ static int __init net_dev_init(void)
 	open_softirq(NET_TX_SOFTIRQ, net_tx_action);
 	open_softirq(NET_RX_SOFTIRQ, net_rx_action);
 
-	hotcpu_notifier(dev_cpu_callback, 0);
+	rc = cpuhp_setup_state_nocalls(CPUHP_NET_DEV_DEAD, "net/dev:dead",
+				       NULL, dev_cpu_dead);
+	WARN_ON(rc < 0);
 	dst_subsys_init();
 	rc = 0;
 out:

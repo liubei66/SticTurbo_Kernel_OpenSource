@@ -2,6 +2,7 @@
  * f_hid.c -- USB HID function driver
  *
  * Copyright (C) 2010 Fabien Chouteau <fabien.chouteau@barco.com>
+ * Copyright (C) 2020 Amktiao
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -753,6 +754,7 @@ static int hidg_bind(struct usb_configuration *c, struct usb_function *f)
 
 	device = device_create(hidg_class, NULL, dev, NULL,
 			       "%s%d", "hidg", hidg->minor);
+
 	if (IS_ERR(device)) {
 		status = PTR_ERR(device);
 		goto del;

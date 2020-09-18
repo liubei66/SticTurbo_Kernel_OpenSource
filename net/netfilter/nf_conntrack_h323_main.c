@@ -36,15 +36,15 @@
 
 /* Parameters */
 static unsigned int default_rrq_ttl __read_mostly = 300;
-module_param(default_rrq_ttl, uint, 0600);
+module_param(default_rrq_ttl, uint, 0);
 MODULE_PARM_DESC(default_rrq_ttl, "use this TTL if it's missing in RRQ");
 
 static int gkrouted_only __read_mostly = 1;
-module_param(gkrouted_only, int, 0600);
+module_param(gkrouted_only, int, 0);
 MODULE_PARM_DESC(gkrouted_only, "only accept calls from gatekeeper");
 
 static bool callforward_filter __read_mostly = true;
-module_param(callforward_filter, bool, 0600);
+module_param(callforward_filter, bool, 0);
 MODULE_PARM_DESC(callforward_filter, "only create call forwarding expectations "
 				     "if both endpoints are on different sides "
 				     "(determined by routing information)");

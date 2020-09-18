@@ -1,6 +1,5 @@
 /*
  * Copyright (c) 2017-2018, The Linux Foundation. All rights reserved.
- * Copyright (C) 2019 XiaoMi, Inc.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -252,10 +251,8 @@ static int clk_debug_measure_get(void *data, u64 *val)
 
 	meas_rate = clk_get_rate(hw->clk);
 	par = clk_hw_get_parent(measure);
-	if (!par) {
-		mutex_unlock(&clk_debug_lock);
+	if (!par)
 		return -EINVAL;
-	}
 
 	sw_rate = clk_get_rate(par->clk);
 	if (sw_rate && meas_rate >= (sw_rate * 2))

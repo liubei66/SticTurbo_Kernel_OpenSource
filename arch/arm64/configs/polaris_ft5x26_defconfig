@@ -1,0 +1,14 @@
+#
+# Automatically generated file; DO NOT EDIT.
+# Linux/arm64 4.9.236 Kernel Configuration
+#
+
+#
+# Ebbg
+#
+# CONFIG_TOUCHSCREEN_FT5X46 is not set
+# CONFIG_TOUCHSCREEN_FT5X46_CALIBRATE is not set
+# CONFIG_TOUCHSCREEN_FT5X46_TYPEB is not set
+# CONFIG_TOUCHSCREEN_FT5X46_I2C is not set
+# CONFIG_TOUCHSCREEN_FT5X46_SPI is not set
+# CONFIG_TOUCHSCREEN_FT5X46P_PROXIMITY is not set

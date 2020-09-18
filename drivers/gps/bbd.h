@@ -25,9 +25,8 @@
 #define __BBD_H__
 
 #pragma pack(4)
-typedef unsigned char   uint8_t;
-typedef unsigned short  uint16_t;
-typedef unsigned int    uint32_t;
+
+#include <linux/types.h>
 
 union long_union_t {
 	unsigned char uc[sizeof(unsigned long)];
@@ -41,13 +40,12 @@ union short_union_t {
 #pragma pack()
 
 
-//#define BBD_DEVICE_MAJOR	240
 enum {
 	BBD_MINOR_SHMD	    = 0,
 	BBD_MINOR_SENSOR    = 1,
 	BBD_MINOR_CONTROL   = 2,
 	BBD_MINOR_PATCH     = 3,
-	//BBD_MINOR_SSI_SPI_DEBUG = 5,	//NOT supported yet
+
 	BBD_DEVICE_INDEX
 };
 
@@ -71,7 +69,7 @@ enum {
 #define BBD_CTRL_SSI_PATCH_END		"SSI:PatchEnd"
 #define GPSD_SENSOR_ON		"GPSD:SENSOR_ON"
 #define GPSD_SENSOR_OFF		"GPSD:SENSOR_OFF"
-//#define DEBUG_1HZ_STAT
+
 
 #define HSI_RNGDMA_RX_BASE_ADDR       0x40104040
 #define HSI_RNGDMA_RX_SW_ADDR_OFFSET  0x40104050
