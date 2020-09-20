@@ -103,7 +103,7 @@ config F2FS_FAULT_INJECTION
 
 	  If unsure, say N.
 	  
-config F2FS_IO_TRACE
+config F2FS_FILE_TRACE
 	bool "F2FS filesystem trace"
 	depends on F2FS_FS
 	help
