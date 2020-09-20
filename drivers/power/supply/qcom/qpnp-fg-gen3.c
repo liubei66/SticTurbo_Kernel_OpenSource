@@ -5499,7 +5499,7 @@ static int calculate_average_current(struct fg_chip *fg)
 	}
 
 unchanged:
-	pr_info("current_now_ma=%d averaged_iavg_ma=%d\n",
+	pr_debug("current_now_ma=%d averaged_iavg_ma=%d\n",
 				fg->param.batt_ma, fg->param.batt_ma_avg);
 	return fg->param.batt_ma_avg;
 }
@@ -5572,7 +5572,7 @@ static void fg_battery_soc_smooth_tracking(struct fg_chip *fg)
 			power_supply_changed(fg->batt_psy);
 	}
 
-	pr_info("soc:%d, last_soc:%d, raw_soc:%d, soc_changed:%d.\n",
+	pr_debug("soc:%d, last_soc:%d, raw_soc:%d, soc_changed:%d.\n",
 				fg->param.batt_soc, last_batt_soc,
 				fg->param.batt_raw_soc, soc_changed);
 }
