@@ -130,7 +130,7 @@ static ssize_t anxiety_max_writes_starved_store(struct elevator_queue *e, const 
 }
 
 static struct elv_fs_entry anxiety_attrs[] = {
-	__ATTR(max_writes_starved, 0644, anxiety_max_writes_starved_show, anxiety_max_writes_starved_store),
+	__ATTR(max_writes_starved, 0444, anxiety_max_writes_starved_show, anxiety_max_writes_starved_store),
 	__ATTR_NULL
 };
 
