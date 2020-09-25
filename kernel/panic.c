@@ -2,7 +2,6 @@
  *  linux/kernel/panic.c
  *
  *  Copyright (C) 1991, 1992  Linus Torvalds
- *  Copyright (C) 2020 XiaoMi, Inc.
  */
 
 /*
@@ -81,11 +80,6 @@ void panic(const char *fmt, ...)
 	va_list args;
 	long i, i_next = 0;
 	int state = 0;
-	
-	if (!in_atomic())
-	{
-		exec_fs_sync_work();
-	}
 
 	trace_kernel_panic(0);
 
