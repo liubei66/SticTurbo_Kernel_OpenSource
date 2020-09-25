@@ -28,7 +28,6 @@
 
 #include "u_ether.h"
 
-
 /*
  * This component encapsulates the Ethernet link glue needed to provide
  * one (!) network link through the USB gadget stack, normally "usb0".
@@ -130,7 +129,7 @@ static void uether_debugfs_exit(struct eth_dev *dev);
  * additional multipler on qmult.
  */
 static unsigned int tx_qmult = 2;
-module_param(tx_qmult, uint, 0644);
+module_param(tx_qmult, uint, 0);
 MODULE_PARM_DESC(tx_qmult, "Additional queue length multiplier for tx");
 
 /* for dual-speed hardware, use deeper queues at high/super speed */
@@ -147,7 +146,7 @@ static inline int qlen(struct usb_gadget *gadget, unsigned qmult)
 #define U_ETHER_RX_PENDING_TSHOLD 500
 
 static unsigned int u_ether_rx_pending_thld = U_ETHER_RX_PENDING_TSHOLD;
-module_param(u_ether_rx_pending_thld, uint, 0644);
+module_param(u_ether_rx_pending_thld, uint, 0);
 
 /* REVISIT there must be a better way than having two sets
  * of debug calls ...

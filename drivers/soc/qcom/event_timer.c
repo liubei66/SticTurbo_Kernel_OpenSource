@@ -66,7 +66,7 @@ static void irq_affinity_change_notifier(struct irq_affinity_notify *notify,
 static void irq_affinity_release(struct kref *ref);
 
 static int msm_event_debug_mask;
-module_param_named(debug_mask, msm_event_debug_mask, int, 0664);
+module_param_named(debug_mask, msm_event_debug_mask, int, 0);
 
 enum {
 	MSM_EVENT_TIMER_DEBUG = 1U << 0,

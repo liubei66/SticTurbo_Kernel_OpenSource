@@ -175,10 +175,9 @@ bool f2fs_check_rb_tree_consistence(struct f2fs_sb_info *sbi,
 		next_re = rb_entry(next, struct rb_entry, rb_node);
 
 		if (cur_re->ofs + cur_re->len > next_re->ofs) {
-			f2fs_msg(sbi->sb, KERN_INFO, "inconsistent rbtree, "
-				"cur(%u, %u) next(%u, %u)",
-				cur_re->ofs, cur_re->len,
-				next_re->ofs, next_re->len);
+			f2fs_info(sbi, "inconsistent rbtree, cur(%u, %u) next(%u, %u)",
+				  cur_re->ofs, cur_re->len,
+				  next_re->ofs, next_re->len);
 			return false;
 		}
 
@@ -374,8 +373,6 @@ static bool f2fs_lookup_extent_tree(struct inode *inode, pgoff_t pgofs,
 
 	f2fs_bug_on(sbi, !et);
 
-	trace_f2fs_lookup_extent_tree_start(inode, pgofs);
-
 	read_lock(&et->lock);
 
 	if (et->largest.fofs <= pgofs &&
@@ -408,7 +405,6 @@ out:
 	stat_inc_total_hit(sbi);
 	read_unlock(&et->lock);
 
-	trace_f2fs_lookup_extent_tree_end(inode, pgofs, ei);
 	return ret;
 }
 
@@ -495,8 +491,6 @@ static void f2fs_update_extent_tree_range(struct inode *inode,
 
 	if (!et)
 		return;
-
-	trace_f2fs_update_extent_tree_range(inode, fofs, blkaddr, len);
 
 	write_lock(&et->lock);
 
@@ -684,8 +678,6 @@ free_node:
 unlock_out:
 	mutex_unlock(&sbi->extent_tree_lock);
 out:
-	trace_f2fs_shrink_extent_tree(sbi, node_cnt, tree_cnt);
-
 	return node_cnt + tree_cnt;
 }
 
@@ -757,8 +749,6 @@ void f2fs_destroy_extent_tree(struct inode *inode)
 	mutex_unlock(&sbi->extent_tree_lock);
 
 	F2FS_I(inode)->extent_tree = NULL;
-
-	trace_f2fs_destroy_extent_tree(inode, node_cnt);
 }
 
 bool f2fs_lookup_extent_cache(struct inode *inode, pgoff_t pgofs,

@@ -2,7 +2,6 @@
  *  linux/mm/memory.c
  *
  *  Copyright (C) 1991, 1992, 1993, 1994  Linus Torvalds
- *  Copyright (C) 2019 XiaoMi, Inc.
  */
 
 /*
@@ -973,14 +972,6 @@ again:
 		progress += 8;
 	} while (dst_pte++, src_pte++, addr += PAGE_SIZE, addr != end);
 
-	/*
-	 * Prevent the page fault handler to copy the page while stale tlb entry
-	 * are still not flushed.
-	 */
-	if (IS_ENABLED(CONFIG_SPECULATIVE_PAGE_FAULT) &&
-	    is_cow_mapping(vma->vm_flags))
-		flush_tlb_range(vma, orig_addr, end);
-
 	arch_leave_lazy_mmu_mode();
 
 	/*
@@ -1135,6 +1126,7 @@ static unsigned long zap_pte_range(struct mmu_gather *tlb,
 				struct zap_details *details)
 {
 	struct mm_struct *mm = tlb->mm;
+	int progress = 0;
 	int force_flush = 0;
 	int rss[NR_MM_COUNTERS];
 	spinlock_t *ptl;
@@ -1150,7 +1142,15 @@ again:
 	flush_tlb_batched_pending(mm);
 	arch_enter_lazy_mmu_mode();
 	do {
-		pte_t ptent = *pte;
+		pte_t ptent;
+
+		if (progress++ >= 32) {
+			progress = 0;
+			if (need_resched())
+				break;
+		}
+
+		ptent = *pte;
 		if (pte_none(ptent)) {
 			continue;
 		}
@@ -1236,8 +1236,11 @@ again:
 			__tlb_remove_pte_page(tlb, pending_page);
 			pending_page = NULL;
 		}
-		if (addr != end)
-			goto again;
+	}
+
+	if (addr != end) {
+		progress = 0;
+		goto again;
 	}
 
 	return addr;
@@ -3566,7 +3569,7 @@ static int do_fault(struct fault_env *fe)
 		ret = VM_FAULT_SIGBUS;
 	else if (!(fe->flags & FAULT_FLAG_WRITE))
 		ret = do_read_fault(fe, pgoff);
-	else if (!(fe->vma_flags & VM_SHARED))
+	else if (!(vma->vm_flags & VM_SHARED))
 		ret = do_cow_fault(fe, pgoff);
 	else
 		ret = do_shared_fault(fe, pgoff);

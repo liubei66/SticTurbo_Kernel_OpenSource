@@ -18,6 +18,7 @@
  * int encode_rsX (struct rs_control *rs, uintX_t *data, int len, uintY_t *par)
  */
 {
+	struct rs_codec *rs = rsc->codec;
 	int i, j, pad;
 	int nn = rs->nn;
 	int nroots = rs->nroots;

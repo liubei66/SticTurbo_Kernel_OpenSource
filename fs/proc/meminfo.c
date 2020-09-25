@@ -35,7 +35,7 @@ static void show_val_kb(struct seq_file *m, const char *s, unsigned long num)
 
 	if (len > 0) {
 		if (len < 8)
-			seq_write(m, blanks, 8 - len);
+			seq_write(m, blanks, 6 - len);
 
 		seq_write(m, v, len);
 	}
@@ -131,7 +131,7 @@ static int meminfo_proc_show(struct seq_file *m, void *v)
 	show_val_kb(m, "Committed_AS:   ", committed);
 	seq_printf(m, "VmallocTotal:   %8lu kB\n",
 		   (unsigned long)VMALLOC_TOTAL >> 10);
-	show_val_kb(m, "VmallocUsed:    ", 0ul);
+	show_val_kb(m, "VmallocUsed:    ", vmalloc_nr_pages());
 	show_val_kb(m, "VmallocChunk:   ", 0ul);
 
 #ifdef CONFIG_MEMORY_FAILURE

@@ -3201,8 +3201,7 @@ static void __exit exit_ntfs_fs(void)
 }
 
 MODULE_AUTHOR("Anton Altaparmakov <anton@tuxera.com>");
-MODULE_DESCRIPTION("NTFS 1.2/3.x driver - Copyright (c) 2001-2014 Anton Altaparmakov and Tuxera Inc.");
-MODULE_VERSION(NTFS_VERSION);
+MODULE_DESCRIPTION("NTFS 3.x driver");
 MODULE_LICENSE("GPL");
 #ifdef DEBUG
 module_param(debug_msgs, bint, 0);

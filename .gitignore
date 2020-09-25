@@ -101,6 +101,8 @@ ID
 *~
 \#*#
 
+#drivers/oneplus
+
 #
 # Leavings from module signing
 #
@@ -117,7 +119,58 @@ all.config
 *.kdev4
 
 #audio-kernel
-techpack/audio/
+#techpack/audio/
+
+# kernel-out-files
+out
+
+# stic-server-files
+迅雷下载
+
+# stic-kernel-modules
+drivers/stickernel
+
+# stic-server-files2
+优雅的舔逼ALL-迅雷下载
+
+# stic-server-files3
+drivers/迅雷下载/Papapa
+
+# stic-server-video
+download/pornhub-video/
+
+# stic-baidupan-video
+pandownloads
+
+# stic-build-tools
+sticbuild-kernel/build.sh
+
+# stic-server-kernel
+server_build.sh
+
+# stic-phone-kernel
+phone_build.sh
+
+# xiaomi-sdm845-audio
+# techpack
+
+# xiaomi-sdm845-clang
+stic-clang/
+
+# xiaomi-sdm845-gcc
+stic-gcc/
+
+# stock-clang12
+clang12-ndk/
+
+# yingyingying
+nvzhuang/
+
+# image
+stictools/dtbobuild-tools
+
+# nodody
+sticboot/bootperf/demo-tools
 
 # fetched Android config fragments
 kernel/configs/android-*.cfg

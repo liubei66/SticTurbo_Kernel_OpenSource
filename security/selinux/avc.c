@@ -8,6 +8,7 @@
  *	Replaced the avc_lock spinlock by RCU.
  *
  * Copyright (C) 2003 Red Hat, Inc., James Morris <jmorris@redhat.com>
+ * Copyright (C) 2020 Amktiao.
  *
  *	This program is free software; you can redistribute it and/or modify
  *	it under the terms of the GNU General Public License version 2,
@@ -147,23 +148,22 @@ static void avc_dump_query(struct audit_buffer *ab, u32 ssid, u32 tsid, u16 tcla
 {
 	int rc;
 	char *scontext;
+	char buf[SELINUX_LABEL_LENGTH];
 	u32 scontext_len;
 
-	rc = security_sid_to_context(ssid, &scontext, &scontext_len);
+	scontext = buf;
+
+	rc = security_sid_to_context_stack(ssid, &scontext, &scontext_len);
 	if (rc)
 		audit_log_format(ab, "ssid=%d", ssid);
-	else {
+	else
 		audit_log_format(ab, "scontext=%s", scontext);
-		kfree(scontext);
-	}
 
-	rc = security_sid_to_context(tsid, &scontext, &scontext_len);
+	rc = security_sid_to_context_stack(tsid, &scontext, &scontext_len);
 	if (rc)
 		audit_log_format(ab, " tsid=%d", tsid);
-	else {
+	else
 		audit_log_format(ab, " tcontext=%s", scontext);
-		kfree(scontext);
-	}
 
 	BUG_ON(!tclass || tclass >= ARRAY_SIZE(secclass_map));
 	audit_log_format(ab, " tclass=%s", secclass_map[tclass-1].name);
@@ -627,8 +627,6 @@ static int avc_latest_notif_update(int seqno, int is_insert)
 	spin_lock_irqsave(&notif_lock, flag);
 	if (is_insert) {
 		if (seqno < avc_cache.latest_notif) {
-			printk(KERN_WARNING "SELinux: avc:  seqno %d < latest_notif %d\n",
-			       seqno, avc_cache.latest_notif);
 			ret = -EAGAIN;
 		}
 	} else {
@@ -745,6 +743,10 @@ noinline int slow_avc_audit(u32 ssid, u32 tsid, u16 tclass,
 {
 	struct common_audit_data stack_data;
 	struct selinux_audit_data sad;
+	
+	/* Only log permissive=1 messages for SECURITY_SELINUX_DEVELOP */
+	if (denied && !result)
+		return 0;
 
 	if (!a) {
 		a = &stack_data;
@@ -983,14 +985,6 @@ static noinline int avc_denied(u32 ssid, u32 tsid,
 				u8 driver, u8 xperm, unsigned flags,
 				struct av_decision *avd)
 {
-	if (flags & AVC_STRICT)
-		return -EACCES;
-
-	if (selinux_enforcing && !(avd->flags & AVD_FLAGS_PERMISSIVE))
-		return -EACCES;
-
-	avc_update_node(AVC_CALLBACK_GRANT, requested, driver, xperm, ssid,
-				tsid, tclass, avd->seqno, NULL, flags);
 	return 0;
 }
 

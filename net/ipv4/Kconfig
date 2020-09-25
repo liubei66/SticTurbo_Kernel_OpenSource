@@ -456,20 +456,6 @@ menuconfig TCP_CONG_ADVANCED
 
 if TCP_CONG_ADVANCED
 
-config TCP_CONG_BIC
-	tristate "Binary Increase Congestion (BIC) control"
-	default m
-	---help---
-	BIC-TCP is a sender-side only change that ensures a linear RTT
-	fairness under large windows while offering both scalability and
-	bounded TCP-friendliness. The protocol combines two schemes
-	called additive increase and binary search increase. When the
-	congestion window is large, additive increase with a large
-	increment ensures linear RTT fairness as well as good
-	scalability. Under small congestion windows, binary search
-	increase provides TCP friendliness.
-	See http://www.csc.ncsu.edu/faculty/rhee/export/bitcp/
-
 config TCP_CONG_CUBIC
 	tristate "CUBIC TCP"
 	default y
@@ -477,31 +463,6 @@ config TCP_CONG_CUBIC
 	This is version 2.0 of BIC-TCP which uses a cubic growth function
 	among other techniques.
 	See http://www.csc.ncsu.edu/faculty/rhee/export/bitcp/cubic-paper.pdf
-
-config TCP_CONG_WESTWOOD
-	tristate "TCP Westwood+"
-	default m
-	---help---
-	TCP Westwood+ is a sender-side only modification of the TCP Reno
-	protocol stack that optimizes the performance of TCP congestion
-	control. It is based on end-to-end bandwidth estimation to set
-	congestion window and slow start threshold after a congestion
-	episode. Using this estimation, TCP Westwood+ adaptively sets a
-	slow start threshold and a congestion window which takes into
-	account the bandwidth used  at the time congestion is experienced.
-	TCP Westwood+ significantly increases fairness wrt TCP Reno in
-	wired networks and throughput over wireless links.
-
-config TCP_CONG_HTCP
-        tristate "H-TCP"
-        default m
-	---help---
-	H-TCP is a send-side only modifications of the TCP Reno
-	protocol stack that optimizes the performance of TCP
-	congestion control for high speed network links. It uses a
-	modeswitch to change the alpha and beta parameters of TCP Reno
-	based on network conditions and in a way so as to be fair with
-	other Reno and H-TCP flows.
 
 config TCP_CONG_HSTCP
 	tristate "High Speed TCP"
@@ -654,6 +615,40 @@ config TCP_CONG_BBR
 	control, and can operate with shallow buffers, deep buffers,
 	bufferbloat, policers, or AQM schemes that do not provide a delay
 	signal. It requires the fq ("Fair Queue") pacing packet scheduler.
+	
+config TCP_CONG_WESTWOOD
+	tristate "TCP Westwood+"
+	default y
+	---help---
+	TCP Westwood+ is a sender-side only modification of the TCP Reno
+	protocol stack that optimizes the performance of TCP congestion
+	control. It is based on end-to-end bandwidth estimation to set
+	congestion window and slow start threshold after a congestion
+	episode. Using this estimation, TCP Westwood+ adaptively sets a
+	slow start threshold and a congestion window which takes into
+	account the bandwidth used  at the time congestion is experienced.
+	TCP Westwood+ significantly increases fairness wrt TCP Reno in
+	wired networks and throughput over wireless links.
+	
+config TCP_CONG_NANQINLANG
+         tristate "TCP nanqinlang"
+         default n
+        ---help---
+         This is basically TCP BBR with violence.
+
+ config TCP_CONG_BBRPLUS
+         tristate "TCP bbrplus"
+         default n
+        ---help---
+         This is basically TCP BBR with violence.
+		 
+config TCP_CONG_TSUNAMI
+        tristate "Tsunami - BBR Based TCP Congestion with magic optimiztion"
+        default n
+        ---help---
+
+	Tsunami TCP Congestion Control - BBR Based TCP Congedtion with magic optimiztion
+	Modified by Yankee.
 
 choice
 	prompt "Default TCP congestion control"
@@ -662,14 +657,8 @@ choice
 	  Select the TCP congestion control that will be used by default
 	  for all connections.
 
-	config DEFAULT_BIC
-		bool "Bic" if TCP_CONG_BIC=y
-
 	config DEFAULT_CUBIC
 		bool "Cubic" if TCP_CONG_CUBIC=y
-
-	config DEFAULT_HTCP
-		bool "Htcp" if TCP_CONG_HTCP=y
 
 	config DEFAULT_HYBLA
 		bool "Hybla" if TCP_CONG_HYBLA=y
@@ -691,6 +680,15 @@ choice
 
 	config DEFAULT_BBR
 		bool "BBR" if TCP_CONG_BBR=y
+		
+	config DEFAULT_NANQINLANG
+                 bool "NANQINLANG" if TCP_CONG_NANQINLANG=y
+
+ 	config DEFAULT_BBRPLUS
+                 bool "BBRPLUS" if TCP_CONG_BBRPLUS=y
+
+ 	config DEFAULT_TSUNAMI
+                 bool "TSUNAMI" if TCP_CONG_TSUNAMI=y
 
 	config DEFAULT_RENO
 		bool "Reno"
@@ -705,9 +703,7 @@ config TCP_CONG_CUBIC
 
 config DEFAULT_TCP_CONG
 	string
-	default "bic" if DEFAULT_BIC
 	default "cubic" if DEFAULT_CUBIC
-	default "htcp" if DEFAULT_HTCP
 	default "hybla" if DEFAULT_HYBLA
 	default "vegas" if DEFAULT_VEGAS
 	default "westwood" if DEFAULT_WESTWOOD
@@ -716,6 +712,9 @@ config DEFAULT_TCP_CONG
 	default "dctcp" if DEFAULT_DCTCP
 	default "cdg" if DEFAULT_CDG
 	default "bbr" if DEFAULT_BBR
+	default "nanqinlang" if DEFAULT_NANQINLANG
+ 	default "bbrplus" if DEFAULT_BBRPLUS
+ 	default "tsunami" if DEFAULT_TSUNAMI
 	default "cubic"
 
 config TCP_MD5SIG

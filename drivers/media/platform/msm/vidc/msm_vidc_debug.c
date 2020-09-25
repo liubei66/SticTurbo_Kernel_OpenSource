@@ -16,14 +16,14 @@
 #include "msm_vidc_debug.h"
 #include "vidc_hfi_api.h"
 
-int msm_vidc_debug = VIDC_ERR | VIDC_WARN;
+int msm_vidc_debug = 0;
 EXPORT_SYMBOL(msm_vidc_debug);
 
-int msm_vidc_debug_out = VIDC_OUT_PRINTK;
+int msm_vidc_debug_out = 0;
 EXPORT_SYMBOL(msm_vidc_debug_out);
 
-int msm_vidc_fw_debug = 0x18;
-int msm_vidc_fw_debug_mode = 1;
+int msm_vidc_fw_debug = 0;
+int msm_vidc_fw_debug_mode = 0;
 int msm_vidc_fw_low_power_mode = 1;
 bool msm_vidc_fw_coverage = !true;
 bool msm_vidc_sys_idle_indicator = !true;
@@ -86,7 +86,6 @@ static ssize_t core_info_read(struct file *file, char __user *buf,
 
 	cur += write_str(cur, end - cur, "===============================\n");
 	cur += write_str(cur, end - cur, "CORE %d: %pK\n", core->id, core);
-	cur += write_str(cur, end - cur, "===============================\n");
 	cur += write_str(cur, end - cur, "Core state: %d\n", core->state);
 	rc = call_hfi_op(hdev, get_fw_info, hdev->hfi_device_data, &fw_info);
 	if (rc) {
@@ -235,7 +234,9 @@ struct dentry *msm_vidc_debugfs_init_core(struct msm_vidc_core *core,
 	snprintf(debugfs_name, MAX_DEBUGFS_NAME, "core%d", core->id);
 	dir = debugfs_create_dir(debugfs_name, parent);
 	if (!dir) {
+#ifdef CONFIG_DEBUG_FS
 		dprintk(VIDC_ERR, "Failed to create debugfs for msm_vidc\n");
+#endif
 		goto failed_create_dir;
 	}
 	if (!debugfs_create_file("info", 0444, dir, core, &core_info_fops)) {
@@ -390,7 +391,7 @@ static ssize_t inst_info_read(struct file *file, char __user *buf,
 		if (i < MAX_PORT_NUM - 1)
 			cur += write_str(cur, end - cur, "\n");
 	}
-	cur += write_str(cur, end - cur, "-------------------------------\n");
+	cur += write_str(cur, end - cur, "-------------\n");
 	for (i = SESSION_MSG_START; i < SESSION_MSG_END; i++) {
 		cur += write_str(cur, end - cur, "completions[%d]: %s\n", i,
 		completion_done(&inst->completions[SESSION_MSG_INDEX(i)]) ?
@@ -448,7 +449,9 @@ struct dentry *msm_vidc_debugfs_init_inst(struct msm_vidc_inst *inst,
 
 	dir = debugfs_create_dir(debugfs_name, parent);
 	if (!dir) {
+#ifdef CONFIG_DEBUG_FS
 		dprintk(VIDC_ERR, "Failed to create debugfs for msm_vidc\n");
+#endif
 		goto failed_create_dir;
 	}
 

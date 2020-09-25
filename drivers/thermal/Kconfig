@@ -443,6 +443,15 @@ config THERMAL_QPNP
 	  results in shifting PMIC over temperature shutdown control from
 	  hardware to software.
 
+config THERMAL_MONITOR_SIMPLE
+	bool "Simple solution to monitor CPU temp and limit CPU Frequency"
+	default n
+	help
+	  This enables thermal monitoring capability in the kernel in the
+	  absence of a system wide thermal monitoring entity. Monitors TSENS
+	  temperature and limits the max frequency of the cores. The code is
+	  simple, uses 3 throttling steps, and is completely configurable via sysfs.
+
 config GENERIC_ADC_THERMAL
 	tristate "Generic ADC based thermal sensor"
 	depends on IIO

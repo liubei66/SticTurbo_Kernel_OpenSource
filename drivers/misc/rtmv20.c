@@ -1,7 +1,6 @@
 /*
 * Simple driver for Ricktek 6A laser diode driver chip
-* Copyright (C) 2018 Xiaomi Corp.
-* Copyright (C) 2019 XiaoMi, Inc.
+* Copyright (C) 2018 XiaoMi, Inc.
 *
 * This program is free software; you can redistribute it and/or modify
 * it under the terms of the GNU General Public License version 2 as
@@ -96,7 +95,7 @@ struct rtmv20_chip_data {
 	struct pinctrl_state *gpio_state_active;
 	struct pinctrl_state *gpio_state_suspend;
 
-	unsigned int ic_error; //ic irq/status reg is reset after irq ,so need add this value
+	unsigned int ic_error;
 };
 
 static int rtmv20_read_chip_rev(struct rtmv20_chip_data *chip)
@@ -210,7 +209,7 @@ static void rtmv20_reset_ic(void *dev)
 	regmap_write(chip->regmap, REG_EN_CTRL, 0);
 	if (gpio_is_valid(chip->pdata->enable_gpio)) {
 		gpio_set_value(chip->pdata->enable_gpio, 0);
-		msleep(1);  // sleep 1ms
+		msleep(1);
 		gpio_set_value(chip->pdata->enable_gpio, 1);
 	} else {
 		dev_err(chip->dev, "rtmv20_reset_ic fail!\n");
@@ -237,7 +236,7 @@ static irqreturn_t rtmv20_ic_error_irq_handler(int ic_irq, void *dev_id)
 		if (irq_val & RTMV_IRQ_OCP_EVT)
 			dev_err(chip->dev, "ic error:RTMV_IRQ_OCP_EVT\n");
 
-		// bit 0~4 need reset rtmv ic, bit 5~7 will not trigger IRQ
+
 		rtmv20_reset_ic(dev_id);
 
 		chip->ic_error = irq_val;
@@ -281,8 +280,8 @@ static int rtmv20_open(struct inode *inp, struct file *filp)
 	struct rtmv20_chip_data *chip =
 		container_of(inp->i_cdev, struct rtmv20_chip_data, cdev);
 
-	//if (test_and_set_bit(RTMV20_BUSY_BIT_POS, &chip->flags))
-	//	return -EBUSY;
+
+
 
 	filp->private_data = chip;
 
@@ -312,8 +311,8 @@ static ssize_t rtmv20_read(struct file *filp, char *buf, size_t len, loff_t *fse
 
 	if (report_data.ic_event) {
 		report_data.ic_exception = chip->ic_error;
-		// dev_err(chip->dev, "rtmv20_read, !report_data.ic_exception=%d\n",report_data.ic_exception);
-		atomic_set(&chip->ic_event, 0);  //reset ic event after read
+
+		atomic_set(&chip->ic_event, 0);
 		chip->ic_error = 0;
 	}
 
@@ -422,13 +421,13 @@ static long rtmv20_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 		laser_info.laser_enable = ((val & 0x9) == 0x9) ? 1 : 0;
 
 		ret += regmap_read(chip->regmap, REG_LD_CTRL1, &val);
-		laser_info.laser_current = val * 30;  // mA
+		laser_info.laser_current = val * 30;
 
 		ret += regmap_read(chip->regmap, REG_PULSE_WIDTH1, &val);
 		ret += regmap_read(chip->regmap, REG_PULSE_WIDTH2, &val0);
-		laser_info.laser_pulse = ((val & 0x3f) << 8) + (val0 & 0xff); //ms*1000
+		laser_info.laser_pulse = ((val & 0x3f) << 8) + (val0 & 0xff);
 
-		// ES check
+
 		ret += regmap_read(chip->regmap, REG_EN_CTRL, &val_es_en);
 		if (val_es_en & (1 << 6)) {
 			ret += regmap_read(chip->regmap, REG_ES_LD_CTRL1, &val);
@@ -724,7 +723,7 @@ static ssize_t rtmv20_reg_opt_show(struct device *dev,
 	ret += regmap_read(chip->regmap, REG_LD_STAT, &reg_rtmv[RTMV_REG_NUM - 2]);
 	ret += regmap_read(chip->regmap, REG_LD_MASK, &reg_rtmv[RTMV_REG_NUM - 1]);
 
-	// print reg to kernel log
+
 	for (i = 0; i < RTMV_REG_NUM; i++) {
 		if (i <= 0x29)
 			j = i;

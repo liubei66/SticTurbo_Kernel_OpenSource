@@ -90,6 +90,7 @@
 #include <linux/random.h>
 #include <linux/slab.h>
 #include <linux/netfilter/xt_qtaguid.h>
+
 #include <asm/uaccess.h>
 
 #include <linux/inet.h>
@@ -1305,8 +1306,10 @@ struct sk_buff *inet_gso_segment(struct sk_buff *skb,
 			else
 				tot_len = skb->len - nhoff;
 		} else {
-			if (!fixedid)
-				iph->id = htons(id++);
+			if (!fixedid) {
+				iph->id = htons(id);
+				id++;
+                        }
 			tot_len = skb->len - nhoff;
 		}
 		iph->tot_len = htons(tot_len);

@@ -1,5 +1,4 @@
 /* Copyright (c) 2016-2018, The Linux Foundation. All rights reserved.
- * Copyright (C) 2019 XiaoMi, Inc.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -178,9 +177,10 @@ end:
 }
 
 int cam_req_mgr_workq_create(char *name, int32_t num_tasks,
-	struct cam_req_mgr_core_workq **workq, enum crm_workq_context in_irq)
+	struct cam_req_mgr_core_workq **workq, enum crm_workq_context in_irq,
+	int flags)
 {
-	int32_t i;
+	int32_t i, wq_flags = 0, max_active_tasks = 0;
 	struct crm_workq_task  *task;
 	struct cam_req_mgr_core_workq *crm_workq = NULL;
 	char buf[128] = "crm_workq-";
@@ -192,10 +192,17 @@ int cam_req_mgr_workq_create(char *name, int32_t num_tasks,
 		if (crm_workq == NULL)
 			return -ENOMEM;
 
+		wq_flags |= WQ_UNBOUND;
+		if (flags & CAM_WORKQ_FLAG_HIGH_PRIORITY)
+			wq_flags |= WQ_HIGHPRI;
+
+		if (flags & CAM_WORKQ_FLAG_SERIAL)
+			max_active_tasks = 1;
+
 		strlcat(buf, name, sizeof(buf));
 		CAM_DBG(CAM_CRM, "create workque crm_workq-%s", name);
 		crm_workq->job = alloc_workqueue(buf,
-			WQ_HIGHPRI | WQ_UNBOUND, 0, NULL);
+			wq_flags, max_active_tasks, NULL);
 		if (!crm_workq->job) {
 			kfree(crm_workq);
 			return -ENOMEM;
@@ -220,7 +227,7 @@ int cam_req_mgr_workq_create(char *name, int32_t num_tasks,
 				crm_workq->task.num_task,
 				GFP_KERNEL);
 		if (!crm_workq->task.pool) {
-			CAM_WARN(CAM_CRM, "Insufficient memory %lu",
+			CAM_WARN(CAM_CRM, "Insufficient memory %zu",
 				sizeof(struct crm_workq_task) *
 				crm_workq->task.num_task);
 			kfree(crm_workq);
@@ -254,13 +261,8 @@ void cam_req_mgr_workq_destroy(struct cam_req_mgr_core_workq **crm_workq)
 			WORKQ_RELEASE_LOCK(*crm_workq, flags);
 			cancel_work_sync(&(*crm_workq)->work);
 			destroy_workqueue(job);
-		} else {
+		} else
 			WORKQ_RELEASE_LOCK(*crm_workq, flags);
-		}
-
-		/* Destroy workq payload data */
-		kfree((*crm_workq)->task.pool[0].payload);
-		(*crm_workq)->task.pool[0].payload = NULL;
 		kfree((*crm_workq)->task.pool);
 		kfree(*crm_workq);
 		*crm_workq = NULL;

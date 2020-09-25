@@ -870,7 +870,6 @@ struct ufs_hba {
 	struct mutex uic_cmd_mutex;
 	struct completion *uic_async_done;
 
-	struct mutex h8_dev_cmd_mutex;
 	u32 ufshcd_state;
 	u32 eh_flags;
 	u32 intr_mask;
@@ -981,6 +980,7 @@ struct ufs_hba {
 
 	/* sync b/w diff contexts */
 	struct rw_semaphore lock;
+	struct rw_semaphore query_lock;
 	unsigned long shutdown_in_prog;
 
 	struct reset_control *core_reset;

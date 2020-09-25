@@ -173,7 +173,7 @@ struct qnovo {
 };
 
 static int debug_mask;
-module_param_named(debug_mask, debug_mask, int, 0600);
+module_param_named(debug_mask, debug_mask, int, 0);
 
 #define qnovo_dbg(chip, reason, fmt, ...)				\
 	do {								\

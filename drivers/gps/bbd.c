@@ -37,8 +37,7 @@
 #include "bbd.h"
 
 #ifdef CONFIG_SENSORS_SSP
-#include <linux/spi/spi.h>	//Needs because SSP is tightly coupled with SPI
-//#include <linux/spidev.h>
+#include <linux/spi/spi.h>
 
 extern struct spi_driver *pssp_driver;
 extern bool ssp_dbg;
@@ -59,11 +58,6 @@ extern bool ssi_dbg_rng;
 
 void bbd_log_hex(const char*, const unsigned char*, unsigned long);
 
-//--------------------------------------------------------------
-//
-//               BBD device struct
-//
-//--------------------------------------------------------------
 #define BBD_BUFF_SIZE (PAGE_SIZE*2)
 struct bbd_cdev_priv {
 	const char *name;
@@ -97,16 +91,11 @@ static const char *bbd_dev_name[BBD_DEVICE_INDEX] = {
 	"bbd_sensor",
 	"bbd_control",
 	"bbd_patch",
-	//"bbd_ssi_spi_debug"
+
 };
 
 static dev_t devno;
 
-//--------------------------------------------------------------
-//
-//               Globals
-//
-//--------------------------------------------------------------
 /*
  * The global BBD device which has all necessary information.
  * It's not beautiful but useful when we debug by Trace32.
@@ -117,9 +106,9 @@ static struct bbd_device bbd;
  */
 static unsigned char bbd_patch[] = {
 #ifdef CONFIG_POP
-//#include "bbd_patch_file_pop.h"
+
 #else
-//#include "bbd_patch_file_solis.h"
+
 #endif
 };
 
@@ -136,12 +125,6 @@ static unsigned char legacy_bbd_patch[] = {
 /* Function to push read data into any bbd device's read buf */
 ssize_t bbd_on_read(unsigned int minor,
 					const unsigned char *buf, size_t size);
-
-//--------------------------------------------------------------
-//
-//               SHMD Interface Functions
-//
-//--------------------------------------------------------------
 
 /**
  * bbd_register -Interface function called from SHMD
@@ -185,7 +168,6 @@ ssize_t bbd_send_packet(unsigned char *buf, size_t size)
 					(unsigned char *)&ss_pkt, size+2); /* +2 for pkt.size */
 }
 EXPORT_SYMBOL(bbd_send_packet);
-
 
 /**
  * bbd_pull_packet - Interface function called
@@ -252,19 +234,11 @@ EXPORT_SYMBOL(bbd_pull_packet);
  */
 int bbd_mcu_reset(void)
 {
-	pr_info("reset request from sensor hub\n");
+
 	return bbd_on_read(BBD_MINOR_CONTROL,
 					   BBD_CTRL_RESET_REQ, strlen(BBD_CTRL_RESET_REQ)+1);
 }
 EXPORT_SYMBOL(bbd_mcu_reset);
-
-
-
-//--------------------------------------------------------------
-//
-//               BBD device struct
-//
-//--------------------------------------------------------------
 
 /**
  * bbd_control - Handles command string from lhd
@@ -338,14 +312,6 @@ ssize_t bbd_control(const char *buf, ssize_t len)
 	return len;
 }
 
-
-
-//--------------------------------------------------------------
-//
-//               BBD Common File Functions
-//
-//--------------------------------------------------------------
-
 /**
  * bbd_common_open - Common open function for BBD devices
  *
@@ -355,12 +321,8 @@ int bbd_common_open(struct inode *inode, struct file *filp)
 	unsigned int minor = iminor(inode);
 	struct circ_buf *circ = &bbd.priv[minor].read_buf;
 
-	pr_info("%s++\n", __func__);
-
 	if (minor >= BBD_DEVICE_INDEX)
 		return -ENODEV;
-
-	pr_info("%s", bbd.priv[minor].name);
 
 	if (bbd.priv[minor].busy && minor != BBD_MINOR_CONTROL)
 		return -EBUSY;
@@ -372,7 +334,6 @@ int bbd_common_open(struct inode *inode, struct file *filp)
 
 	filp->private_data = &bbd;
 
-	pr_info("%s--\n", __func__);
 	return 0;
 }
 
@@ -382,16 +343,11 @@ int bbd_common_open(struct inode *inode, struct file *filp)
 static int bbd_common_release(struct inode *inode, struct file *filp)
 {
 	unsigned int minor = iminor(inode);
-	//struct bbd_device *bbd = filp->private_data;
-
-	pr_info("%s++\n", __func__);
 
 	BUG_ON(minor >= BBD_DEVICE_INDEX);
-	pr_info("%s", bbd.priv[minor].name);
 
 	bbd.priv[minor].busy = false;
 
-	pr_info("%s--\n", __func__);
 	return 0;
 }
 
@@ -405,11 +361,10 @@ static ssize_t bbd_common_read(struct file *filp,
 							   char __user *buf, size_t size, loff_t *ppos)
 {
 	unsigned int minor = iminor(filp->f_path.dentry->d_inode);
-	//struct bbd_device *bbd = filp->private_data;
+
 	struct circ_buf *circ = &bbd.priv[minor].read_buf;
 	size_t rd_size = 0;
 
-	pr_info("%s++\n", __func__);
 	BUG_ON(minor >= BBD_DEVICE_INDEX);
 
 	mutex_lock(&bbd.priv[minor].lock);
@@ -435,7 +390,6 @@ static ssize_t bbd_common_read(struct file *filp,
 
 	bbd_log_hex(bbd_dev_name[minor], buf, rd_size);
 
-	pr_info("%s--\n", __func__);
 	return rd_size;
 }
 
@@ -449,7 +403,7 @@ static ssize_t bbd_common_write(struct file *filp,
 								loff_t *ppos)
 {
 	unsigned int minor = iminor(filp->f_path.dentry->d_inode);
-	//struct bbd_device *bbd = filp->private_data;
+
 
 	BUG_ON(size >= BBD_BUFF_SIZE);
 
@@ -465,7 +419,7 @@ static ssize_t bbd_common_write(struct file *filp,
 static unsigned int bbd_common_poll(struct file *filp, poll_table *wait)
 {
 	unsigned int minor = iminor(filp->f_path.dentry->d_inode);
-	//struct bbd_device *bbd = filp->private_data;
+
 	struct circ_buf *circ = &bbd.priv[minor].read_buf;
 	unsigned int mask = 0;
 
@@ -478,15 +432,6 @@ static unsigned int bbd_common_poll(struct file *filp, poll_table *wait)
 
 	return mask;
 }
-
-
-
-
-//--------------------------------------------------------------
-//
-//               BBD Device Specific File Functions
-//
-//--------------------------------------------------------------
 
 /**
  * bbd_sensor_write - BBD's RPC calls this function to send sensor packet
@@ -523,7 +468,6 @@ ssize_t bbd_control_write(struct file *filp, const char __user *buf,
 						  size_t size, loff_t *ppos)
 {
 	unsigned int minor = iminor(filp->f_path.dentry->d_inode);
-	//struct bbd_device *bbd = filp->private_data;
 
 	/* get command string first */
 	ssize_t len = bbd_common_write(filp, buf, size, ppos);
@@ -565,11 +509,6 @@ ssize_t bbd_patch_read(struct file *filp, char __user *buf,
 	return rd_size;
 }
 
-//--------------------------------------------------------------
-//
-//               Sysfs
-//
-//--------------------------------------------------------------
 static ssize_t store_sysfs_bbd_control(struct device *dev,
 									   struct device_attribute *attr,
 									   const char *buf, size_t len)
@@ -598,12 +537,6 @@ static const struct attribute_group bbd_group = {
 	.attrs = bbd_attributes,
 };
 
-
-//--------------------------------------------------------------
-//
-//               Misc Functions
-//
-//--------------------------------------------------------------
 void bbd_log_hex(const char *pIntroduction,
 		const unsigned char *pData,
 		unsigned long        ulDataLen)
@@ -680,7 +613,6 @@ skip:
 	/* Wake up reader */
 	wake_up(&bbd.priv[minor].poll_wait);
 
-
 	return wr_size;
 }
 
@@ -698,14 +630,8 @@ ssize_t bbd_request_mcu(bool on)
 }
 EXPORT_SYMBOL(bbd_request_mcu);
 
-//--------------------------------------------------------------
-//
-//               PM operation
-//
-//--------------------------------------------------------------
 static int bbd_suspend(pm_message_t state)
 {
-	pr_info("[SSPBBD]: %s ++ \n", __func__);
 
 #ifdef CONFIG_SENSORS_SSP
 	/* Call SSP suspend */
@@ -714,7 +640,6 @@ static int bbd_suspend(pm_message_t state)
 #endif
 	mdelay(20);
 
-	pr_info("[SSPBBD]: %s -- \n", __func__);
 	return 0;
 }
 
@@ -750,13 +675,6 @@ static int bbd_notifier(struct notifier_block *nb,
 static struct notifier_block bbd_notifier_block = {
 				.notifier_call = bbd_notifier,
 };
-
-//--------------------------------------------------------------
-//
-//               BBD Device Init and Exit
-//
-//--------------------------------------------------------------
-
 
 static const struct file_operations bbd_fops[BBD_DEVICE_INDEX] = {
 	/* bbd shmd file operations */
@@ -802,7 +720,6 @@ static const struct file_operations bbd_fops[BBD_DEVICE_INDEX] = {
 	*/
 };
 
-
 int bbd_init(struct device *dev, bool legacy_patch)
 {
 	int minor, ret = -ENOMEM;
@@ -811,7 +728,6 @@ int bbd_init(struct device *dev, bool legacy_patch)
 
 	ts1 = ktime_to_timespec(ktime_get_boottime());
 	start = ts1.tv_sec * 1000000000ULL + ts1.tv_nsec;
-
 
 	/* Initialize BBD device */
 	memset(&bbd, 0, sizeof(bbd));
@@ -827,7 +743,6 @@ int bbd_init(struct device *dev, bool legacy_patch)
 
 	/* Create BBD char devices */
 	for (minor = 0; minor < BBD_DEVICE_INDEX; minor++) {
-		//dev_t devno = MKDEV(BBD_DEVICE_MAJOR, minor);
 		struct cdev *cdev = &bbd.priv[minor].dev;
 		const char *name = bbd_dev_name[minor];
 		struct device *dev;
@@ -844,7 +759,6 @@ int bbd_init(struct device *dev, bool legacy_patch)
 			continue;
 		/* Reserve char device number (a.k.a, major, minor)
 		 * for this BBD device */
-		//ret = register_chrdev_region(devno, 1, name);
 		ret = alloc_chrdev_region(&devno, 0, 1, name);
 		if (ret) {
 			pr_err("BBD:%s() failed to alloc_chrdev_region() "
@@ -875,10 +789,6 @@ int bbd_init(struct device *dev, bool legacy_patch)
 			goto free_class;
 		}
 
-		/* Done. Put success log and init BBD specific fields */
-		/*pr_info("BBD:%s(%d,%d) registered /dev/%s\n",
-			      __func__, BBD_DEVICE_MAJOR, minor, name);*/
-
 	}
 
 	/* Register sysfs entry */
@@ -890,7 +800,6 @@ int bbd_init(struct device *dev, bool legacy_patch)
 							__func__, ret);
 		goto free_kobj;
 	}
-
 
 	/* Register PM */
 	ret = register_pm_notifier(&bbd_notifier_block);
@@ -913,7 +822,6 @@ int bbd_init(struct device *dev, bool legacy_patch)
 #endif
 	ts1 = ktime_to_timespec(ktime_get_boottime());
 	elapsed = (ts1.tv_sec * 1000000000ULL + ts1.tv_nsec) - start;
-	pr_info("BBD:%s %lu nsec elapsed\n", __func__, elapsed);
 
 		return 0;
 
@@ -921,7 +829,6 @@ free_kobj:
 	kobject_put(bbd.kobj);
 free_class:
 	while (--minor > BBD_MINOR_SHMD) {
-		//dev_t devno = MKDEV(BBD_DEVICE_MAJOR, minor);
 		struct cdev *cdev = &bbd.priv[minor].dev;
 
 		device_destroy(bbd.class, devno);
@@ -937,8 +844,6 @@ static void __exit bbd_exit(void)
 {
 	int minor;
 
-	pr_info("%s ++\n", __func__);
-
 #ifdef CONFIG_SENSORS_SSP
 	/* Shutdown SSP first*/
 	pssp_driver->shutdown(&dummy_spi);
@@ -949,25 +854,16 @@ static void __exit bbd_exit(void)
 
 	/* Remove BBD char devices */
 	for (minor = BBD_MINOR_SENSOR; minor < BBD_DEVICE_INDEX; minor++) {
-		//dev_t devno = MKDEV(BBD_DEVICE_MAJOR, minor);
 		struct cdev *cdev = &bbd.priv[minor].dev;
-		//const char *name = bbd_dev_name[minor];
 
 		device_destroy(bbd.class, devno);
 		cdev_del(cdev);
 		unregister_chrdev_region(devno, 1);
 
-		/*pr_info("%s(%d,%d) unregistered /dev/%s\n",
-			__func__, BBD_DEVICE_MAJOR, minor, name);*/
 	}
 
-	/* Remove class */
 	class_destroy(bbd.class);
-	/* Done. Put success log */
-	pr_info("%s --\n", __func__);
 }
 
 MODULE_AUTHOR("Broadcom");
 MODULE_LICENSE("Dual BSD/GPL");
-//subsys_initcall(bbd_init);
-//module_exit(bbd_exit);

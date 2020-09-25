@@ -1,6 +1,5 @@
 /*
  * Copyright (c) 2012-2018, The Linux Foundation. All rights reserved.
- * Copyright (C) 2019 XiaoMi, Inc.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -602,9 +601,7 @@ static int __init pil_mss_init(void)
 	int ret;
 
 	last_modem_sfr_entry = proc_create("last_mcrash", S_IFREG | S_IRUGO, NULL, &last_modem_sfr_file_ops);
-	if (!last_modem_sfr_entry) {
-		printk(KERN_ERR "pil: cannot create proc entry last_mcrash\n");
-	}
+	if (!last_modem_sfr_entry)
 
 	ret = platform_driver_register(&pil_mba_mem_driver);
 	if (!ret)

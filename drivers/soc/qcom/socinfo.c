@@ -1,6 +1,5 @@
 /*
  * Copyright (c) 2009-2019, The Linux Foundation. All rights reserved.
- * Copyright (C) 2019 XiaoMi, Inc.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -67,8 +66,9 @@ enum {
 	HW_PLATFORM_RCM	= 21,
 	HW_PLATFORM_STP = 23,
 	HW_PLATFORM_SBC = 24,
-	HW_PLATFORM_D5X = 40,
+	HW_PLATFORM_ADP = 25,
 	HW_PLATFORM_HDK = 31,
+	HW_PLATFORM_D5X = 40,
 	HW_PLATFORM_E1N = 50,
 	HW_PLATFORM_E10 = 60,
 	HW_PLATFORM_E1S = 70,
@@ -79,23 +79,16 @@ enum {
 
 const char *hw_platform[] = {
 	[HW_PLATFORM_UNKNOWN] = "Unknown",
-	[HW_PLATFORM_SURF] = "Surf",
-	[HW_PLATFORM_FFA] = "FFA",
-	[HW_PLATFORM_FLUID] = "Fluid",
-	[HW_PLATFORM_SVLTE_FFA] = "SVLTE_FFA",
-	[HW_PLATFORM_SVLTE_SURF] = "SLVTE_SURF",
-	[HW_PLATFORM_MTP_MDM] = "MDM_MTP_NO_DISPLAY",
 	[HW_PLATFORM_MTP] = "MTP",
 	[HW_PLATFORM_RCM] = "RCM",
-	[HW_PLATFORM_LIQUID] = "Liquid",
-	[HW_PLATFORM_DRAGON] = "Dragon",
 	[HW_PLATFORM_QRD] = "QRD",
 	[HW_PLATFORM_HRD] = "HRD",
 	[HW_PLATFORM_DTV] = "DTV",
 	[HW_PLATFORM_STP] = "STP",
 	[HW_PLATFORM_SBC] = "SBC",
-	[HW_PLATFORM_D5X] = "POLARIS",
+	[HW_PLATFORM_ADP] = "ADP",
 	[HW_PLATFORM_HDK] = "HDK",
+	[HW_PLATFORM_D5X] = "POLARIS",
 	[HW_PLATFORM_E1N] = "DIPPER",
 	[HW_PLATFORM_E10] = "BERYLLIUM",
 	[HW_PLATFORM_E1S] = "EQUULEUS",
@@ -656,8 +649,12 @@ static struct msm_soc_info cpu_of_id[] = {
 	/* QM215 ID */
 	[386] = {MSM_CPU_QM215, "QM215"},
 
+	/* QCM2150 ID */
+	[436] = {MSM_CPU_QCM2150, "QCM2150"},
+
 	/* SDM429W IDs*/
 	[416] = {MSM_CPU_SDM429W, "SDM429W"},
+	[437] = {MSM_CPU_SDA429W, "SDA429W"},
 	/* Uninitialized IDs are not known to run Linux.
 	 * MSM_CPU_UNKNOWN is set to 0 to ensure these IDs are
 	 * considered as unknown CPU.
@@ -1649,6 +1646,10 @@ static void * __init setup_dummy_socinfo(void)
 		dummy_socinfo.id = 416;
 		strlcpy(dummy_socinfo.build_id, "sdm429w - ",
 				sizeof(dummy_socinfo.build_id));
+	} else if (early_machine_is_sda429w()) {
+		dummy_socinfo.id = 437;
+		strlcpy(dummy_socinfo.build_id, "sda429w - ",
+				sizeof(dummy_socinfo.build_id));
 	} else if (early_machine_is_mdm9607()) {
 		dummy_socinfo.id = 290;
 		strlcpy(dummy_socinfo.build_id, "mdm9607 - ",
@@ -1656,6 +1657,10 @@ static void * __init setup_dummy_socinfo(void)
 	} else if (early_machine_is_qm215()) {
 		dummy_socinfo.id = 386;
 		strlcpy(dummy_socinfo.build_id, "qm215 - ",
+				sizeof(dummy_socinfo.build_id));
+	} else if (early_machine_is_qcm2150()) {
+		dummy_socinfo.id = 436;
+		strlcpy(dummy_socinfo.build_id, "qcm2150 - ",
 				sizeof(dummy_socinfo.build_id));
 	}
 
@@ -2027,7 +2032,7 @@ EXPORT_SYMBOL(get_hw_version_platform);
 uint32_t get_hw_version_major(void)
 {
 	uint32_t version = socinfo_get_platform_version();
-	return ((version & HW_MAJOR_VERSION_MASK) >> HW_MAJOR_VERSION_SHIFT) & 0xF;
+	return (version & HW_MAJOR_VERSION_MASK) >> HW_MAJOR_VERSION_SHIFT;
 }
 EXPORT_SYMBOL(get_hw_version_major);
 

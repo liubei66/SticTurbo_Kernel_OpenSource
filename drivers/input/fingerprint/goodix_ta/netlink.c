@@ -17,7 +17,7 @@
 int stringlength(char *s);
 void sendnlmsg(char *message);
 static int pid = -1;
-struct sock *nl_sk;
+struct sock *nl_sk = NULL;
 
 void sendnlmsg(char *message)
 {
@@ -93,6 +93,4 @@ void netlink_exit(void)
 		netlink_kernel_release(nl_sk);
 		nl_sk = NULL;
 	}
-	pr_info("self module exited\n");
 }
-

@@ -383,68 +383,6 @@ static void sde_disable_all_irqs(struct sde_kms *sde_kms)
 	sde_kms->hw_intr->ops.disable_all_irqs(sde_kms->hw_intr);
 }
 
-#ifdef CONFIG_DEBUG_FS
-#define DEFINE_SDE_DEBUGFS_SEQ_FOPS(__prefix)				\
-static int __prefix ## _open(struct inode *inode, struct file *file)	\
-{									\
-	return single_open(file, __prefix ## _show, inode->i_private);	\
-}									\
-static const struct file_operations __prefix ## _fops = {		\
-	.owner = THIS_MODULE,						\
-	.open = __prefix ## _open,					\
-	.release = single_release,					\
-	.read = seq_read,						\
-	.llseek = seq_lseek,						\
-}
-
-static int sde_debugfs_core_irq_show(struct seq_file *s, void *v)
-{
-	struct sde_irq *irq_obj = s->private;
-	struct sde_irq_callback *cb;
-	unsigned long irq_flags;
-	int i, irq_count, enable_count, cb_count;
-
-	if (!irq_obj || !irq_obj->enable_counts || !irq_obj->irq_cb_tbl) {
-		SDE_ERROR("invalid parameters\n");
-		return 0;
-	}
-
-	for (i = 0; i < irq_obj->total_irqs; i++) {
-		spin_lock_irqsave(&irq_obj->cb_lock, irq_flags);
-		cb_count = 0;
-		irq_count = atomic_read(&irq_obj->irq_counts[i]);
-		enable_count = atomic_read(&irq_obj->enable_counts[i]);
-		list_for_each_entry(cb, &irq_obj->irq_cb_tbl[i], list)
-			cb_count++;
-		spin_unlock_irqrestore(&irq_obj->cb_lock, irq_flags);
-
-		if (irq_count || enable_count || cb_count)
-			seq_printf(s, "idx:%d irq:%d enable:%d cb:%d\n",
-					i, irq_count, enable_count, cb_count);
-	}
-
-	return 0;
-}
-
-DEFINE_SDE_DEBUGFS_SEQ_FOPS(sde_debugfs_core_irq);
-
-int sde_debugfs_core_irq_init(struct sde_kms *sde_kms,
-		struct dentry *parent)
-{
-	sde_kms->irq_obj.debugfs_file = debugfs_create_file("core_irq", 0600,
-			parent, &sde_kms->irq_obj,
-			&sde_debugfs_core_irq_fops);
-
-	return 0;
-}
-
-void sde_debugfs_core_irq_destroy(struct sde_kms *sde_kms)
-{
-	debugfs_remove(sde_kms->irq_obj.debugfs_file);
-	sde_kms->irq_obj.debugfs_file = NULL;
-}
-
-#else
 int sde_debugfs_core_irq_init(struct sde_kms *sde_kms,
 		struct dentry *parent)
 {
@@ -454,7 +392,6 @@ int sde_debugfs_core_irq_init(struct sde_kms *sde_kms,
 void sde_debugfs_core_irq_destroy(struct sde_kms *sde_kms)
 {
 }
-#endif
 
 void sde_core_irq_preinstall(struct sde_kms *sde_kms)
 {

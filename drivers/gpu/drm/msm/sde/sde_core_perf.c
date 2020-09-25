@@ -1,5 +1,5 @@
 /* Copyright (c) 2016-2017, The Linux Foundation. All rights reserved.
- * Copyright (C) 2019 XiaoMi, Inc.
+ * Copyright (C) 2018 XiaoMi, Inc.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -637,12 +637,6 @@ void sde_core_perf_crtc_update(struct drm_crtc *crtc,
 		new->core_clk_rate, stop_req,
 		update_bus, update_clk, params_changed);
 
-	trace_printk("crtc:%d ib_mnoc:%llu ib_llc:%llu ib_ebi:%llu\n",
-		crtc->base.id,
-		new->max_per_pipe_ib[SDE_POWER_HANDLE_DBUS_ID_MNOC],
-		new->max_per_pipe_ib[SDE_POWER_HANDLE_DBUS_ID_LLCC],
-		new->max_per_pipe_ib[SDE_POWER_HANDLE_DBUS_ID_EBI]);
-
 	for (i = 0; i < SDE_POWER_HANDLE_DBUS_ID_MAX; i++) {
 		if (update_bus & BIT(i))
 			_sde_core_perf_crtc_update_bus(kms, crtc, i);
@@ -657,7 +651,6 @@ void sde_core_perf_crtc_update(struct drm_crtc *crtc,
 
 		SDE_EVT32(kms->dev, stop_req, clk_rate, params_changed,
 			old->core_clk_rate, new->core_clk_rate);
-
 		ret = sde_power_clk_set_rate(&priv->phandle,
 				kms->perf.clk_name, clk_rate);
 		if (ret) {
@@ -673,8 +666,6 @@ void sde_core_perf_crtc_update(struct drm_crtc *crtc,
 	mutex_unlock(&sde_core_perf_lock);
 
 }
-
-#ifdef CONFIG_DEBUG_FS
 
 static ssize_t _sde_core_perf_mode_write(struct file *file,
 		    const char __user *user_buf, size_t count, loff_t *ppos)
@@ -757,65 +748,6 @@ static const struct file_operations sde_core_perf_mode_fops = {
 
 static void sde_core_perf_debugfs_destroy(struct sde_core_perf *perf)
 {
-	debugfs_remove_recursive(perf->debugfs_root);
-	perf->debugfs_root = NULL;
-}
-
-int sde_core_perf_debugfs_init(struct sde_core_perf *perf,
-		struct dentry *parent)
-{
-	struct sde_mdss_cfg *catalog = perf->catalog;
-	struct msm_drm_private *priv;
-	struct sde_kms *sde_kms;
-
-	priv = perf->dev->dev_private;
-	if (!priv || !priv->kms) {
-		SDE_ERROR("invalid KMS reference\n");
-		return -EINVAL;
-	}
-
-	sde_kms = to_sde_kms(priv->kms);
-
-	perf->debugfs_root = debugfs_create_dir("core_perf", parent);
-	if (!perf->debugfs_root) {
-		SDE_ERROR("failed to create core perf debugfs\n");
-		return -EINVAL;
-	}
-
-	debugfs_create_u64("max_core_clk_rate", 0600, perf->debugfs_root,
-			&perf->max_core_clk_rate);
-	debugfs_create_u64("core_clk_rate", 0600, perf->debugfs_root,
-			&perf->core_clk_rate);
-	debugfs_create_u32("enable_bw_release", 0600, perf->debugfs_root,
-			(u32 *)&perf->enable_bw_release);
-	debugfs_create_u32("threshold_low", 0600, perf->debugfs_root,
-			(u32 *)&catalog->perf.max_bw_low);
-	debugfs_create_u32("threshold_high", 0600, perf->debugfs_root,
-			(u32 *)&catalog->perf.max_bw_high);
-	debugfs_create_u32("min_core_ib", 0600, perf->debugfs_root,
-			(u32 *)&catalog->perf.min_core_ib);
-	debugfs_create_u32("min_llcc_ib", 0600, perf->debugfs_root,
-			(u32 *)&catalog->perf.min_llcc_ib);
-	debugfs_create_u32("min_dram_ib", 0600, perf->debugfs_root,
-			(u32 *)&catalog->perf.min_dram_ib);
-	debugfs_create_file("perf_mode", 0600, perf->debugfs_root,
-			(u32 *)perf, &sde_core_perf_mode_fops);
-	debugfs_create_u32("bw_vote_mode", 0600, perf->debugfs_root,
-			&perf->bw_vote_mode);
-	debugfs_create_bool("bw_vote_mode_updated", 0600, perf->debugfs_root,
-			&perf->bw_vote_mode_updated);
-	debugfs_create_u64("fix_core_clk_rate", 0600, perf->debugfs_root,
-			&perf->fix_core_clk_rate);
-	debugfs_create_u64("fix_core_ib_vote", 0600, perf->debugfs_root,
-			&perf->fix_core_ib_vote);
-	debugfs_create_u64("fix_core_ab_vote", 0600, perf->debugfs_root,
-			&perf->fix_core_ab_vote);
-
-	return 0;
-}
-#else
-static void sde_core_perf_debugfs_destroy(struct sde_core_perf *perf)
-{
 }
 
 int sde_core_perf_debugfs_init(struct sde_core_perf *perf,
@@ -823,7 +755,6 @@ int sde_core_perf_debugfs_init(struct sde_core_perf *perf,
 {
 	return 0;
 }
-#endif
 
 void sde_core_perf_destroy(struct sde_core_perf *perf)
 {

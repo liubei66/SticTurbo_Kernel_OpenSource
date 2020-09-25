@@ -2110,7 +2110,7 @@ static int sde_encoder_resource_control(struct drm_encoder *drm_enc,
 				&sde_enc->delayed_off_work))
 			SDE_DEBUG_ENC(sde_enc, "sw_event:%d, work cancelled\n",
 					sw_event);
-
+			
 		msm_idle_set_state(drm_enc, true);
 
 		mutex_lock(&sde_enc->rc_lock);
@@ -2216,7 +2216,7 @@ static int sde_encoder_resource_control(struct drm_encoder *drm_enc,
 			idle_pc_duration = IDLE_SHORT_TIMEOUT;
 		else
 			idle_pc_duration = IDLE_POWERCOLLAPSE_DURATION;
-
+			
 		msm_idle_set_state(drm_enc, false);
 
 		if (!autorefresh_enabled)
@@ -4208,12 +4208,6 @@ void sde_encoder_kickoff(struct drm_encoder *drm_enc, bool is_error)
 				nsecs_to_jiffies(ktime_to_ns(wakeup_time)));
 	}
 
-	if (drm_enc->bridge && drm_enc->bridge->is_dsi_drm_bridge) {
-		struct dsi_bridge *c_bridge = container_of((drm_enc->bridge), struct dsi_bridge, base);
-		if (c_bridge && c_bridge->display && c_bridge->display->panel)
-			c_bridge->display->panel->kickoff_count++;
-	}
-
 	SDE_ATRACE_END("encoder_kickoff");
 }
 
@@ -4299,232 +4293,6 @@ void sde_encoder_prepare_commit(struct drm_encoder *drm_enc)
 	}
 }
 
-#ifdef CONFIG_DEBUG_FS
-static int _sde_encoder_status_show(struct seq_file *s, void *data)
-{
-	struct sde_encoder_virt *sde_enc;
-	int i;
-
-	if (!s || !s->private)
-		return -EINVAL;
-
-	sde_enc = s->private;
-
-	mutex_lock(&sde_enc->enc_lock);
-	for (i = 0; i < sde_enc->num_phys_encs; i++) {
-		struct sde_encoder_phys *phys = sde_enc->phys_encs[i];
-
-		if (!phys)
-			continue;
-
-		seq_printf(s, "intf:%d    vsync:%8d     underrun:%8d    ",
-				phys->intf_idx - INTF_0,
-				atomic_read(&phys->vsync_cnt),
-				atomic_read(&phys->underrun_cnt));
-
-		switch (phys->intf_mode) {
-		case INTF_MODE_VIDEO:
-			seq_puts(s, "mode: video\n");
-			break;
-		case INTF_MODE_CMD:
-			seq_puts(s, "mode: command\n");
-			break;
-		case INTF_MODE_WB_BLOCK:
-			seq_puts(s, "mode: wb block\n");
-			break;
-		case INTF_MODE_WB_LINE:
-			seq_puts(s, "mode: wb line\n");
-			break;
-		default:
-			seq_puts(s, "mode: ???\n");
-			break;
-		}
-	}
-	mutex_unlock(&sde_enc->enc_lock);
-
-	return 0;
-}
-
-static int _sde_encoder_debugfs_status_open(struct inode *inode,
-		struct file *file)
-{
-	return single_open(file, _sde_encoder_status_show, inode->i_private);
-}
-
-static ssize_t _sde_encoder_misr_setup(struct file *file,
-		const char __user *user_buf, size_t count, loff_t *ppos)
-{
-	struct sde_encoder_virt *sde_enc;
-	int i = 0, rc;
-	char buf[MISR_BUFF_SIZE + 1];
-	size_t buff_copy;
-	u32 frame_count, enable;
-
-	if (!file || !file->private_data)
-		return -EINVAL;
-
-	sde_enc = file->private_data;
-
-	buff_copy = min_t(size_t, count, MISR_BUFF_SIZE);
-	if (copy_from_user(buf, user_buf, buff_copy))
-		return -EINVAL;
-
-	buf[buff_copy] = 0; /* end of string */
-
-	if (sscanf(buf, "%u %u", &enable, &frame_count) != 2)
-		return -EINVAL;
-
-	rc = _sde_encoder_power_enable(sde_enc, true);
-	if (rc)
-		return rc;
-
-	mutex_lock(&sde_enc->enc_lock);
-	sde_enc->misr_enable = enable;
-	sde_enc->misr_frame_count = frame_count;
-	for (i = 0; i < sde_enc->num_phys_encs; i++) {
-		struct sde_encoder_phys *phys = sde_enc->phys_encs[i];
-
-		if (!phys || !phys->ops.setup_misr)
-			continue;
-
-		phys->ops.setup_misr(phys, enable, frame_count);
-	}
-	mutex_unlock(&sde_enc->enc_lock);
-	_sde_encoder_power_enable(sde_enc, false);
-
-	return count;
-}
-
-static ssize_t _sde_encoder_misr_read(struct file *file,
-		char __user *user_buff, size_t count, loff_t *ppos)
-{
-	struct sde_encoder_virt *sde_enc;
-	int i = 0, len = 0;
-	char buf[MISR_BUFF_SIZE + 1] = {'\0'};
-	int rc;
-
-	if (*ppos)
-		return 0;
-
-	if (!file || !file->private_data)
-		return -EINVAL;
-
-	sde_enc = file->private_data;
-
-	rc = _sde_encoder_power_enable(sde_enc, true);
-	if (rc)
-		return rc;
-
-	mutex_lock(&sde_enc->enc_lock);
-	if (!sde_enc->misr_enable) {
-		len += snprintf(buf + len, MISR_BUFF_SIZE - len,
-			"disabled\n");
-		goto buff_check;
-	} else if (sde_enc->disp_info.capabilities &
-						~MSM_DISPLAY_CAP_VID_MODE) {
-		len += snprintf(buf + len, MISR_BUFF_SIZE - len,
-			"unsupported\n");
-		goto buff_check;
-	}
-
-	for (i = 0; i < sde_enc->num_phys_encs; i++) {
-		struct sde_encoder_phys *phys = sde_enc->phys_encs[i];
-
-		if (!phys || !phys->ops.collect_misr)
-			continue;
-
-		len += snprintf(buf + len, MISR_BUFF_SIZE - len,
-			"Intf idx:%d\n", phys->intf_idx - INTF_0);
-		len += snprintf(buf + len, MISR_BUFF_SIZE - len, "0x%x\n",
-					phys->ops.collect_misr(phys));
-	}
-
-buff_check:
-	if (count <= len) {
-		len = 0;
-		goto end;
-	}
-
-	if (copy_to_user(user_buff, buf, len)) {
-		len = -EFAULT;
-		goto end;
-	}
-
-	*ppos += len;   /* increase offset */
-
-end:
-	mutex_unlock(&sde_enc->enc_lock);
-	_sde_encoder_power_enable(sde_enc, false);
-	return len;
-}
-
-static int _sde_encoder_init_debugfs(struct drm_encoder *drm_enc)
-{
-	struct sde_encoder_virt *sde_enc;
-	struct msm_drm_private *priv;
-	struct sde_kms *sde_kms;
-	int i;
-
-	static const struct file_operations debugfs_status_fops = {
-		.open =		_sde_encoder_debugfs_status_open,
-		.read =		seq_read,
-		.llseek =	seq_lseek,
-		.release =	single_release,
-	};
-
-	static const struct file_operations debugfs_misr_fops = {
-		.open = simple_open,
-		.read = _sde_encoder_misr_read,
-		.write = _sde_encoder_misr_setup,
-	};
-
-	char name[SDE_NAME_SIZE];
-
-	if (!drm_enc || !drm_enc->dev || !drm_enc->dev->dev_private) {
-		SDE_ERROR("invalid encoder or kms\n");
-		return -EINVAL;
-	}
-
-	sde_enc = to_sde_encoder_virt(drm_enc);
-	priv = drm_enc->dev->dev_private;
-	sde_kms = to_sde_kms(priv->kms);
-
-	snprintf(name, SDE_NAME_SIZE, "encoder%u", drm_enc->base.id);
-
-	/* create overall sub-directory for the encoder */
-	sde_enc->debugfs_root = debugfs_create_dir(name,
-			drm_enc->dev->primary->debugfs_root);
-	if (!sde_enc->debugfs_root)
-		return -ENOMEM;
-
-	/* don't error check these */
-	debugfs_create_file("status", 0600,
-		sde_enc->debugfs_root, sde_enc, &debugfs_status_fops);
-
-	debugfs_create_file("misr_data", 0600,
-		sde_enc->debugfs_root, sde_enc, &debugfs_misr_fops);
-
-	for (i = 0; i < sde_enc->num_phys_encs; i++)
-		if (sde_enc->phys_encs[i] &&
-				sde_enc->phys_encs[i]->ops.late_register)
-			sde_enc->phys_encs[i]->ops.late_register(
-					sde_enc->phys_encs[i],
-					sde_enc->debugfs_root);
-
-	return 0;
-}
-
-static void _sde_encoder_destroy_debugfs(struct drm_encoder *drm_enc)
-{
-	struct sde_encoder_virt *sde_enc;
-
-	if (!drm_enc)
-		return;
-
-	sde_enc = to_sde_encoder_virt(drm_enc);
-	debugfs_remove_recursive(sde_enc->debugfs_root);
-}
-#else
 static int _sde_encoder_init_debugfs(struct drm_encoder *drm_enc)
 {
 	return 0;
@@ -4533,7 +4301,6 @@ static int _sde_encoder_init_debugfs(struct drm_encoder *drm_enc)
 static void _sde_encoder_destroy_debugfs(struct drm_encoder *drm_enc)
 {
 }
-#endif
 
 static int sde_encoder_late_register(struct drm_encoder *encoder)
 {

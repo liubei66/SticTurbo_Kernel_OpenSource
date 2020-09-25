@@ -1,4 +1,3 @@
-
 qcom,e1_coslight_3070mAh {
 	qcom,max-voltage-uv = <4400000>;
 	qcom,nom-batt-capacity-mah = <3000>;

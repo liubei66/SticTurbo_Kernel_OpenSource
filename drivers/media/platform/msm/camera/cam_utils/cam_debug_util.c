@@ -1,5 +1,4 @@
-/* Copyright (c) 2017, The Linux Foundataion. All rights reserved.
- * Copyright (C) 2019 XiaoMi, Inc.
+/* Copyright (c) 2017-2018, The Linux Foundataion. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -17,7 +16,6 @@
 #include "cam_debug_util.h"
 
 static uint debug_mdl;
-module_param(debug_mdl, uint, 0644);
 
 const char *cam_get_module_name(unsigned int module_id)
 {
@@ -31,7 +29,7 @@ const char *cam_get_module_name(unsigned int module_id)
 		name = "CAM-CORE";
 		break;
 	case CAM_CRM:
-		name = "CAM_CRM";
+		name = "CAM-CRM";
 		break;
 	case CAM_CPAS:
 		name = "CAM-CPAS";
@@ -87,6 +85,21 @@ const char *cam_get_module_name(unsigned int module_id)
 	case CAM_OIS:
 		name = "CAM-OIS";
 		break;
+	case CAM_IRQ_CTRL:
+		name = "CAM-IRQ-CTRL";
+		break;
+	case CAM_MEM:
+		name = "CAM-MEM";
+		break;
+	case CAM_PERF:
+		name = "CAM-PERF";
+		break;
+	case CAM_REQ:
+		name = "CAM-REQ";
+		break;
+	case CAM_SL_EEPROM:
+		name = "CAM-SL-EEPROM";
+		break;
 	default:
 		name = "CAM";
 		break;
@@ -105,9 +118,6 @@ void cam_debug_log(unsigned int module_id, const char *func, const int line,
 
 	if (debug_mdl & module_id) {
 		vsnprintf(str_buffer, STR_BUFFER_MAX_LENGTH, fmt, args);
-		pr_info("CAM_DBG: %s: %s: %d: %s\n",
-			cam_get_module_name(module_id),
-			func, line, str_buffer);
 		va_end(args);
 	}
 }

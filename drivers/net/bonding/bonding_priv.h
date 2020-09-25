@@ -15,7 +15,7 @@
 #ifndef _BONDING_PRIV_H
 #define _BONDING_PRIV_H
 
-#define DRV_VERSION	"3.7.1"
+#define DRV_VERSION	"0"
 #define DRV_RELDATE	"April 27, 2011"
 #define DRV_NAME	"bonding"
 #define DRV_DESCRIPTION	"Ethernet Channel Bonding Driver"

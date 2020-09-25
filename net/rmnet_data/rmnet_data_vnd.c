@@ -119,7 +119,6 @@ static netdev_tx_t rmnet_vnd_start_xmit(struct sk_buff *skb,
 {
 	struct rmnet_vnd_private_s *dev_conf;
 
-	trace_rmnet_vnd_start_xmit(skb);
 	dev_conf = (struct rmnet_vnd_private_s *)netdev_priv(dev);
 	if (dev_conf->local_ep.egress_dev) {
 		/* QoS header should come after MAP header */
@@ -205,7 +204,6 @@ static int _rmnet_vnd_do_qos_ioctl(struct net_device *dev,
 		}
 		qdisc_len = tc_qdisc_flow_control(dev,
 						  ioctl_data.u.tcm_handle, 1);
-		trace_rmnet_fc_qmi(ioctl_data.u.tcm_handle, qdisc_len, 1);
 		break;
 
 	case RMNET_IOCTL_FLOW_DISABLE:
@@ -219,7 +217,6 @@ static int _rmnet_vnd_do_qos_ioctl(struct net_device *dev,
 		}
 		qdisc_len = tc_qdisc_flow_control(dev,
 						  ioctl_data.u.tcm_handle, 0);
-		trace_rmnet_fc_qmi(ioctl_data.u.tcm_handle, qdisc_len, 0);
 		break;
 
 	default:
@@ -246,7 +243,6 @@ static void _rmnet_vnd_wq_flow_control(struct work_struct *work)
 	rtnl_lock();
 	qdisc_len = tc_qdisc_flow_control(fcwork->dev, fcwork->tc_handle,
 					  fcwork->enable);
-	trace_rmnet_fc_map(fcwork->tc_handle, qdisc_len, fcwork->enable);
 	rtnl_unlock();
 
 	LOGL("[%s] handle:%08X enable:%d",
@@ -1019,7 +1015,6 @@ nolookup:
 				netif_wake_queue(dev);
 			else
 				netif_stop_queue(dev);
-			trace_rmnet_fc_map(0xFFFFFFFF, 0, enable);
 			goto fcdone;
 		}
 		for (i = 0; i < RMNET_MAP_FLOW_NUM_TC_HANDLE; i++) {

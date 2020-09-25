@@ -15,7 +15,8 @@
 #include <dt-bindings/gpio/gpio.h>
 #include "sdm845-pmic-overlay.dtsi"
 #include "sdm845-pinctrl-overlay.dtsi"
-#include "xiaomi-sde-display.dtsi"
+#include "sdm845-xiaomi-common.dtsi"
+//#include "beryllium-camera-sensor-mtp.dtsi"
 #include "beryllium-p0-camera-sensor-mtp.dtsi"
 
 &qupv3_se10_i2c {
@@ -208,20 +209,20 @@
 };
 
 &pmi8998_haptics {
-	qcom,vmax-mv = <2812>;
-	qcom,lra-auto-mode;
-	qcom,overdrive;
-	qcom,wave-play-rate-us = <4878>;
-	qcom,wave-shape = "sine";
-	qcom,lra-high-z = "opt1";
-	qcom,lra-auto-res-mode = "qwd";
-	qcom,lra-res-cal-period = <4>;
-	qcom,effect-max = <3>;
-	qcom,effect-arry = [3e 3e be a0 00 00 00 00
-			3e 3e 3e be be 00 00 00
-			3e 3e 3e 3e be be a0 90];
-	qcom,play-mode = "buffer";
-	status = "okay";
+       qcom,vmax-mv = <2812>;
+       qcom,lra-auto-mode;
+       qcom,overdrive;
+       qcom,wave-play-rate-us = <4878>;
+       qcom,wave-shape = "sine";
+       qcom,lra-high-z = "opt1";
+       qcom,lra-auto-res-mode = "qwd";
+       qcom,lra-res-cal-period = <4>;
+       qcom,effect-max = <3>;
+       qcom,effect-arry = [3e 3e be a0 00 00 00 00
+       3e 3e 3e be be 00 00 00
+       3e 3e 3e 3e be be a0 90];
+       qcom,play-mode = "buffer";
+       status = "okay";
 };
 
 &mdss_mdp {
@@ -289,9 +290,9 @@
 };
 
 &pmi8998_switch2 {
-	pinctrl-names = "led_enable", "led_disable";
-	pinctrl-0 = <&flash_led3_iris_en>;
-	pinctrl-1 = <&flash_led3_iris_dis>;
+       pinctrl-names = "led_enable", "led_disable";
+       pinctrl-0 = <&flash_led3_iris_en>;
+       pinctrl-1 = <&flash_led3_iris_dis>;
 };
 
 &vendor{
@@ -415,12 +416,13 @@
 		interrupts = <63 0>;
 		interrupt-names = "nfc_irq";
 		pinctrl-names = "nfc_active", "nfc_suspend";
-		pinctrl-0 = <&nfc_int_active
-				        &nfc_enable_active
-				        &nfc_clk_default>;
+                pinctrl-0 = <&nfc_int_active
+                             &nfc_enable_active
+                             &nfc_clk_default>;
 		pinctrl-1 = <&nfc_int_suspend &nfc_enable_suspend>;
 		clocks = <&clock_rpmh RPMH_LN_BB_CLK3>;
 		clock-names = "ref_clk";
+		status = "disabled";
 	};
 };
 

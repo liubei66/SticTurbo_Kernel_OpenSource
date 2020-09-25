@@ -17,8 +17,6 @@ enum FP_MODE{
 	GF_DEBUG_MODE = 0x56
 };
 
-#define SUPPORT_NAV_EVENT
-
 #if defined(SUPPORT_NAV_EVENT)
 #define GF_NAV_INPUT_UP			KEY_UP
 #define GF_NAV_INPUT_DOWN		KEY_DOWN
@@ -138,11 +136,10 @@ struct gf_dev {
 	struct notifier_block notifier;
 	char device_available;
 	char fb_black;
-	char wait_finger_down;
-	struct work_struct work;
 #ifdef CONFIG_FINGERPRINT_FP_VREG_CONTROL
 	struct regulator *vreg;
 #endif
+	int proximity_state; /* 0:far 1:near */
 };
 
 int gf_parse_dts(struct gf_dev *gf_dev);
