@@ -46,7 +46,6 @@ config TOUCHSCREEN_FT5X46_SPI
 	  If unsure, say N.
 
 	  To compile this driver as a set of modules, choose M here: the
-
 config TOUCHSCREEN_FT5X46_DEBUG_FS
 	bool "touch debugfs suport"
 	default n
