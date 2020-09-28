@@ -368,7 +368,6 @@ AFLAGS_KERNEL	=
 CFLAGS_GCOV	= -fprofile-arcs -ftest-coverage -fno-tree-loop-im
 CFLAGS_KCOV	= -fsanitize-coverage=trace-pc
 
-
 # Use USERINCLUDE when you must reference the UAPI directories only.
 USERINCLUDE    := \
 		-I$(srctree)/arch/$(hdr-arch)/include/uapi \
@@ -659,6 +658,10 @@ endif
 
 ifdef CONFIG_CC_WERROR
 KBUILD_CFLAGS	+= -Werror
+endif
+
+ifeq ($(cc-name),gcc)
+KBUILD_CFLAGS	+= -Wno-psabi
 endif
 
 # Tell gcc to never replace conditional load with a non-conditional one
