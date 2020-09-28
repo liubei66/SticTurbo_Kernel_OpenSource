@@ -155,7 +155,7 @@
 
 #define QPNP_PON_BUFFER_SIZE			9
 
-#define QPNP_POFF_REASON_UVLO		
+#define QPNP_POFF_REASON_UVLO			13
 
 enum qpnp_pon_version {
 	QPNP_PON_GEN1_V1,
@@ -2557,7 +2557,6 @@ static int qpnp_pon_probe(struct platform_device *pdev)
 					"qcom,store-hard-reset-reason");
 	debug_pon_on_off_reg(pon);
 	qpnp_pon_debugfs_init(pdev);
-
 	return 0;
 }
 
