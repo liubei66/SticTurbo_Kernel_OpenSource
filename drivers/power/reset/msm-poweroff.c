@@ -36,9 +36,6 @@
 #include <soc/qcom/watchdog.h>
 #include <soc/qcom/minidump.h>
 
-#include <linux/syscalls.h>
-#include <linux/workqueue.h>
-
 #define EMERGENCY_DLOAD_MAGIC1    0x322A4F99
 #define EMERGENCY_DLOAD_MAGIC2    0xC67E4350
 #define EMERGENCY_DLOAD_MAGIC3    0x77777777
@@ -401,31 +398,9 @@ static void deassert_ps_hold(void)
 	__raw_writel(0, msm_ps_hold);
 }
 
-#define FS_SYNC_TIMEOUT_MS 5000
-static struct work_struct fs_sync_work;
-static DECLARE_COMPLETION(sync_compl);
-
-static void fs_sync_work_func(struct work_struct *work)
-{
-	pr_emerg("sys_sync: Syncing fs\n");
-	sys_sync();
-	complete(&sync_compl);
-}
-
-void exec_fs_sync_work(void)
-{
-	INIT_WORK(&fs_sync_work, fs_sync_work_func);
-	reinit_completion(&sync_compl);
-	schedule_work(&fs_sync_work);
-	if (wait_for_completion_timeout(&sync_compl, msecs_to_jiffies(FS_SYNC_TIMEOUT_MS)) == 0)
-		pr_emerg("sys_sync: Timeout\n");
-}
-
 static void do_msm_restart(enum reboot_mode reboot_mode, const char *cmd)
 {
 	pr_notice("Going down for restart now\n");
-	
-	exec_fs_sync_work();
 
 	msm_restart_prepare(cmd);
 
@@ -449,8 +424,6 @@ static void do_msm_restart(enum reboot_mode reboot_mode, const char *cmd)
 static void do_msm_poweroff(void)
 {
 	pr_notice("Powering off the SoC\n");
-	
-	exec_fs_sync_work();
 
 	set_dload_mode(0);
 	scm_disable_sdi();
