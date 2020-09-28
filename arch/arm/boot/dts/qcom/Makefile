@@ -216,34 +216,9 @@ dtb-$(CONFIG_ARCH_SDM660) += sdm660-sim.dtb \
 	sdm660-cdp.dtb \
 	sdm660-mtp.dtb \
 	sdm660-qrd.dtb \
-	sdm660-rcm.dtb \
-	sdm660-rumi.dtb \
-	sdm660-pm660a-cdp.dtb \
-	sdm660-pm660a-mtp.dtb \
-	sdm660-pm660a-qrd.dtb \
-	sdm660-pm660a-rcm.dtb \
-	sdm660-pm660a-rumi.dtb \
-	sdm660-pm660a-sim.dtb \
-	sdm660-headset-jacktype-no-cdp.dtb \
-	sdm660-headset-jacktype-no-rcm.dtb \
-	sdm660-pm660a-headset-jacktype-no-cdp.dtb \
-	sdm660-pm660a-headset-jacktype-no-rcm.dtb \
-	sdm660-usbc-audio-mtp.dtb \
-	sdm660-usbc-audio-rcm.dtb \
 	sdm636-cdp.dtb \
 	sdm636-mtp.dtb \
 	sdm636-qrd.dtb \
-	sdm636-rcm.dtb \
-	sdm636-headset-jacktype-no-cdp.dtb \
-	sdm636-headset-jacktype-no-rcm.dtb \
-	sdm636-pm660a-headset-jacktype-no-cdp.dtb \
-	sdm636-pm660a-headset-jacktype-no-rcm.dtb \
-	sdm636-pm660a-cdp.dtb \
-	sdm636-pm660a-mtp.dtb \
-	sdm636-pm660a-qrd.dtb \
-	sdm636-pm660a-rcm.dtb \
-	sdm636-usbc-audio-mtp.dtb \
-	sdm636-usbc-audio-rcm.dtb \
 	platina-sdm660.dtb \
 	nitrogen-sdm636.dtb
 
