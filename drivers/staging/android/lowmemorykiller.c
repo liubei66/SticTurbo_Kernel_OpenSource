@@ -92,6 +92,8 @@ static unsigned long lowmem_deathpending_timeout;
 			pr_info(x);			\
 	} while (0)
 
+static int oom_reaper;
+module_param_named(oom_reaper, int, 0644);
 
 static DECLARE_WAIT_QUEUE_HEAD(event_wait);
 static DEFINE_SPINLOCK(lmk_event_lock);

@@ -121,5 +121,9 @@ build.sh
 
 phone_build.sh
 
+pornhub-video
+
+drivers/sticmodules
+
 # fetched Android config fragments
 android/configs/android-*.cfg
