@@ -149,7 +149,7 @@
 		qcom,esd-check-enabled;
 		qcom,initial-esd-check-cmd = <0x0A 0x9C 20>;
 		qcom,dispparam-enabled;
-		qcom,mdss-panel-on-dimming-delay = <100>;
+		qcom,mdss-panel-on-dimming-delay = <120>;
 		qcom,mdss-dsi-dispparam-dimmingon-command = [
 			15 01 00 00 01 00 02 53 2C];
 		qcom,mdss-dsi-dispparam-cabcon-command = [

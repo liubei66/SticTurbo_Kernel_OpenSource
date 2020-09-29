@@ -18,7 +18,7 @@ qcom,e4_coslight_5500mah {
 	qcom,fg-cc-cv-threshold-mv = <4390>;
 	qcom,batt-id-kohm = <100>;
 	qcom,battery-beta = <3380>;
-	qcom,battery-type = "e4_coslight";
+	qcom,battery-type = "e4_coslight_5500mah";
 	qcom,checksum = <0xD654>;
 	qcom,gui-version = "PM660GUI - 0.0.0.45";
 	qcom,fg-profile-data = [
