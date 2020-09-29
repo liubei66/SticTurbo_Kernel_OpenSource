@@ -55,15 +55,6 @@ config DEVFREQ_GOV_POWERSAVE
 	  the DEVFREQ framework returns the lowest frequency available
 	  at any time.
 
-config DEVFREQ_GOV_USERSPACE
-	tristate "Userspace"
-	help
-	  Sets the frequency at the user specified one.
-	  This governor returns the user configured frequency if there
-	  has been an input to /sys/devices/.../power/devfreq_set_freq.
-	  Otherwise, the governor does not change the frequnecy
-	  given at the initialization.
-
 config DEVFREQ_GOV_QCOM_ADRENO_TZ
 	tristate "Qualcom  Adreno Trustzone"
 	depends on QCOM_KGSL && QCOM_SCM
@@ -217,7 +208,6 @@ config DEVFREQ_SIMPLE_DEV
 	tristate "Device driver for simple clock device with no status info"
 	select DEVFREQ_GOV_PERFORMANCE
 	select DEVFREQ_GOV_POWERSAVE
-	select DEVFREQ_GOV_USERSPACE
 	select DEVFREQ_GOV_CPUFREQ
 	help
 	  Device driver for simple devices that control their frequency using
@@ -228,7 +218,6 @@ config QCOM_DEVFREQ_DEVBW
 	depends on ARCH_QCOM
 	select DEVFREQ_GOV_PERFORMANCE
 	select DEVFREQ_GOV_POWERSAVE
-	select DEVFREQ_GOV_USERSPACE
 	select DEVFREQ_GOV_CPUFREQ
 	default n
 	help
