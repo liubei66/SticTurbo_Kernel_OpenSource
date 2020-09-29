@@ -544,7 +544,7 @@ config DEBUG_KMEMLEAK_EARLY_LOG_SIZE
 	int "Maximum kmemleak early log entries"
 	depends on DEBUG_KMEMLEAK
 	range 200 40000
-	default 400
+	default 16000
 	help
 	  Kmemleak must track all the memory allocations to avoid
 	  reporting false positives. Since memory may be allocated or
@@ -2042,6 +2042,16 @@ config BUG_ON_DATA_CORRUPTION
 	  for validity.
 
 	  If unsure, say N.
+
+config CC_WERROR
+	bool "Treat all compile warnings as errors"
+	default n
+	help
+	 Select this option to set compiler warnings as errors,
+	 to prevent easily-fixable problems from creeping into
+	 the codebase.
+
+	 If unsure, say N.
 
 source "samples/Kconfig"
 

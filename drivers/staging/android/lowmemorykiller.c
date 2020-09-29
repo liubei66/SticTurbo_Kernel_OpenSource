@@ -53,6 +53,7 @@
 #include <linux/circ_buf.h>
 #include <linux/proc_fs.h>
 #include <linux/slab.h>
+#include <linux/poll.h>
 
 #define CREATE_TRACE_POINTS
 #include <trace/events/almk.h>
@@ -66,7 +67,7 @@
 #define CREATE_TRACE_POINTS
 #include "trace/lowmemorykiller.h"
 
-static uint32_t lowmem_debug_level = 1;
+static uint32_t lowmem_debug_level = 0;
 static short lowmem_adj[6] = {
 	0,
 	1,
@@ -240,9 +241,8 @@ module_param_named(adj_max_shift, adj_max_shift, short,
                    S_IRUGO | S_IWUSR);
 
 /* User knob to enable/disable adaptive lmk feature */
-static int enable_adaptive_lmk;
-module_param_named(enable_adaptive_lmk, enable_adaptive_lmk, int,
-		   S_IRUGO | S_IWUSR);
+static int enable_adaptive_lmk = 0;
+module_param_named(enable_adaptive_lmk, enable_adaptive_lmk, int, 0444);
 
 /*
  * This parameter controls the behaviour of LMK when vmpressure is in
@@ -294,6 +294,7 @@ static int lmk_vmpressure_notifier(struct notifier_block *nb,
 	if (pressure >= 95) {
 		other_file = global_page_state(NR_FILE_PAGES) + zcache_pages() -
 			global_page_state(NR_SHMEM) -
+			global_page_state(NR_UNEVICTABLE) -
 			total_swapcache_pages();
 		other_free = global_page_state(NR_FREE_PAGES);
 
@@ -307,6 +308,7 @@ static int lmk_vmpressure_notifier(struct notifier_block *nb,
 
 		other_file = global_page_state(NR_FILE_PAGES) + zcache_pages() -
 			global_page_state(NR_SHMEM) -
+			global_page_state(NR_UNEVICTABLE) -
 			total_swapcache_pages();
 
 		other_free = global_page_state(NR_FREE_PAGES);
@@ -319,6 +321,7 @@ static int lmk_vmpressure_notifier(struct notifier_block *nb,
 	} else if (atomic_read(&shift_adj)) {
 		other_file = global_page_state(NR_FILE_PAGES) + zcache_pages() -
 			global_page_state(NR_SHMEM) -
+			global_page_state(NR_UNEVICTABLE) -
 			total_swapcache_pages();
 		other_free = global_page_state(NR_FREE_PAGES);
 

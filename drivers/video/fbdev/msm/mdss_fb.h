@@ -293,6 +293,7 @@ struct msm_fb_data_type {
 	int op_enable;
 	u32 fb_imgType;
 	int panel_reconfig;
+	int force_null_commit;
 	u32 panel_orientation;
 
 	u32 dst_format;
