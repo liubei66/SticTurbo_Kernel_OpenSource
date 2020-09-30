@@ -391,7 +391,7 @@ static struct fg_alg_flag pmi8998_v2_alg_flags[] = {
 	},
 };
 
-static int fg_gen3_debug_mask;
+static int fg_gen3_debug_mask = 0;
 module_param_named(
 	debug_mask, fg_gen3_debug_mask, int, S_IRUSR | S_IWUSR
 );
@@ -2946,10 +2946,8 @@ static bool is_profile_load_required(struct fg_chip *chip)
 		if (!chip->dt.force_load_profile) {
 			pr_warn("Profiles doesn't match, skipping loading it since force_load_profile is disabled\n");
 			if (fg_profile_dump) {
-				pr_info("FG: loaded profile:\n");
 				dump_sram(buf, PROFILE_LOAD_WORD,
 					PROFILE_COMP_LEN);
-				pr_info("FG: available profile:\n");
 				dump_sram(chip->batt_profile, PROFILE_LOAD_WORD,
 					PROFILE_LEN);
 			}
@@ -2960,7 +2958,6 @@ static bool is_profile_load_required(struct fg_chip *chip)
 	} else {
 		fg_dbg(chip, FG_STATUS, "Profile integrity bit is not set\n");
 		if (fg_profile_dump) {
-			pr_info("FG: profile to be loaded:\n");
 			dump_sram(chip->batt_profile, PROFILE_LOAD_WORD,
 				PROFILE_LEN);
 		}
@@ -3270,7 +3267,6 @@ static int fg_restart_sysfs(const char *val, const struct kernel_param *kp)
 		return rc;
 	}
 
-	pr_info("FG restart done\n");
 	return rc;
 }
 
@@ -3971,8 +3967,6 @@ static int fg_psy_set_property(struct power_supply *psy,
 		break;
 	case POWER_SUPPLY_PROP_CYCLE_COUNT:
 		rc = fg_set_cycle_count(chip, pval->intval);
-		pr_info("Cycle count is modified to %d by userspace\n",
-				pval->intval);
 		break;
 	case POWER_SUPPLY_PROP_CONSTANT_CHARGE_VOLTAGE:
 		rc = fg_set_constant_chg_voltage(chip, pval->intval);
@@ -5436,7 +5430,6 @@ static void empty_restart_fg_work(struct work_struct *work)
 	/* only when usb is absent, restart fg */
 	if (!usb_present) {
 		if (chip->profile_loaded) {
-			pr_info("soc empty after cold to warm, need to restart fg\n");
 			chip->empty_restart_fg = true;
 			rc = __fg_restart(chip);
 			if (rc < 0) {
