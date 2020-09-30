@@ -1,7 +1,7 @@
 /*
  * Author: andip71, 01.09.2017
  *
- * Version 1.1.0
+ * Version 2.0
  *
  * This software is licensed under the terms of the GNU General Public
  * License version 2, as published by the Free Software Foundation, and
@@ -14,21 +14,6 @@
  *
  */
 
-/*
- * Change log:
- *
- * 1.1.0 (01.09.2017)
- *   - By default, the following wakelocks are blocked in an own list
- *     qcom_rx_wakelock, wlan, wlan_wow_wl, wlan_extscan_wl, NETLINK
- *
- * 1.0.1 (29.08.2017)
- *   - Add killing wakelock when currently active
- *
- * 1.0.0 (28.08.2017)
- *   - Initial version
- *
- */
-
 #include <linux/module.h>
 #include <linux/kobject.h>
 #include <linux/sysfs.h>
@@ -36,22 +21,12 @@
 #include <linux/miscdevice.h>
 #include "boeffla_wl_blocker.h"
 
-
-/*
-  Variables
-*/
-
 char list_wl[LENGTH_LIST_WL] = {0};
 char list_wl_default[LENGTH_LIST_WL_DEFAULT] = {0};
 
 extern char list_wl_search[LENGTH_LIST_WL_SEARCH];
 extern bool wl_blocker_active;
 extern bool wl_blocker_debug;
-
-
-/*
- Internal functions
-*/
 
 static void build_search_string(char *list1, char *list2)
 {
@@ -64,7 +39,6 @@ static void build_search_string(char *list1, char *list2)
 	else
 		wl_blocker_active = false;
 }
-
 
 /*
  sysfs interface functions
@@ -128,10 +102,9 @@ static ssize_t wakelock_blocker_default_store(struct device *dev, struct device_
 static ssize_t debug_show(struct device *dev, struct device_attribute *attr, char *buf)
 {
 	/* return current debug status */
-	return sprintf(buf, "Debug status: %d\n\nUser list: %s\nDefault list: %s\nSearch list: %s\nActive: %d\n",
+	return sprintf(buf, "Debug status: %d\nUser list: %s\nDefault list: %s\nSearch list: %s\nActive: %d",
 					wl_blocker_debug, list_wl, list_wl_default, list_wl_search, wl_blocker_active);
 }
-
 
 /* store debug mode on/off (1/0) */
 static ssize_t debug_store(struct device *dev, struct device_attribute *attr,
@@ -161,12 +134,6 @@ static ssize_t version_show(struct device *dev, struct device_attribute *attr, c
 	return snprintf(buf, sizeof(BOEFFLA_WL_BLOCKER_VERSION), "%s\n", BOEFFLA_WL_BLOCKER_VERSION);
 }
 
-
-
-/*
-  Initialize sysfs objects
-*/
-
 /* define objects */
 static DEVICE_ATTR(wakelock_blocker, 0644, wakelock_blocker_show, wakelock_blocker_store);
 static DEVICE_ATTR(wakelock_blocker_default, 0644, wakelock_blocker_default_show, wakelock_blocker_default_store);
@@ -193,7 +160,6 @@ static struct miscdevice boeffla_wl_blocker_control_device = {
 	.name = "boeffla_wakelock_blocker",
 };
 
-
 /*
   Driver init and exit functions
 */
@@ -204,16 +170,13 @@ static int boeffla_wl_blocker_init(void)
 	misc_register(&boeffla_wl_blocker_control_device);
 	if (sysfs_create_group(&boeffla_wl_blocker_control_device.this_device->kobj,
 				&boeffla_wl_blocker_control_group) < 0) {
-		pr_debug("Boeffla WL blocker: failed to create sys fs object.\n");
+		pr_debug("Boeffla WL blocker: failed.\n");
 		return 0;
 	}
 
 	/* initialize default list */
 	snprintf(list_wl_default, sizeof(LIST_WL_DEFAULT), "%s", LIST_WL_DEFAULT);
 	build_search_string(list_wl_default, list_wl);
-
-	/* Print debug info */
-	pr_debug("Boeffla WL blocker: driver version %s started\n", BOEFFLA_WL_BLOCKER_VERSION);
 
 	return 0;
 }
@@ -225,10 +188,7 @@ static void boeffla_wl_blocker_exit(void)
 	sysfs_remove_group(&boeffla_wl_blocker_control_device.this_device->kobj,
 		&boeffla_wl_blocker_control_group);
 
-	/* Print debug info */
-	pr_debug("Boeffla WL blocker: driver stopped\n");
 }
-
 
 /* define driver entry points */
 module_init(boeffla_wl_blocker_init);
