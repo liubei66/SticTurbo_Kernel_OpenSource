@@ -3,7 +3,7 @@
  * Copyright (C) 2020 XiaoMi, Inc.
  *
  * $Revision: 21288 $
- * $Date: 2018-01-05 11:38:47 +0800 (週五, 05 一月 2018) $
+ * $Date: 2018-01-05 11:38:47
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -1274,7 +1274,7 @@ static int32_t nvt_selftest_open(struct inode *inode, struct file *file)
 		 * Ex. nvt_pid = 500A
 		 *     mpcriteria = "novatek-mp-criteria-500A"
 		 */
-		snprintf(mpcriteria, PAGE_SIZE, "novatek-mp-criteria-%04X", ts->nvt_pid);
+		snprintf(mpcriteria, sizeof(mpcriteria), "novatek-mp-criteria-%04X", ts->nvt_pid);
 		nvt_mp_parse_dt(np, mpcriteria);
 	} else {
 		NVT_LOG("Not found novatek,mp-support-dt, use default setting\n");
