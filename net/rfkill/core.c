@@ -92,8 +92,8 @@ struct rfkill_data {
 };
 
 
-MODULE_AUTHOR("Ivo van Doorn <IvDoorn@gmail.com>");
-MODULE_AUTHOR("Johannes Berg <johannes@sipsolutions.net>");
+MODULE_AUTHOR("Ivo van Doorn");
+MODULE_AUTHOR("Johannes Berg");
 MODULE_DESCRIPTION("RF switch support");
 MODULE_LICENSE("GPL");
 
@@ -935,10 +935,13 @@ static void rfkill_sync_work(struct work_struct *work)
 int __must_check rfkill_register(struct rfkill *rfkill)
 {
 	static unsigned long rfkill_no;
-	struct device *dev = &rfkill->dev;
+	struct device *dev;
 	int error;
 
-	BUG_ON(!rfkill);
+	if (!rfkill)
+		return -EINVAL;
+
+	dev = &rfkill->dev;
 
 	mutex_lock(&rfkill_global_mutex);
 

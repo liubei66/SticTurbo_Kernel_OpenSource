@@ -372,10 +372,6 @@ struct mhi_uci_ctxt_t {
 	if (_msg_lvl >= mhi_uci_msg_lvl) { \
 		pr_err("[%s] "_msg, __func__, ##__VA_ARGS__); \
 	} \
-	if (mhi_uci_ipc_log && (_msg_lvl >= mhi_uci_ipc_log_lvl)) { \
-		ipc_log_string(mhi_uci_ipc_log,                     \
-			"[%s] " _msg, __func__, ##__VA_ARGS__);     \
-	} \
 } while (0)
 
 
@@ -1814,13 +1810,14 @@ int mhi_uci_init(void)
 	int ret_val = 0;
 	struct uci_client *mhi_client = NULL;
 	s32 r = 0;
-
+#ifdef CONFIG_IPC_LOGGING
 	mhi_uci_ipc_log = ipc_log_context_create(MHI_UCI_IPC_LOG_PAGES,
 						"mhi-uci", 0);
 	if (mhi_uci_ipc_log == NULL) {
 		uci_log(UCI_DBG_WARNING,
 				"Failed to create IPC logging context\n");
 	}
+#endif
 	uci_ctxt.event_notifier = uci_event_notifier;
 
 	uci_log(UCI_DBG_DBG, "Setting up channel attributes.\n");

@@ -139,9 +139,6 @@ struct qcota_stat {
 	u64 f9_op_fail;
 };
 static struct qcota_stat _qcota_stat;
-static struct dentry *_debug_dent;
-static char _debug_read_buf[DEBUG_MAX_RW_BUF];
-static int _debug_qcota;
 
 static struct ota_dev_control *qcota_control(void)
 {
@@ -243,9 +240,11 @@ static void req_done(unsigned long data)
 			pqce->active_command = new_req;
 			spin_unlock_irqrestore(&podev->lock, flags);
 
-			new_req->err = 0;
-			/* start a new request */
-			ret = start_req(pqce, new_req);
+			if (new_req) {
+				new_req->err = 0;
+				/* start a new request */
+				ret = start_req(pqce, new_req);
+			}
 			if (unlikely(new_req && ret)) {
 				new_req->err = ret;
 				complete(&new_req->complete);
@@ -790,166 +789,9 @@ static struct platform_driver qcota_plat_driver = {
 	},
 };
 
-static int _disp_stats(void)
-{
-	struct qcota_stat *pstat;
-	int len = 0;
-	struct ota_dev_control *podev = &qcota_dev;
-	unsigned long flags;
-	struct ota_qce_dev *p;
-
-	pstat = &_qcota_stat;
-	len = scnprintf(_debug_read_buf, DEBUG_MAX_RW_BUF - 1,
-			"\nQTI OTA crypto accelerator Statistics:\n");
-
-	len += scnprintf(_debug_read_buf + len, DEBUG_MAX_RW_BUF - len - 1,
-			"   F8 request                      : %llu\n",
-					pstat->f8_req);
-	len += scnprintf(_debug_read_buf + len, DEBUG_MAX_RW_BUF - len - 1,
-			"   F8 operation success            : %llu\n",
-					pstat->f8_op_success);
-	len += scnprintf(_debug_read_buf + len, DEBUG_MAX_RW_BUF - len - 1,
-			"   F8 operation fail               : %llu\n",
-					pstat->f8_op_fail);
-
-	len += scnprintf(_debug_read_buf + len, DEBUG_MAX_RW_BUF - len - 1,
-			"   F8 MP request                   : %llu\n",
-					pstat->f8_mp_req);
-	len += scnprintf(_debug_read_buf + len, DEBUG_MAX_RW_BUF - len - 1,
-			"   F8 MP operation success         : %llu\n",
-					pstat->f8_mp_op_success);
-	len += scnprintf(_debug_read_buf + len, DEBUG_MAX_RW_BUF - len - 1,
-			"   F8 MP operation fail            : %llu\n",
-					pstat->f8_mp_op_fail);
-
-	len += scnprintf(_debug_read_buf + len, DEBUG_MAX_RW_BUF - len - 1,
-			"   F8 Variable MP request          : %llu\n",
-					pstat->f8_v_mp_req);
-	len += scnprintf(_debug_read_buf + len, DEBUG_MAX_RW_BUF - len - 1,
-			"   F8 Variable MP operation success: %llu\n",
-					pstat->f8_v_mp_op_success);
-	len += scnprintf(_debug_read_buf + len, DEBUG_MAX_RW_BUF - len - 1,
-			"   F8 Variable MP operation fail   : %llu\n",
-					pstat->f8_v_mp_op_fail);
-
-	len += scnprintf(_debug_read_buf + len, DEBUG_MAX_RW_BUF - len - 1,
-			"   F9 request                      : %llu\n",
-					pstat->f9_req);
-	len += scnprintf(_debug_read_buf + len, DEBUG_MAX_RW_BUF - len - 1,
-			"   F9 operation success            : %llu\n",
-					pstat->f9_op_success);
-	len += scnprintf(_debug_read_buf + len, DEBUG_MAX_RW_BUF - len - 1,
-			"   F9 operation fail               : %llu\n",
-					pstat->f9_op_fail);
-
-	spin_lock_irqsave(&podev->lock, flags);
-
-	list_for_each_entry(p, &podev->qce_dev, qlist) {
-		len += scnprintf(
-			_debug_read_buf + len,
-			DEBUG_MAX_RW_BUF - len - 1,
-			"   Engine %4d Req                 : %llu\n",
-			p->unit,
-			p->total_req
-		);
-		len += scnprintf(
-			_debug_read_buf + len,
-			DEBUG_MAX_RW_BUF - len - 1,
-			"   Engine %4d Req Error           : %llu\n",
-			p->unit,
-			p->err_req
-		);
-	}
-
-	spin_unlock_irqrestore(&podev->lock, flags);
-
-	return len;
-}
-
-static int _debug_stats_open(struct inode *inode, struct file *file)
-{
-	file->private_data = inode->i_private;
-	return 0;
-}
-
-static ssize_t _debug_stats_read(struct file *file, char __user *buf,
-			size_t count, loff_t *ppos)
-{
-	int rc = -EINVAL;
-	int len;
-
-	len = _disp_stats();
-	if (len <= count)
-		rc = simple_read_from_buffer((void __user *) buf, len,
-			ppos, (void *) _debug_read_buf, len);
-
-	return rc;
-}
-
-static ssize_t _debug_stats_write(struct file *file, const char __user *buf,
-			size_t count, loff_t *ppos)
-{
-	struct ota_dev_control *podev = &qcota_dev;
-	unsigned long flags;
-	struct ota_qce_dev *p;
-
-	memset((char *)&_qcota_stat, 0, sizeof(struct qcota_stat));
-
-	spin_lock_irqsave(&podev->lock, flags);
-
-	list_for_each_entry(p, &podev->qce_dev, qlist) {
-		p->total_req = 0;
-		p->err_req = 0;
-	}
-
-	spin_unlock_irqrestore(&podev->lock, flags);
-
-	return count;
-}
-
-static const struct file_operations _debug_stats_ops = {
-	.open =         _debug_stats_open,
-	.read =         _debug_stats_read,
-	.write =        _debug_stats_write,
-};
-
-static int _qcota_debug_init(void)
-{
-	int rc;
-	char name[DEBUG_MAX_FNAME];
-	struct dentry *dent;
-
-	_debug_dent = debugfs_create_dir("qcota", NULL);
-	if (IS_ERR(_debug_dent)) {
-		pr_err("qcota debugfs_create_dir fail, error %ld\n",
-				PTR_ERR(_debug_dent));
-		return PTR_ERR(_debug_dent);
-	}
-
-	snprintf(name, DEBUG_MAX_FNAME-1, "stats-0");
-	_debug_qcota = 0;
-	dent = debugfs_create_file(name, 0644, _debug_dent,
-				&_debug_qcota, &_debug_stats_ops);
-	if (dent == NULL) {
-		pr_err("qcota debugfs_create_file fail, error %ld\n",
-					PTR_ERR(dent));
-		rc = PTR_ERR(dent);
-		goto err;
-	}
-	return 0;
-err:
-	debugfs_remove_recursive(_debug_dent);
-	return rc;
-}
-
 static int __init qcota_init(void)
 {
-	int rc;
 	struct ota_dev_control *podev;
-
-	rc = _qcota_debug_init();
-	if (rc)
-		return rc;
 
 	podev = &qcota_dev;
 	INIT_LIST_HEAD(&podev->ready_commands);
@@ -963,7 +805,6 @@ static int __init qcota_init(void)
 }
 static void __exit qcota_exit(void)
 {
-	debugfs_remove_recursive(_debug_dent);
 	platform_driver_unregister(&qcota_plat_driver);
 }
 

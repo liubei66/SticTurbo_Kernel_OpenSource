@@ -413,12 +413,12 @@ static struct fg_alg_flag pmi8998_v2_alg_flags[] = {
 	},
 };
 
-static int fg_gen3_debug_mask = FG_IRQ | FG_STATUS;
+static int fg_gen3_debug_mask = 0;
 module_param_named(
 	debug_mask, fg_gen3_debug_mask, int, 0600
 );
 
-static bool fg_profile_dump;
+static bool fg_profile_dump = false;
 module_param_named(
 	profile_dump, fg_profile_dump, bool, 0600
 );
@@ -429,7 +429,9 @@ module_param_named(
 );
 
 static int fg_restart;
-static bool fg_sram_dump;
+static bool fg_sram_dump = false;
+
+#define FG_RATE_LIM_MS (5 * MSEC_PER_SEC)
 
 /* All getters HERE */
 
@@ -439,8 +441,6 @@ static int fg_decode_voltage_15b(struct fg_sram_param *sp,
 {
 	value &= VOLTAGE_15BIT_MASK;
 	sp[id].value = div_u64((u64)value * sp[id].denmtr, sp[id].numrtr);
-	pr_debug("id: %d raw value: %x decoded value: %x\n", id, value,
-		sp[id].value);
 	return sp[id].value;
 }
 
@@ -449,8 +449,6 @@ static int fg_decode_cc_soc(struct fg_sram_param *sp,
 {
 	sp[id].value = div_s64((s64)value * sp[id].denmtr, sp[id].numrtr);
 	sp[id].value = sign_extend32(sp[id].value, 31);
-	pr_debug("id: %d raw value: %x decoded value: %x\n", id, value,
-		sp[id].value);
 	return sp[id].value;
 }
 
@@ -458,8 +456,6 @@ static int fg_decode_value_16b(struct fg_sram_param *sp,
 				enum fg_sram_param_id id, int value)
 {
 	sp[id].value = div_u64((u64)(u16)value * sp[id].denmtr, sp[id].numrtr);
-	pr_debug("id: %d raw value: %x decoded value: %x\n", id, value,
-		sp[id].value);
 	return sp[id].value;
 }
 
@@ -489,13 +485,10 @@ static void fg_encode_voltage(struct fg_sram_param *sp,
 
 	val_mv += sp[id].offset;
 	temp = (int64_t)div_u64((u64)val_mv * sp[id].numrtr, sp[id].denmtr);
-	pr_debug("temp: %llx id: %d, val_mv: %d, buf: [ ", temp, id, val_mv);
 	for (i = 0; i < sp[id].len; i++) {
 		buf[i] = temp & mask;
 		temp >>= 8;
-		pr_debug("%x ", buf[i]);
 	}
-	pr_debug("]\n");
 }
 
 static void fg_encode_current(struct fg_sram_param *sp,
@@ -507,13 +500,10 @@ static void fg_encode_current(struct fg_sram_param *sp,
 
 	current_ma = val_ma;
 	temp = (int64_t)div_s64(current_ma * sp[id].numrtr, sp[id].denmtr);
-	pr_debug("temp: %llx id: %d, val: %d, buf: [ ", temp, id, val_ma);
 	for (i = 0; i < sp[id].len; i++) {
 		buf[i] = temp & mask;
 		temp >>= 8;
-		pr_debug("%x ", buf[i]);
 	}
-	pr_debug("]\n");
 }
 
 static void fg_encode_default(struct fg_sram_param *sp,
@@ -523,13 +513,10 @@ static void fg_encode_default(struct fg_sram_param *sp,
 	int64_t temp;
 
 	temp = (int64_t)div_s64((s64)val * sp[id].numrtr, sp[id].denmtr);
-	pr_debug("temp: %llx id: %d, val: %d, buf: [ ", temp, id, val);
 	for (i = 0; i < sp[id].len; i++) {
 		buf[i] = temp & mask;
 		temp >>= 8;
-		pr_debug("%x ", buf[i]);
 	}
-	pr_debug("]\n");
 }
 
 static void fg_encode(struct fg_sram_param *sp, enum fg_sram_param_id id,
@@ -734,7 +721,6 @@ static int fg_get_battery_current(struct fg_chip *chip, int *val)
 	else
 		temp = buf[1] << 8 | buf[0];
 
-	pr_debug("buf: %x %x temp: %llx\n", buf[0], buf[1], temp);
 	/* Sign bit is bit 15 */
 	temp = twos_compliment_extend(temp, 15);
 	*val = div_s64((s64)temp * BATT_CURRENT_NUMR, BATT_CURRENT_DENR);
@@ -761,7 +747,6 @@ static int fg_get_battery_voltage(struct fg_chip *chip, int *val)
 	else
 		temp = buf[1] << 8 | buf[0];
 
-	pr_debug("buf: %x %x temp: %x\n", buf[0], buf[1], temp);
 	*val = div_u64((u64)temp * BATT_VOLTAGE_NUMR, BATT_VOLTAGE_DENR);
 	return 0;
 }
@@ -807,7 +792,6 @@ static int fg_get_msoc(struct fg_chip *chip, int *msoc)
 	if (rc < 0)
 		return rc;
 
-
 	/*
 	 * To have better endpoints for 0 and 100, it is good to tune the
 	 * calculation discarding values 0 and 255 while rounding off. Rest
@@ -823,15 +807,12 @@ static int fg_get_msoc(struct fg_chip *chip, int *msoc)
 		*msoc = 100;
 	else if (*msoc == 0)
 		*msoc = 0;
-	else if (*msoc >= FULL_SOC_REPORT_THR - 4 && *msoc <= FULL_SOC_REPORT_THR - 3 && chip->report_full)
-	{
+	else if (*msoc >= FULL_SOC_REPORT_THR - 4 && *msoc <= FULL_SOC_REPORT_THR - 3 &&
+			chip->report_full)
 		*msoc = DIV_ROUND_CLOSEST(*msoc * FULL_CAPACITY, FULL_SOC_RAW);
-	}
 	else
-	{
 		*msoc = DIV_ROUND_CLOSEST((*msoc - 1) * (FULL_CAPACITY - 2),
 				FULL_SOC_RAW - 2) + 1;
-	}
 	return 0;
 }
 
@@ -894,7 +875,6 @@ static int fg_get_debug_batt_id(struct fg_chip *chip, int *batt_id)
 	temp = (buf[1] << 8 | buf[0]) * 2500000;
 	do_div(temp, 150 * 1024);
 	batt_id[1] = temp;
-	pr_debug("debug batt_id range: [%d %d]\n", batt_id[0], batt_id[1]);
 	return 0;
 }
 
@@ -1094,12 +1074,6 @@ static int fg_get_batt_profile(struct fg_chip *chip)
 		chip->bp.vbatt_full_mv = -EINVAL;
 	}
 
-	rc = of_property_read_u32(profile_node, "qcom,nom-batt-capacity-mah",
-			&chip->bp.nom_cap_uah);
-	if (rc < 0) {
-		pr_err("battery nominal capacity unavailable, rc:%d\n", rc);
-		chip->bp.nom_cap_uah = -EINVAL;
-	}
 	data = of_get_property(profile_node, "qcom,fg-profile-data", &len);
 	if (!data) {
 		pr_err("No profile data available\n");
@@ -1228,6 +1202,15 @@ static void fg_notify_charger(struct fg_chip *chip)
 	}
 
 
+	prop.intval = chip->bp.fastchg_curr_ma * 1000;
+	rc = power_supply_set_property(chip->batt_psy,
+			POWER_SUPPLY_PROP_CONSTANT_CHARGE_CURRENT_MAX, &prop);
+	if (rc < 0) {
+		pr_err("Error in setting constant_charge_current_max property on batt_psy, rc=%d\n",
+			rc);
+		return;
+	}
+
 	fg_dbg(chip, FG_STATUS, "Notified charger on float voltage and FCC\n");
 }
 
@@ -1275,11 +1258,10 @@ static int fg_awake_cb(struct votable *votable, void *data, int awake,
 	struct fg_chip *chip = data;
 
 	if (awake)
-		pm_stay_awake(chip->dev);
+		pm_wakeup_event(chip->dev, 500);
 	else
 		pm_relax(chip->dev);
 
-	pr_debug("client: %s awake: %d\n", client, awake);
 	return 0;
 }
 
@@ -1913,8 +1895,10 @@ static int fg_charge_full_update(struct fg_chip *chip)
 		msoc, bsoc, chip->health, chip->charge_status,
 		chip->charge_full);
 	if (chip->charge_done && !chip->charge_full) {
-		if (msoc >= 99 && chip->health == POWER_SUPPLY_HEALTH_GOOD) {
-			fg_dbg(chip, FG_STATUS, "Setting charge_full to true\n");
+		if (msoc >= 99 && (chip->health == POWER_SUPPLY_HEALTH_GOOD
+				|| chip->health == POWER_SUPPLY_HEALTH_COOL
+				|| chip->health == POWER_SUPPLY_HEALTH_WARM)) {
+			fg_dbg(chip, FG_STATUS, "Charge_full to true\n");
 			chip->charge_full = true;
 			/*
 			 * Lower the recharge voltage so that VBAT_LT_RECHG
@@ -2685,7 +2669,8 @@ static void fg_ttf_update(struct fg_chip *chip)
 	chip->ttf.last_ttf = 0;
 	chip->ttf.last_ms = 0;
 	mutex_unlock(&chip->ttf.lock);
-	schedule_delayed_work(&chip->ttf_work, msecs_to_jiffies(delay_ms));
+	queue_delayed_work(system_power_efficient_wq,
+		&chip->ttf_work, msecs_to_jiffies(delay_ms));
 }
 
 static void restore_cycle_counter(struct fg_chip *chip)
@@ -2724,7 +2709,7 @@ static void clear_cycle_counter(struct fg_chip *chip)
 	}
 	rc = fg_sram_write(chip, CYCLE_COUNT_WORD, CYCLE_COUNT_OFFSET,
 			(u8 *)&chip->cyc_ctr.count,
-			sizeof(chip->cyc_ctr.count) / sizeof(u8 *),
+			sizeof(chip->cyc_ctr.count) / (sizeof(u8 *)),
 			FG_IMA_DEFAULT);
 	if (rc < 0)
 		pr_err("failed to clear cycle counter rc=%d\n", rc);
@@ -2784,8 +2769,7 @@ static void fg_cycle_counter_update(struct fg_chip *chip)
 	/* Find out which bucket the SOC falls in */
 	bucket = batt_soc / BUCKET_SOC_PCT;
 
-	if (chip->batt_psy)
-	{
+	if (chip->batt_psy) {
 		rc = power_supply_get_property(chip->batt_psy, POWER_SUPPLY_PROP_INPUT_SUSPEND,
 				&prop);
 		if (rc < 0) {
@@ -3206,10 +3190,8 @@ static bool is_profile_load_required(struct fg_chip *chip)
 		if (!chip->dt.force_load_profile) {
 			pr_warn("Profiles doesn't match, skipping loading it since force_load_profile is disabled\n");
 			if (fg_profile_dump) {
-				pr_info("FG: loaded profile:\n");
 				dump_sram(buf, PROFILE_LOAD_WORD,
 					PROFILE_COMP_LEN);
-				pr_info("FG: available profile:\n");
 				dump_sram(chip->batt_profile, PROFILE_LOAD_WORD,
 					PROFILE_LEN);
 			}
@@ -3221,7 +3203,6 @@ static bool is_profile_load_required(struct fg_chip *chip)
 	} else {
 		fg_dbg(chip, FG_STATUS, "Profile integrity bit is not set\n");
 		if (fg_profile_dump) {
-			pr_info("FG: profile to be loaded:\n");
 			dump_sram(chip->batt_profile, PROFILE_LOAD_WORD,
 				PROFILE_LEN);
 		}
@@ -3364,7 +3345,8 @@ static void profile_load_work(struct work_struct *work)
 			chip->batt_id_ohms / 1000, rc);
 		goto out;
 	}
-	qcom_step_chg_init(chip->dev, 0 , 1);
+	/*xiaomi move qcom_step_chg_init to fg driver*/
+	qcom_step_chg_init(chip->dev, 0, 1);
 
 	if (!chip->profile_available)
 		goto out;
@@ -3479,7 +3461,8 @@ static void sram_dump_work(struct work_struct *work)
 	fg_dbg(chip, FG_STATUS, "SRAM Dump done at %lld.%d\n",
 		quotient, remainder);
 resched:
-	schedule_delayed_work(&chip->sram_dump_work,
+	queue_delayed_work(system_power_efficient_wq,
+		&chip->sram_dump_work,
 			msecs_to_jiffies(fg_sram_dump_period_ms));
 }
 
@@ -3507,7 +3490,8 @@ static int fg_sram_dump_sysfs(const char *val, const struct kernel_param *kp)
 
 	chip = power_supply_get_drvdata(bms_psy);
 	if (fg_sram_dump)
-		schedule_delayed_work(&chip->sram_dump_work,
+		queue_delayed_work(system_power_efficient_wq,
+			&chip->sram_dump_work,
 				msecs_to_jiffies(fg_sram_dump_period_ms));
 	else
 		cancel_delayed_work_sync(&chip->sram_dump_work);
@@ -3552,7 +3536,6 @@ static int fg_restart_sysfs(const char *val, const struct kernel_param *kp)
 		return rc;
 	}
 
-	pr_info("FG restart done\n");
 	return rc;
 }
 
@@ -3911,7 +3894,6 @@ static int fg_esr_validate(struct fg_chip *chip)
 	}
 
 	if (esr_uohms >= chip->dt.esr_clamp_mohms * 1000) {
-		pr_debug("ESR %d is > ESR_clamp\n", esr_uohms);
 		return 0;
 	}
 
@@ -4073,8 +4055,8 @@ static void ttf_work(struct work_struct *work)
 		/* keep the wake lock and prime the IBATT and VBATT buffers */
 		if (ttf < 0) {
 			/* delay for one FG cycle */
-			schedule_delayed_work(&chip->ttf_work,
-							msecs_to_jiffies(1500));
+			queue_delayed_work(system_power_efficient_wq,
+				&chip->ttf_work, msecs_to_jiffies(1500));
 			mutex_unlock(&chip->ttf.lock);
 			return;
 		}
@@ -4090,7 +4072,8 @@ static void ttf_work(struct work_struct *work)
 	}
 
 	/* recurse every 10 seconds */
-	schedule_delayed_work(&chip->ttf_work, msecs_to_jiffies(10000));
+	queue_delayed_work(system_power_efficient_wq,
+		&chip->ttf_work, msecs_to_jiffies(10000));
 end_work:
 	vote(chip->awake_votable, TTF_PRIMING, false, 0);
 	mutex_unlock(&chip->ttf.lock);
@@ -4103,12 +4086,43 @@ static int fg_psy_get_property(struct power_supply *psy,
 				       union power_supply_propval *pval)
 {
 	struct fg_chip *chip = power_supply_get_drvdata(psy);
+	struct fg_saved_data *sd = chip->saved_data + psp;
+	union power_supply_propval typec_sts = { .intval = -1 };
 	int rc = 0;
+
+	switch (psp) {
+	case POWER_SUPPLY_PROP_CHARGE_FULL_DESIGN:
+	case POWER_SUPPLY_PROP_RESISTANCE_ID:
+	case POWER_SUPPLY_PROP_VOLTAGE_MAX_DESIGN:
+	case POWER_SUPPLY_PROP_CYCLE_COUNT_ID:
+	case POWER_SUPPLY_PROP_CHARGE_NOW:
+	case POWER_SUPPLY_PROP_CHARGE_FULL:
+	case POWER_SUPPLY_PROP_SOC_REPORTING_READY:
+		/* These props don't require a fg query; don't ratelimit them */
+	case POWER_SUPPLY_PROP_CAPACITY:
+	case POWER_SUPPLY_PROP_STATUS:
+		/* These props affect interactive experience in user space */
+		break;
+	default:
+		if (!sd->last_req_expires)
+			break;
+
+		if (usb_psy_initialized(chip))
+			power_supply_get_property(chip->usb_psy,
+				POWER_SUPPLY_PROP_TYPEC_MODE, &typec_sts);
+
+		if (typec_sts.intval == POWER_SUPPLY_TYPEC_NONE &&
+			time_before(jiffies, sd->last_req_expires)) {
+			*pval = sd->val;
+			return 0;
+		}
+		break;
+	}
 
 	switch (psp) {
 	case POWER_SUPPLY_PROP_CAPACITY:
 		rc = fg_get_prop_capacity(chip, &pval->intval);
-		//Using smooth battery capacity.
+
 		if (chip->param.batt_soc >= 0)
 			pval->intval = chip->param.batt_soc;
 		break;
@@ -4165,10 +4179,7 @@ static int fg_psy_get_property(struct power_supply *psy,
 		rc = fg_get_sram_prop(chip, FG_SRAM_OCV, &pval->intval);
 		break;
 	case POWER_SUPPLY_PROP_CHARGE_FULL_DESIGN:
-		if (-EINVAL != chip->bp.nom_cap_uah)
-			pval->intval = chip->bp.nom_cap_uah * 1000;
-		else
-			pval->intval = chip->cl.nom_cap_uah;
+		pval->intval = chip->cl.nom_cap_uah;
 		break;
 	case POWER_SUPPLY_PROP_RESISTANCE_ID:
 		pval->intval = chip->batt_id_ohms;
@@ -4241,6 +4252,9 @@ static int fg_psy_get_property(struct power_supply *psy,
 	if (rc < 0)
 		return -ENODATA;
 
+	sd->val = *pval;
+	sd->last_req_expires = jiffies + msecs_to_jiffies(FG_RATE_LIM_MS);
+
 	return 0;
 }
 
@@ -4254,7 +4268,6 @@ static int fg_psy_set_property(struct power_supply *psy,
 	switch (psp) {
 	case POWER_SUPPLY_PROP_CYCLE_COUNT:
 		rc = fg_set_cycle_count(chip, pval->intval);
-		pr_info("Cycle count is modified to %d by userspace\n", pval->intval);
 		break;
 	case POWER_SUPPLY_PROP_CONSTANT_CHARGE_VOLTAGE:
 		rc = fg_set_constant_chg_voltage(chip, pval->intval);
@@ -4286,18 +4299,13 @@ static int fg_psy_set_property(struct power_supply *psy,
 		}
 		break;
 	case POWER_SUPPLY_PROP_CHARGE_FULL:
-		if (chip->cl.active) {
-			pr_warn("Capacity learning active!\n");
-			return 0;
-		}
-		if (pval->intval <= 0 || pval->intval > chip->cl.nom_cap_uah) {
-			pr_err("charge_full is out of bounds\n");
-			return -EINVAL;
-		}
 		chip->cl.learned_cc_uah = pval->intval;
 		rc = fg_save_learned_cap_to_sram(chip);
 		if (rc < 0)
 			pr_err("Error in saving learned_cc_uah, rc=%d\n", rc);
+		break;
+	case POWER_SUPPLY_PROP_CHARGE_FULL_DESIGN:
+		chip->cl.nom_cap_uah = pval->intval;
 		break;
 	case POWER_SUPPLY_PROP_COLD_TEMP:
 		rc = fg_set_jeita_threshold(chip, JEITA_COLD, pval->intval);
@@ -4342,6 +4350,7 @@ static int fg_property_is_writeable(struct power_supply *psy,
 	case POWER_SUPPLY_PROP_CC_STEP:
 	case POWER_SUPPLY_PROP_CC_STEP_SEL:
 	case POWER_SUPPLY_PROP_CHARGE_FULL:
+	case POWER_SUPPLY_PROP_CHARGE_FULL_DESIGN:
 	case POWER_SUPPLY_PROP_COLD_TEMP:
 	case POWER_SUPPLY_PROP_COOL_TEMP:
 	case POWER_SUPPLY_PROP_WARM_TEMP:
@@ -4357,7 +4366,6 @@ static int fg_property_is_writeable(struct power_supply *psy,
 
 static void fg_external_power_changed(struct power_supply *psy)
 {
-	pr_debug("power supply changed\n");
 }
 
 static int fg_notifier_cb(struct notifier_block *nb,
@@ -4401,7 +4409,6 @@ static int twm_notifier_cb(struct notifier_block *nb,
 
 	if (action != PMIC_TWM_CLEAR &&
 			action != PMIC_TWM_ENABLE) {
-		pr_debug("Unsupported option %lu\n", action);
 		return NOTIFY_OK;
 	}
 
@@ -4779,7 +4786,7 @@ static int fg_hw_init(struct fg_chip *chip)
 			return rc;
 		}
 	}
-
+	
 	if (chip->dt.optimize_sram) {
 		int i;
 		for (i = 0; i < chip->dt.optimize_sram_seq_len; i++) {
@@ -4908,7 +4915,8 @@ static irqreturn_t fg_batt_missing_irq_handler(int irq, void *data)
 	}
 
 	clear_battery_profile(chip);
-	schedule_delayed_work(&chip->profile_load_work, 0);
+	queue_delayed_work(system_power_efficient_wq,
+		&chip->profile_load_work, 0);
 
 	if (chip->fg_psy)
 		power_supply_changed(chip->fg_psy);
@@ -5061,7 +5069,6 @@ static irqreturn_t fg_soc_irq_handler(int irq, void *data)
 
 static irqreturn_t fg_dummy_irq_handler(int irq, void *data)
 {
-	pr_debug("irq %d triggered\n", irq);
 	return IRQ_HANDLED;
 }
 
@@ -5332,8 +5339,6 @@ static int fg_parse_ki_coefficients(struct fg_chip *chip)
 #define DEFAULT_DELTA_SOC_THR		1
 #define DEFAULT_RECHARGE_SOC_THR	95
 #define DEFAULT_BATT_TEMP_COLD		0
-#define DEFAULT_BATT_TEMP_COOL		5
-#define DEFAULT_BATT_TEMP_WARM		45
 #define DEFAULT_BATT_TEMP_HOT		50
 #define DEFAULT_CL_START_SOC		15
 #define DEFAULT_CL_MIN_TEMP_DECIDEGC	150
@@ -5356,6 +5361,11 @@ static int fg_parse_ki_coefficients(struct fg_chip *chip)
 #define DEFAULT_ESR_PULSE_THRESH_MA	110
 #define DEFAULT_ESR_MEAS_CURR_MA	120
 #define DEFAULT_BMD_EN_DELAY_MS	200
+static unsigned int DEFAULT_BATT_TEMP_WARM = 50;
+static unsigned int DEFAULT_BATT_TEMP_COOL = 5;
+module_param(DEFAULT_BATT_TEMP_WARM, uint, 0644);
+module_param(DEFAULT_BATT_TEMP_COOL, uint, 0644);
+
 static int fg_parse_dt(struct fg_chip *chip)
 {
 	struct device_node *child, *revid_node, *node = chip->dev->of_node;
@@ -5386,9 +5396,6 @@ static int fg_parse_dt(struct fg_chip *chip)
 		 */
 		return -EPROBE_DEFER;
 	}
-
-	pr_debug("PMIC subtype %d Digital major %d\n",
-		chip->pmic_rev_id->pmic_subtype, chip->pmic_rev_id->rev4);
 
 	switch (chip->pmic_rev_id->pmic_subtype) {
 	case PMI8998_SUBTYPE:
@@ -5542,12 +5549,6 @@ static int fg_parse_dt(struct fg_chip *chip)
 			pr_warn("Error reading Jeita thresholds, default values will be used rc:%d\n",
 				rc);
 	}
-	pr_info("%s: jeita threshold %d, %d, %d, %d\n", __func__,
-						chip->dt.jeita_thresholds[JEITA_COLD],
-						chip->dt.jeita_thresholds[JEITA_COOL],
-						chip->dt.jeita_thresholds[JEITA_WARM],
-						chip->dt.jeita_thresholds[JEITA_HOT]);
-
 
 	if (of_property_count_elems_of_size(node,
 		"qcom,battery-thermal-coefficients",
@@ -5768,7 +5769,7 @@ static int fg_parse_dt(struct fg_chip *chip)
 
 	chip->dt.disable_fg_twm = of_property_read_bool(node,
 					"qcom,fg-disable-in-twm");
-
+	
 	chip->dt.optimize_sram = of_property_read_bool(node, "qcom,optimize-sram");
 	if (chip->dt.optimize_sram) {
 		of_get_property(node, "qcom,optimize-sram-seq", &size);
@@ -5846,19 +5847,8 @@ static void soc_work_fn(struct work_struct *work)
 		pr_err("sram read failed: address=79, rc=%d\n", rc);
 		return;
 	}
-	pr_info("adjust_soc: s %d r %d i %d v %d t %d cc %d m 0x%02x\n",
-			soc,
-			esr_uohms,
-			curr_ua,
-			volt_uv,
-			temp,
-			cycle_count,
-			msoc);
-	pr_info("adjust_soc: 000: %02x, %02x, %02x, %02x\n", buf_top[0], buf_top[1], buf_top[2], buf_top[3]);
-	pr_info("adjust_soc: 019: %02x, %02x, %02x, %02x\n", buf_auto[0], buf_auto[1], buf_auto[2], buf_auto[3]);
-	pr_info("adjust_soc: 079: %02x, %02x, %02x, %02x\n", buf_profile[0], buf_profile[1], buf_profile[2], buf_profile[3]);
 
-	if (temp < 450 && chip->last_batt_temp >= 450) {
+	if (temp < 500 && chip->last_batt_temp >= 500) {
 		/* follow the way that fg_notifier_cb use wake lock */
 		pm_stay_awake(chip->dev);
 		schedule_work(&chip->status_change_work);
@@ -5881,43 +5871,41 @@ static void soc_work_fn(struct work_struct *work)
 
 static void empty_restart_fg_work(struct work_struct *work)
 {
-	struct fg_chip *chip = container_of(work,
-				struct fg_chip,
-				empty_restart_fg_work.work);
-	union power_supply_propval prop = {0, };
-	int usb_present = 0;
-	int rc;
+        struct fg_chip *chip = container_of(work,
+                                struct fg_chip,
+                                empty_restart_fg_work.work);
+        union power_supply_propval prop = {0, };
+        int usb_present = 0;
+        int rc;
 
-	if (usb_psy_initialized(chip)) {
-		rc = power_supply_get_property(chip->usb_psy,
-			POWER_SUPPLY_PROP_PRESENT, &prop);
-		if (rc < 0) {
-			pr_err("Couldn't read usb present prop rc=%d\n", rc);
-			return;
-		}
-		usb_present = prop.intval;
-	}
+        if (usb_psy_initialized(chip)) {
+                rc = power_supply_get_property(chip->usb_psy,
+                        POWER_SUPPLY_PROP_PRESENT, &prop);
+                if (rc < 0) {
+                        pr_err("Couldn't read usb present prop rc=%d\n", rc);
+                        return;
+                }
+                usb_present = prop.intval;
+        }
 
-	/* only when usb is absent, restart fg */
-	if (!usb_present) {
-		if (chip->profile_loaded) {
-			pr_info("soc empty after cold to warm, need to restart fg\n");
-			chip->empty_restart_fg = true;
-			rc = __fg_restart(chip);
-			if (rc < 0) {
-				pr_err("Error in restarting FG, rc=%d\n", rc);
-				chip->empty_restart_fg = false;
-				return;
-			}
-			pr_info("FG restart done\n");
-			if (batt_psy_initialized(chip))
-				power_supply_changed(chip->batt_psy);
-		} else {
-			schedule_delayed_work(
-					&chip->empty_restart_fg_work,
-					msecs_to_jiffies(RESTART_FG_WORK_MS));
-		}
-	}
+        /* only when usb is absent, restart fg */
+        if (!usb_present) {
+                if (chip->profile_loaded) {
+                        chip->empty_restart_fg = true;
+                        rc = __fg_restart(chip);
+                        if (rc < 0) {
+                                pr_err("Error in restarting FG, rc=%d\n", rc);
+                                chip->empty_restart_fg = false;
+                                return;
+                        }
+                        if (batt_psy_initialized(chip))
+                                power_supply_changed(chip->batt_psy);
+                } else {
+                        schedule_delayed_work(
+                                        &chip->empty_restart_fg_work,
+                                        msecs_to_jiffies(RESTART_FG_WORK_MS));
+                }
+        }
 }
 
 static int calculate_delta_time(struct timespec *time_stamp, int *delta_time_s)
@@ -5958,15 +5946,12 @@ static int calculate_average_current(struct fg_chip *chip)
 		iavg_ma = 0;
 		/* maintain a AVG_SAMPLES sample average of ibat */
 		for (i = 0; i < chip->param.samples_num; i++) {
-			pr_debug("iavg_samples_ma[%d] = %d\n", i, chip->param.batt_ma_avg_samples[i]);
 			iavg_ma += chip->param.batt_ma_avg_samples[i];
 		}
 		chip->param.batt_ma_avg = DIV_ROUND_CLOSEST(iavg_ma, chip->param.samples_num);
 	}
 
 unchanged:
-	pr_info("current_now_ma=%d averaged_iavg_ma=%d\n",
-				chip->param.batt_ma, chip->param.batt_ma_avg);
 	return chip->param.batt_ma_avg;
 }
 
@@ -6012,22 +5997,22 @@ static void fg_battery_soc_smooth_tracking(struct fg_chip *chip)
 	if (last_batt_soc >= 0) {
 		if (last_batt_soc < chip->param.batt_raw_soc &&
 					chip->param.batt_ma < 0)
-		  /* Battery in charging status
-		   * update the soc when resuming device
-		   */
-			last_batt_soc = chip->param.update_now ?
-			  chip->param.batt_raw_soc : last_batt_soc + soc_changed;
+		/* Battery in charging status
+		 * update the soc when resuming device
+		 */
+		last_batt_soc = chip->param.update_now ?
+			chip->param.batt_raw_soc : last_batt_soc + soc_changed;
 		else if (last_batt_soc > chip->param.batt_raw_soc
 					&& chip->param.batt_ma > 0)
 		  /* Battery in discharging status
 		   * update the soc when resuming device
 		   */
-			last_batt_soc = chip->param.update_now ?
-			  chip->param.batt_raw_soc : last_batt_soc - soc_changed;
+		last_batt_soc = chip->param.update_now ?
+			chip->param.batt_raw_soc : last_batt_soc - soc_changed;
 		else if (last_batt_soc != 100
 					&& chip->param.batt_raw_soc >= 95
 					&& chip->charge_status == POWER_SUPPLY_STATUS_FULL)
-			// Unlikely status
+
 			last_batt_soc = chip->param.update_now ?
 				100 : last_batt_soc + soc_changed;
 
@@ -6041,10 +6026,6 @@ static void fg_battery_soc_smooth_tracking(struct fg_chip *chip)
 		chip->param.last_soc_change_time = last_change_time;
 		power_supply_changed(chip->batt_psy);
 	}
-
-	pr_info("soc:%d, last_soc:%d, raw_soc:%d, soc_changed:%d.\n",
-				chip->param.batt_soc, last_batt_soc,
-				chip->param.batt_raw_soc, soc_changed);
 }
 
 #define MONITOR_SOC_WAIT_MS					1000
@@ -6055,7 +6036,7 @@ static void soc_monitor_work(struct work_struct *work)
 	struct delayed_work *dwork = to_delayed_work(work);
 	struct fg_chip *chip = container_of(dwork,
 				struct fg_chip, soc_monitor_work);
-	// Update battery information
+
 	rc = fg_get_battery_current(chip, &chip->param.batt_ma);
 	if (rc < 0)
 		pr_err("failded to get battery current, rc=%d\n", rc);
@@ -6068,12 +6049,8 @@ static void soc_monitor_work(struct work_struct *work)
 	if (rc < 0)
 		pr_err("failed to get battery temperature, rc=%d\n", rc);
 
-	if (chip->soc_reporting_ready)
-		fg_battery_soc_smooth_tracking(chip);
+	fg_battery_soc_smooth_tracking(chip);
 
-	pr_info("soc:%d, raw_soc:%d, c:%d, s:%d\n",
-				chip->param.batt_soc, chip->param.batt_raw_soc,
-				chip->param.batt_ma, chip->charge_status);
 	schedule_delayed_work(&chip->soc_monitor_work,
 				msecs_to_jiffies(MONITOR_SOC_WAIT_PER_MS));
 }
@@ -6328,13 +6305,6 @@ static int fg_gen3_probe(struct platform_device *pdev)
 	/* Keep BATT_MISSING_IRQ disabled until we require it */
 	vote(chip->batt_miss_irq_en_votable, BATT_MISS_IRQ_VOTER, false, 0);
 
-	rc = fg_debugfs_create(chip);
-	if (rc < 0) {
-		dev_err(chip->dev, "Error in creating debugfs entries, rc:%d\n",
-			rc);
-		goto exit;
-	}
-
 	rc = fg_get_battery_voltage(chip, &volt_uv);
 	if (!rc)
 		rc = fg_get_prop_capacity(chip, &msoc);
@@ -6343,8 +6313,6 @@ static int fg_gen3_probe(struct platform_device *pdev)
 		rc = fg_get_battery_temp(chip, &batt_temp);
 
 	if (!rc) {
-		pr_info("battery SOC:%d voltage: %duV temp: %d\n",
-				msoc, volt_uv, batt_temp);
 		rc = fg_esr_filter_config(chip, batt_temp, false);
 		if (rc < 0)
 			pr_err("Error in configuring ESR filter rc:%d\n", rc);
@@ -6360,24 +6328,24 @@ static int fg_gen3_probe(struct platform_device *pdev)
 	}
 
 	device_init_wakeup(chip->dev, true);
-	schedule_delayed_work(&chip->profile_load_work, 0);
+	queue_delayed_work(system_power_efficient_wq,
+		&chip->profile_load_work, 0);
 	schedule_delayed_work(&chip->soc_work, 0);
 
 	chip->param.batt_soc = -EINVAL;
 	schedule_delayed_work(&chip->soc_monitor_work,
 				msecs_to_jiffies(MONITOR_SOC_WAIT_MS));
 	/*
-         * if vbat is above 3.7V and msoc is 0% and battery temperature is
-         * above 15 degree, we restart fg to do new first soc calculate to
-         * improve user experience when device is shutdown in cold then
-         * try to power on in normal temperature room.
-         */
+	 * if vbat is above 3.7V and msoc is 0% and battery temperature is
+	 * above 15 degree, we restart fg to do new first soc calculate to
+	 * improve user experience when device is shutdown in cold then
+	 * try to power on in normal temperature room.
+	 */
 	if ((volt_uv >= VBAT_RESTART_FG_EMPTY_UV)
-			   && (msoc == 0) && (batt_temp >= TEMP_THR_RESTART_FG))
+			&& (msoc == 0) && (batt_temp >= TEMP_THR_RESTART_FG))
 		schedule_delayed_work(&chip->empty_restart_fg_work,
-				 msecs_to_jiffies(RESTART_FG_START_WORK_MS));
+			                msecs_to_jiffies(RESTART_FG_START_WORK_MS));
 
-	pr_debug("FG GEN3 driver probed successfully\n");
 	return 0;
 exit:
 	fg_cleanup(chip);
@@ -6408,9 +6376,11 @@ static int fg_gen3_resume(struct device *dev)
 	struct fg_chip *chip = dev_get_drvdata(dev);
 
 	schedule_delayed_work(&chip->esr_timer_config_work, 0);
-	schedule_delayed_work(&chip->ttf_work, 0);
+	queue_delayed_work(system_power_efficient_wq,
+		&chip->ttf_work, 0);
 	if (fg_sram_dump)
-		schedule_delayed_work(&chip->sram_dump_work,
+		queue_delayed_work(system_power_efficient_wq,
+			&chip->sram_dump_work,
 				msecs_to_jiffies(fg_sram_dump_period_ms));
 
 	if (!work_pending(&chip->status_change_work)) {
@@ -6455,6 +6425,7 @@ static void fg_gen3_shutdown(struct platform_device *pdev)
 		pr_err("Error in getting capacity, rc=%d\n", rc);
 		return;
 	}
+
 	if (chip->charge_full || (msoc == 100)) {
 		rc = fg_get_sram_prop(chip, FG_SRAM_BATT_SOC, &bsoc);
 		if (rc < 0) {

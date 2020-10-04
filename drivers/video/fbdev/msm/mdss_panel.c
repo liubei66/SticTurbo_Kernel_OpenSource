@@ -18,6 +18,8 @@
 #include <linux/slab.h>
 #include <linux/fb.h>
 #include <linux/uaccess.h>
+#include <linux/module.h>
+#include <linux/moduleparam.h>
 
 #include "mdss_panel.h"
 

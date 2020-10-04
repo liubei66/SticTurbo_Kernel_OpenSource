@@ -1,4 +1,5 @@
 /* Copyright (c) 2008-2019, The Linux Foundation. All rights reserved.
+ * Copyright (C) 2020 Amktiao.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -33,7 +34,6 @@
 #include "diagfwd.h"
 #include "diagfwd_cntl.h"
 #include "diag_dci.h"
-#include "diag_debugfs.h"
 #include "diag_masks.h"
 #include "diagfwd_bridge.h"
 #include "diag_usb.h"
@@ -152,7 +152,7 @@ static int timer_in_progress;
  * USB disconnection and stopping ODL
  */
 static int diag_mask_clear_param = 1;
-module_param(diag_mask_clear_param, int, 0644);
+module_param(diag_mask_clear_param, int, 0);
 
 struct diag_apps_data_t {
 	void *buf;
@@ -165,11 +165,6 @@ static struct diag_apps_data_t non_hdlc_data;
 static struct mutex apps_data_mutex;
 
 #define DIAGPKT_MAX_DELAYED_RSP 0xFFFF
-
-#ifdef CONFIG_IPC_LOGGING
-uint16_t diag_debug_mask;
-void *diag_ipc_log;
-#endif
 
 static void diag_md_session_close(int pid);
 
@@ -3489,8 +3484,6 @@ static ssize_t diagchar_read(struct file *file, char __user *buf, size_t count,
 	if ((driver->data_ready[index] & USER_SPACE_DATA_TYPE) &&
 	    (driver->logging_mode == DIAG_MEMORY_DEVICE_MODE ||
 	     driver->logging_mode == DIAG_MULTI_MODE)) {
-		pr_debug("diag: process woken up\n");
-		/*Copy the type of data being passed*/
 		data_type = driver->data_ready[index] & USER_SPACE_DATA_TYPE;
 		driver->data_ready[index] ^= USER_SPACE_DATA_TYPE;
 		atomic_dec(&driver->data_ready_notif[index]);
@@ -4044,26 +4037,6 @@ void diag_ws_release(void)
 		pm_relax(driver->diag_dev);
 }
 
-#ifdef CONFIG_IPC_LOGGING
-static void diag_debug_init(void)
-{
-	diag_ipc_log = ipc_log_context_create(DIAG_IPC_LOG_PAGES, "diag", 0);
-	if (!diag_ipc_log)
-		pr_err("diag: Failed to create IPC logging context\n");
-	/*
-	 * Set the bit mask here as per diag_ipc_logging.h to enable debug logs
-	 * to be logged to IPC
-	 */
-	diag_debug_mask = DIAG_DEBUG_PERIPHERALS | DIAG_DEBUG_DCI |
-				DIAG_DEBUG_USERSPACE | DIAG_DEBUG_BRIDGE;
-}
-#else
-static void diag_debug_init(void)
-{
-
-}
-#endif
-
 static int diag_real_time_info_init(void)
 {
 	int i;
@@ -4118,7 +4091,6 @@ static int diagchar_setup_cdev(dev_t devno)
 	driver->diagchar_class = class_create(THIS_MODULE, "diag");
 
 	if (IS_ERR(driver->diagchar_class)) {
-		pr_err("Error creating diagchar class.\n");
 		return PTR_ERR(driver->diagchar_class);
 	}
 
@@ -4246,7 +4218,6 @@ static int __init diagchar_init(void)
 			diag_update_md_client_work_fn);
 	diag_ws_init();
 	diag_stats_init();
-	diag_debug_init();
 	diag_md_session_init();
 
 	driver->incoming_pkt.capacity = DIAG_MAX_REQ_SIZE;
@@ -4262,9 +4233,6 @@ static int __init diagchar_init(void)
 	driver->incoming_pkt.total_len = 0;
 
 	ret = diag_real_time_info_init();
-	if (ret)
-		goto fail;
-	ret = diag_debugfs_init();
 	if (ret)
 		goto fail;
 	ret = diag_masks_init();
@@ -4292,7 +4260,7 @@ static int __init diagchar_init(void)
 	pr_debug("diagchar initializing ..\n");
 	driver->num = 1;
 	driver->name = ((void *)driver) + sizeof(struct diagchar_dev);
-	strlcpy(driver->name, "diag", 4);
+	strlcpy(driver->name, "diag", 5);
 	/* Get major number from kernel and initialize */
 	ret = alloc_chrdev_region(&dev, driver->minor_start,
 				    driver->num, driver->name);
@@ -4310,15 +4278,12 @@ static int __init diagchar_init(void)
 	mutex_init(&driver->diag_id_mutex);
 	INIT_LIST_HEAD(&driver->diag_id_list);
 	diag_add_diag_id_to_list(DIAG_ID_APPS, "APPS", APPS_DATA, APPS_DATA);
-	pr_debug("diagchar initialized now");
 	ret = diagfwd_bridge_init();
 	if (ret)
 		diagfwd_bridge_exit();
 	return 0;
 
 fail:
-	pr_err("diagchar is not initialized, ret: %d\n", ret);
-	diag_debugfs_cleanup();
 	diagchar_cleanup();
 	diag_mux_exit();
 	diagfwd_peripheral_exit();
@@ -4334,7 +4299,6 @@ fail:
 
 static void diagchar_exit(void)
 {
-	pr_info("diagchar exiting...\n");
 	diag_mempool_exit();
 	diag_mux_exit();
 	diagfwd_peripheral_exit();
@@ -4344,9 +4308,7 @@ static void diagchar_exit(void)
 	diag_masks_exit();
 	diag_md_session_exit();
 	diag_remote_exit();
-	diag_debugfs_cleanup();
 	diagchar_cleanup();
-	pr_info("done diagchar exit\n");
 }
 
 module_init(diagchar_init);

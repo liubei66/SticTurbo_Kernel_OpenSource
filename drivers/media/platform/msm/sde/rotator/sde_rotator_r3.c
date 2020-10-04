@@ -2764,8 +2764,8 @@ static int sde_hw_rotator_config(struct sde_rot_hw_resource *hw,
 	if (test_bit(SDE_QOS_PER_PIPE_LUT, mdata->sde_qos_map))	{
 		u32 qos_lut = 0; /* low priority for nrt read client */
 
-		trace_rot_perf_set_qos_luts(XIN_SSPP, sspp_cfg.fmt->format,
-			qos_lut, sde_mdp_is_linear_format(sspp_cfg.fmt));
+//		trace_rot_perf_set_qos_luts(XIN_SSPP, sspp_cfg.fmt->format,
+//			qos_lut, sde_mdp_is_linear_format(sspp_cfg.fmt));
 
 		SDE_ROTREG_WRITE(rot->mdss_base, ROT_SSPP_CREQ_LUT, qos_lut);
 	}
@@ -3368,6 +3368,8 @@ static ssize_t sde_hw_rotator_show_caps(struct sde_rot_mgr *mgr,
 
 	if (hw_data->downscale_caps)
 		SPRINT("downscale_ratios=%s\n", hw_data->downscale_caps);
+
+	SPRINT("max_line_width=%d\n", sde_rotator_get_maxlinewidth(mgr));
 
 #undef SPRINT
 	return cnt;

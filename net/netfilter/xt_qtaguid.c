@@ -9,7 +9,7 @@
  */
 
 /*
- * There are runtime debug flags enabled via the debug_mask module param, or
+ * There are run-time debug flags enabled via the debug_mask module param, or
  * via the DEFAULT_DEBUG_MASK. See xt_qtaguid_internal.h.
  */
 #define DEBUG
@@ -20,7 +20,6 @@
 #include <linux/miscdevice.h>
 #include <linux/netfilter/x_tables.h>
 #include <linux/netfilter/xt_qtaguid.h>
-#include <linux/pid.h>
 #include <linux/ratelimit.h>
 #include <linux/seq_file.h>
 #include <linux/skbuff.h>
@@ -56,11 +55,6 @@ module_param_named(iface_perms, proc_iface_perms, uint, S_IRUGO | S_IWUSR);
 static struct proc_dir_entry *xt_qtaguid_stats_file;
 static unsigned int proc_stats_perms = S_IRUGO;
 module_param_named(stats_perms, proc_stats_perms, uint, S_IRUGO | S_IWUSR);
-
-static struct proc_dir_entry *xt_qtaguid_system_app_stats_file;
-static unsigned int proc_system_app_stats_perms = S_IRUGO;
-module_param_named(system_app_stats_perms, proc_system_app_stats_perms, uint,
-		   S_IRUGO | S_IWUSR);
 
 static struct proc_dir_entry *xt_qtaguid_ctrl_file;
 
@@ -226,56 +220,6 @@ static void tag_node_tree_insert(struct tag_node *data, struct rb_root *root)
 	}
 
 	/* Add new node and rebalance tree. */
-	rb_link_node(&data->node, parent, new);
-	rb_insert_color(&data->node, root);
-}
-
-static struct system_app_stat_node *system_app_stats_tree_search(
-				struct rb_root *root, const char *package)
-{
-	struct rb_node *node = root->rb_node;
-
-	while (node) {
-		struct system_app_stat_node *data = rb_entry(node,
-					struct system_app_stat_node, node);
-		int result;
-
-		result = strcmp(package, data->package);
-		RB_DEBUG("qtaguid: %s() package=%s data.package=%s res=%d\n",
-			 __func__, (package ? package : ""),
-			 (data->package ? data->package : ""), result);
-		if (result < 0)
-			node = node->rb_left;
-		else if (result > 0)
-			node = node->rb_right;
-		else
-			return data;
-	}
-	return NULL;
-}
-
-static void system_app_stats_tree_insert(struct system_app_stat_node *data,
-					 struct rb_root *root)
-{
-	struct rb_node **new = &root->rb_node, *parent = NULL;
-
-	while (*new) {
-		struct system_app_stat_node *this = rb_entry(*new,
-					struct system_app_stat_node, node);
-		int result = strcmp(data->package, this->package);
-
-		RB_DEBUG("qtaguid: %s() data.package=%s new=%s res=%d\n",
-			 __func__, (data->package ? data->package : ""),
-			 (this->package ? this->package : ""), result);
-		parent = *new;
-		if (result < 0)
-			new = &((*new)->rb_left);
-		else if (result > 0)
-			new = &((*new)->rb_right);
-		else
-			RB_DEBUG("qtaguid: error happens while searching");
-	}
-
 	rb_link_node(&data->node, parent, new);
 	rb_insert_color(&data->node, root);
 }
@@ -923,9 +867,7 @@ static struct iface_stat *iface_alloc(struct net_device *net_dev)
 		return NULL;
 	}
 	spin_lock_init(&new_iface->tag_stat_list_lock);
-	spin_lock_init(&new_iface->system_app_stats_lock);
 	new_iface->tag_stat_tree = RB_ROOT;
-	new_iface->system_app_stas_tree = RB_ROOT;
 	_iface_stat_set_active(new_iface, net_dev, true);
 
 	/*
@@ -1335,58 +1277,9 @@ done:
 	return new_tag_stat_entry;
 }
 
-/* Create a new entry for tracking the specified package name within
- * the interface.
- */
-static struct system_app_stat_node *create_if_system_app_stat(
-			struct iface_stat *iface_entry, const char *package)
-{
-	struct system_app_stat_node *new_system_app_stat_entry = NULL;
-
-	IF_DEBUG("qtaguid: iface_stat: %s(): ife=%p package=%s",
-		 __func__, iface_entry, package);
-	new_system_app_stat_entry = kzalloc(sizeof(*new_system_app_stat_entry),
-					    GFP_ATOMIC);
-	if (new_system_app_stat_entry) {
-		strlcpy(new_system_app_stat_entry->package, package, 100);
-		system_app_stats_tree_insert(new_system_app_stat_entry,
-					&iface_entry->system_app_stas_tree);
-	}
-	return new_system_app_stat_entry;
-}
-
-static void system_app_stat_update(struct system_app_stat_node *entry,
-				   enum ifs_tx_rx direction,
-				   int proto, int bytes)
-{
-	if (entry) {
-		MT_DEBUG("qtaguid: %s()(package=%s dir=%d proto=%d byte=%d)\n",
-			  __func__, entry->package, direction, proto, bytes);
-		switch (proto) {
-		case IPPROTO_TCP:
-			entry->counters.bpc[direction][IFS_TCP].bytes += bytes;
-			entry->counters.bpc[direction][IFS_TCP].packets += 1;
-			break;
-		case IPPROTO_UDP:
-			entry->counters.bpc[direction][IFS_UDP].bytes += bytes;
-			entry->counters.bpc[direction][IFS_UDP].packets += 1;
-			break;
-		case IPPROTO_IP:
-		default:
-			entry->counters.bpc[direction][IFS_PROTO_OTHER].bytes
-				+= bytes;
-			entry->counters.bpc[direction][IFS_PROTO_OTHER].packets
-				+= 1;
-			break;
-		}
-	} else {
-		MT_DEBUG("qtaguid: system_app_stat_update entry is NULL\n");
-	}
-}
-
 static void if_tag_stat_update(const char *ifname, uid_t uid,
 			       const struct sock *sk, enum ifs_tx_rx direction,
-			       int proto, int bytes, pid_t pid)
+			       int proto, int bytes)
 {
 	struct tag_stat *tag_stat_entry;
 	tag_t tag, acct_tag;
@@ -1395,11 +1288,6 @@ static void if_tag_stat_update(const char *ifname, uid_t uid,
 	struct sock_tag *sock_tag_entry;
 	struct iface_stat *iface_entry;
 	struct tag_stat *new_tag_stat = NULL;
-	char package_name[100] = {0};
-	bool is_system_package = false;
-	struct system_app_stat_node *system_stats_entry;
-	uid_t current_fsuid;
-	struct task_struct *p_task = NULL;
 	MT_DEBUG("qtaguid: if_tag_stat_update(ifname=%s "
 		"uid=%u sk=%p dir=%d proto=%d bytes=%d)\n",
 		 ifname, uid, sk, direction, proto, bytes);
@@ -1421,62 +1309,16 @@ static void if_tag_stat_update(const char *ifname, uid_t uid,
 	 * Look for a tagged sock.
 	 * It will have an acct_uid.
 	 */
-	current_fsuid = from_kuid(&init_user_ns, current_fsuid());
 	sock_tag_entry = get_sock_stat(sk);
 	if (sock_tag_entry) {
 		tag = sock_tag_entry->tag;
 		acct_tag = get_atag_from_tag(tag);
 		uid_tag = get_utag_from_tag(tag);
-		if (uid_tag == 1000) {
-			is_system_package = true;
-			strlcpy(package_name, sock_tag_entry->pname, 100);
-			MT_DEBUG("qtaguid: tagged socket package_name = %s"
-				" pid = %u tgid = %u bytes=%d\n",
-				package_name, current->pid, current->tgid, bytes);
-		}
 	} else {
 		acct_tag = make_atag_from_value(0);
 		tag = combine_atag_with_uid(acct_tag, uid);
 		uid_tag = make_tag_from_uid(uid);
-		if (uid_tag == 1000) {
-			if (pid > 0) {
-				rcu_read_lock();
-				p_task = find_task_by_pid_ns(pid, &init_pid_ns);
-				if (p_task) {
-					get_task_struct(p_task);
-					strlcpy(package_name, p_task->comm, 100);
-					put_task_struct(p_task);
-				}
-				rcu_read_unlock();
-			} else if (current_fsuid == 1000) {
-				strlcpy(package_name,
-					current->group_leader->comm, 100);
-			}
-			MT_DEBUG("qtaguid: not tagged socket package_name = %s"
-				" pid = %u tgid = %u bytes=%d\n",
-				package_name, current->pid, current->tgid, bytes);
-			is_system_package = true;
-		}
 	}
-
-	if (is_system_package && strlen(package_name) > 0) {
-		spin_lock_bh(&iface_entry->system_app_stats_lock);
-		system_stats_entry = system_app_stats_tree_search(
-			&iface_entry->system_app_stas_tree, package_name);
-		if (!system_stats_entry) {
-			system_stats_entry = create_if_system_app_stat(
-						iface_entry, package_name);
-			if (system_stats_entry) {
-				system_app_stat_update(system_stats_entry,
-					direction, proto, bytes);
-			}
-		} else {
-			system_app_stat_update(system_stats_entry, direction,
-								proto, bytes);
-		}
-		spin_unlock_bh(&iface_entry->system_app_stats_lock);
-	}
-
 	MT_DEBUG("qtaguid: tag_stat: stat_update(): "
 		 " looking for tag=0x%llx (uid=%u) in ife=%p\n",
 		 tag, get_uid_from_tag(tag), iface_entry);
@@ -1767,7 +1609,7 @@ static struct sock *qtaguid_find_sk(const struct sk_buff *skb,
 
 static void account_for_uid(const struct sk_buff *skb,
 			    const struct sock *alternate_sk, uid_t uid,
-			    struct xt_action_param *par, pid_t pid)
+			    struct xt_action_param *par)
 {
 	const struct net_device *el_dev;
 	enum ifs_tx_rx direction;
@@ -1782,7 +1624,7 @@ static void account_for_uid(const struct sk_buff *skb,
 	if_tag_stat_update(el_dev->name, uid,
 			   skb->sk ? skb->sk : alternate_sk,
 			   direction,
-			   proto, skb->len, pid);
+			   proto, skb->len);
 }
 
 static bool qtaguid_mt(const struct sk_buff *skb, struct xt_action_param *par)
@@ -1794,7 +1636,6 @@ static bool qtaguid_mt(const struct sk_buff *skb, struct xt_action_param *par)
 	kuid_t sock_uid;
 	bool res;
 	bool set_sk_callback_lock = false;
-	pid_t pid = -1;
 	/*
 	 * TODO: unhack how to force just accounting.
 	 * For now we only do tag stats when the uid-owner is not requested
@@ -1879,7 +1720,7 @@ static bool qtaguid_mt(const struct sk_buff *skb, struct xt_action_param *par)
 		 * against the system.
 		 */
 		if (do_tag_stat)
-			account_for_uid(skb, sk, 0, par, pid);
+			account_for_uid(skb, sk, 0, par);
 		MT_DEBUG("qtaguid[%d]: leaving (sk=NULL)\n", par->hooknum);
 		res = (info->match ^ info->invert) == 0;
 		atomic64_inc(&qtu_events.match_no_sk);
@@ -1889,13 +1730,9 @@ static bool qtaguid_mt(const struct sk_buff *skb, struct xt_action_param *par)
 		goto put_sock_ret_res;
 	}
 	sock_uid = sk->sk_uid;
-
-	if (from_kuid(&init_user_ns, sock_uid) == 1000) {
-		pid = sk->pid_num;
-	}
 	if (do_tag_stat)
 		account_for_uid(skb, sk, from_kuid(&init_user_ns, sock_uid),
-				par, pid);
+				par);
 
 	/*
 	 * The following two tests fail the match when:
@@ -2150,7 +1987,6 @@ static int ctrl_cmd_delete(const char *input)
 	struct tag_counter_set *tcs_entry;
 	struct tag_ref *tr_entry;
 	struct uid_tag_data *utd_entry;
-	struct system_app_stat_node *system_entry;
 
 	argc = sscanf(input, "%c %llu %u", &cmd, &acct_tag, &uid_int);
 	uid = make_kuid(&init_user_ns, uid_int);
@@ -2267,25 +2103,6 @@ static int ctrl_cmd_delete(const char *input)
 		}
 		spin_unlock_bh(&iface_entry->tag_stat_list_lock);
 	}
-
-	if (uid_int == 1000) {
-		list_for_each_entry(iface_entry, &iface_stat_list, list) {
-			spin_lock_bh(&iface_entry->system_app_stats_lock);
-			node = rb_first(&iface_entry->system_app_stas_tree);
-			while (node) {
-				system_entry = rb_entry(node,
-					struct system_app_stat_node, node);
-				node = rb_next(node);
-				CT_DEBUG("qtaguid: ctrl_delete(%s): "
-					 "package=%s\n", input,
-					 system_entry->package);
-				rb_erase(&system_entry->node,
-					&iface_entry->system_app_stas_tree);
-				kfree(system_entry);
-			}
-			spin_unlock_bh(&iface_entry->system_app_stats_lock);
-		}
-	}
 	spin_unlock_bh(&iface_stat_list_lock);
 
 	/* Cleanup the uid_tag_data */
@@ -2377,7 +2194,6 @@ err:
 	return res;
 }
 
-#define MAX_QTAGUID_CTRL_INPUT_LEN 255
 static int ctrl_cmd_tag(const char *input)
 {
 	char cmd;
@@ -2392,16 +2208,13 @@ static int ctrl_cmd_tag(const char *input)
 	struct tag_ref *tag_ref_entry;
 	struct uid_tag_data *uid_tag_data_entry;
 	struct proc_qtu_data *pqd_entry;
-	pid_t pid;
-	struct task_struct *p_task = NULL;
 
 	/* Unassigned args will get defaulted later. */
-	argc = sscanf(input, "%c %d %llu %u %u", &cmd, &sock_fd, &acct_tag,
-						&uid_int, &pid);
+	argc = sscanf(input, "%c %d %llu %u", &cmd, &sock_fd, &acct_tag, &uid_int);
 	uid = make_kuid(&init_user_ns, uid_int);
 	CT_DEBUG("qtaguid: ctrl_tag(%s): argc=%d cmd=%c sock_fd=%d "
-		 "acct_tag=0x%llx uid=%u pid=%u\n", input, argc, cmd, sock_fd,
-		 acct_tag, uid_int, pid);
+		 "acct_tag=0x%llx uid=%u\n", input, argc, cmd, sock_fd,
+		 acct_tag, uid_int);
 	if (argc < 2) {
 		res = -EINVAL;
 		goto err;
@@ -2444,10 +2257,6 @@ static int ctrl_cmd_tag(const char *input)
 		res = -EPERM;
 		goto err_put;
 	}
-
-	CT_DEBUG("qtaguid: uid = %u uid_int = %u\n",
-				from_kuid(&init_user_ns, uid), uid_int);
-
 	full_tag = combine_atag_with_uid(acct_tag, uid_int);
 
 	spin_lock_bh(&sock_tag_list_lock);
@@ -2500,18 +2309,6 @@ static int ctrl_cmd_tag(const char *input)
 		sock_tag_entry->sk = el_socket->sk;
 		sock_tag_entry->pid = current->tgid;
 		sock_tag_entry->tag = combine_atag_with_uid(acct_tag, uid_int);
-		memset(sock_tag_entry->pname, 0, 100);
-		if (pid > -1) {
-			rcu_read_lock();
-			p_task = find_task_by_pid_ns(pid, &init_pid_ns);
-			if (p_task) {
-				get_task_struct(p_task);
-				strlcpy(sock_tag_entry->pname, p_task->comm, 100);
-				put_task_struct(p_task);
-			}
-			rcu_read_unlock();
-		}
-
 		pqd_entry = proc_qtu_data_tree_search(
 			&proc_qtu_data_tree, current->tgid);
 		/*
@@ -2689,6 +2486,7 @@ err:
 	return res;
 }
 
+#define MAX_QTAGUID_CTRL_INPUT_LEN 255
 static ssize_t qtaguid_ctrl_proc_write(struct file *file, const char __user *buffer,
 				   size_t count, loff_t *offp)
 {
@@ -2933,199 +2731,6 @@ static int qtaguid_stats_proc_show(struct seq_file *m, void *v)
 	return 0;
 }
 
-struct proc_system_print_info {
-	struct iface_stat *iface_entry;
-	int item_index;
-	const char *package; /* tag found by reading to tag_pos */
-	off_t tag_pos;
-	int tag_item_index;
-};
-
-static void pp_system_app_stats_header(struct seq_file *m)
-{
-	seq_puts(m,
-		 "idx iface package_name rx_bytes "
-		 "rx_packets tx_bytes tx_packets "
-		 "rx_tcp_bytes rx_tcp_packets "
-		 "rx_udp_bytes rx_udp_packets "
-		 "rx_other_bytes rx_other_packets "
-		 "tx_tcp_bytes tx_tcp_packets "
-		 "tx_udp_bytes tx_udp_packets "
-		 "tx_other_bytes tx_other_packets\n");
-}
-
-static int pp_system_app_stats_line(struct seq_file *m,
-				struct system_app_stat_node *sasn_entry)
-{
-	struct system_app_data_counters *cnts;
-	struct proc_system_print_info *ppi = m->private;
-	/* Detailed tags are not available to everybody */
-	if (!can_read_other_uid_stats(make_kuid(&init_user_ns, 1000))) {
-		CT_DEBUG("qtaguid: %s(): %s %s: insufficient priv\n",
-			 __func__, ppi->iface_entry->ifname, ppi->package);
-		return 0;
-	}
-	ppi->item_index++;
-	cnts = &sasn_entry->counters;
-	seq_printf(m, "%d %s %s "
-		"%llu %llu "
-		"%llu %llu "
-		"%llu %llu "
-		"%llu %llu "
-		"%llu %llu "
-		"%llu %llu "
-		"%llu %llu "
-		"%llu %llu\n",
-		ppi->item_index,
-		ppi->iface_entry->ifname, sasn_entry->package,
-		dc_system_app_sum_bytes(cnts, IFS_RX),
-		dc_system_app_sum_packets(cnts, IFS_RX),
-		dc_system_app_sum_bytes(cnts, IFS_TX),
-		dc_system_app_sum_packets(cnts, IFS_TX),
-		cnts->bpc[IFS_RX][IFS_TCP].bytes,
-		cnts->bpc[IFS_RX][IFS_TCP].packets,
-		cnts->bpc[IFS_RX][IFS_UDP].bytes,
-		cnts->bpc[IFS_RX][IFS_UDP].packets,
-		cnts->bpc[IFS_RX][IFS_PROTO_OTHER].bytes,
-		cnts->bpc[IFS_RX][IFS_PROTO_OTHER].packets,
-		cnts->bpc[IFS_TX][IFS_TCP].bytes,
-		cnts->bpc[IFS_TX][IFS_TCP].packets,
-		cnts->bpc[IFS_TX][IFS_UDP].bytes,
-		cnts->bpc[IFS_TX][IFS_UDP].packets,
-		cnts->bpc[IFS_TX][IFS_PROTO_OTHER].bytes,
-		cnts->bpc[IFS_TX][IFS_PROTO_OTHER].packets);
-	return seq_has_overflowed(m) ? -ENOSPC : 1;
-}
-
-static void qtaguid_system_app_stats_proc_next_iface_entry(
-					struct proc_system_print_info *ppi)
-{
-	spin_unlock_bh(&ppi->iface_entry->system_app_stats_lock);
-	list_for_each_entry_continue(ppi->iface_entry, &iface_stat_list, list) {
-		spin_lock_bh(&ppi->iface_entry->system_app_stats_lock);
-		return;
-	}
-	ppi->iface_entry = NULL;
-}
-
-static void *qtaguid_system_app_stats_proc_next(struct seq_file *m, void *v,
-						loff_t *pos)
-{
-	struct proc_system_print_info *ppi = m->private;
-	struct system_app_stat_node *sasn_entry;
-	struct rb_node *node;
-
-	if (!v) {
-		pr_err("qtaguid: %s(): unexpected v: NULL\n", __func__);
-		return NULL;
-	}
-
-	(*pos)++;
-
-	if (!ppi->iface_entry || unlikely(module_passive))
-		return NULL;
-
-	if (v == SEQ_START_TOKEN) {
-		node = rb_first(&ppi->iface_entry->system_app_stas_tree);
-		MT_DEBUG("qtaguid: qtaguid_system_app_stats_proc_next "
-						"v == SEQ_START_TOKEN\n");
-	} else {
-		node = rb_next(&((struct system_app_stat_node *)v)->node);
-	}
-	while (!node) {
-		qtaguid_system_app_stats_proc_next_iface_entry(ppi);
-		if (!ppi->iface_entry)
-			return NULL;
-		node = rb_first(&ppi->iface_entry->system_app_stas_tree);
-	}
-
-	sasn_entry = rb_entry(node, struct system_app_stat_node, node);
-	ppi->package = sasn_entry->package;
-	ppi->tag_pos = *pos;
-	ppi->tag_item_index = ppi->item_index;
-	return sasn_entry;
-}
-
-static void *qtaguid_system_app_stats_proc_start(struct seq_file *m,
-							loff_t *pos)
-{
-	struct proc_system_print_info *ppi = m->private;
-	struct system_app_stat_node *sasn_entry;
-
-	spin_lock_bh(&iface_stat_list_lock);
-	if (*pos == 0) {
-		ppi->item_index = 1;
-		ppi->tag_pos = 0;
-		if (list_empty(&iface_stat_list)) {
-			MT_DEBUG("qtaguid: qtaguid_system_app_stats_proc_start "
-				 "list_empty\n");
-			ppi->iface_entry = NULL;
-		} else {
-			ppi->iface_entry = list_first_entry(&iface_stat_list,
-							    struct iface_stat,
-							    list);
-			spin_lock_bh(&ppi->iface_entry->system_app_stats_lock);
-		}
-		return SEQ_START_TOKEN;
-	}
-	if (!qtaguid_stats_proc_iface_stat_ptr_valid(ppi->iface_entry)) {
-		if (ppi->iface_entry) {
-			MT_DEBUG("qtaguid: %s(): iface_entry %p not found\n",
-			       __func__, ppi->iface_entry);
-			ppi->iface_entry = NULL;
-		}
-		return NULL;
-	}
-
-	spin_lock_bh(&ppi->iface_entry->system_app_stats_lock);
-	if (!ppi->tag_pos) {
-		/* seq_read skipped first next call */
-		sasn_entry = SEQ_START_TOKEN;
-	} else {
-		sasn_entry = system_app_stats_tree_search(
-			&ppi->iface_entry->system_app_stas_tree, ppi->package);
-		if (!sasn_entry) {
-			MT_DEBUG("qtaguid: %s(): pk %s not found. Abort.\n",
-				__func__, ppi->package);
-			return NULL;
-		}
-	}
-
-	if (*pos == ppi->tag_pos) { /* normal resume */
-		ppi->item_index = ppi->tag_item_index;
-	} else {
-		/* seq_read skipped a next call */
-		*pos = ppi->tag_pos;
-		sasn_entry = qtaguid_system_app_stats_proc_next(m, sasn_entry,
-								pos);
-	}
-
-	return sasn_entry;
-}
-
-static void qtaguid_system_app_stats_proc_stop(struct seq_file *m, void *v)
-{
-	struct proc_system_print_info *ppi = m->private;
-
-	MT_DEBUG("qtaguid: qtaguid_system_app_stats_proc_stop\n");
-	if (ppi->iface_entry)
-		spin_unlock_bh(&ppi->iface_entry->system_app_stats_lock);
-	spin_unlock_bh(&iface_stat_list_lock);
-}
-
-static int qtaguid_system_app_stats_proc_show(struct seq_file *m, void *v)
-{
-	struct system_app_stat_node *sasn_entry = v;
-
-	if (v == SEQ_START_TOKEN) {
-	    MT_DEBUG("qtaguid: qtaguid_stats_proc_show\n");
-		pp_system_app_stats_header(m);
-	} else {
-		pp_system_app_stats_line(m, sasn_entry);
-	}
-	return 0;
-}
-
 /*------------------------------------------*/
 static int qtudev_open(struct inode *inode, struct file *file)
 {
@@ -3331,26 +2936,6 @@ static const struct file_operations proc_qtaguid_stats_fops = {
 	.release	= seq_release_private,
 };
 
-static const struct seq_operations proc_qtaguid_system_app_stats_seqops = {
-	.start = qtaguid_system_app_stats_proc_start,
-	.next = qtaguid_system_app_stats_proc_next,
-	.stop = qtaguid_system_app_stats_proc_stop,
-	.show = qtaguid_system_app_stats_proc_show,
-};
-
-static int proc_qtaguid_system_app_stats_open(struct inode *inode, struct file *file)
-{
-	return seq_open_private(file, &proc_qtaguid_system_app_stats_seqops,
-				sizeof(struct proc_system_print_info));
-}
-
-static const struct file_operations proc_qtaguid_system_app_stats_fops = {
-	.open		= proc_qtaguid_system_app_stats_open,
-	.read		= seq_read,
-	.llseek		= seq_lseek,
-	.release	= seq_release_private,
-};
-
 /*------------------------------------------*/
 static int __init qtaguid_proc_register(struct proc_dir_entry **res_procdir)
 {
@@ -3383,11 +2968,6 @@ static int __init qtaguid_proc_register(struct proc_dir_entry **res_procdir)
 		ret = -ENOMEM;
 		goto no_stats_entry;
 	}
-
-	xt_qtaguid_system_app_stats_file = proc_create_data("system_app_stats",
-					proc_stats_perms, *res_procdir,
-					&proc_qtaguid_system_app_stats_fops,
-					NULL);
 	/*
 	 * TODO: add support counter hacking
 	 * xt_qtaguid_stats_file->write_proc = qtaguid_stats_proc_write;
@@ -3421,7 +3001,7 @@ static int __init qtaguid_mt_init(void)
 	    || iface_stat_init(xt_qtaguid_procdir)
 	    || xt_register_match(&qtaguid_mt_reg)
 	    || misc_register(&qtu_device))
-		return -EPERM;
+		return -1;
 	return 0;
 }
 

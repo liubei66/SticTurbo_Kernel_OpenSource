@@ -20,6 +20,7 @@
 #include <linux/irq.h>
 #include <linux/pmic-voter.h>
 #include <linux/of_batterydata.h>
+#include <linux/module.h>
 #include <linux/alarmtimer.h>
 #include "smb5-lib.h"
 #include "smb5-reg.h"
@@ -1191,7 +1192,7 @@ static int smblib_awake_vote_callback(struct votable *votable, void *data,
 	struct smb_charger *chg = data;
 
 	if (awake)
-		pm_stay_awake(chg->dev);
+		pm_wakeup_event(chg->dev, 500);
 	else
 		pm_relax(chg->dev);
 

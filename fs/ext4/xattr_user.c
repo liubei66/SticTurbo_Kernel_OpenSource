@@ -3,6 +3,7 @@
  * Handler for extended user attributes.
  *
  * Copyright (C) 2001 by Andreas Gruenbacher, <a.gruenbacher@computer.org>
+ * Copyright (C) 2020 Amktiao.
  */
 
 #include <linux/string.h>

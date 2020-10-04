@@ -18,7 +18,7 @@
 #include "../vidc_hfi_api.h"
 
 static bool debug;
-module_param(debug, bool, 0644);
+module_param(debug, bool, 0);
 
 enum governor_mode {
 	GOVERNOR_DDR,

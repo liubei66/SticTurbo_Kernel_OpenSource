@@ -33,27 +33,27 @@
 #define HYSTART_DELAY		2
 
 static int window __read_mostly = 8;
-static unsigned int backoff_beta __read_mostly = 0.7071 * 1024; /* sqrt 0.5 */
+static unsigned int backoff_beta __read_mostly = 0.7071 * 1024;
 static unsigned int backoff_factor __read_mostly = 42;
 static unsigned int hystart_detect __read_mostly = 3;
 static unsigned int use_ineff __read_mostly = 5;
 static bool use_shadow __read_mostly = true;
 static bool use_tolerance __read_mostly;
 
-module_param(window, int, 0444);
+module_param(window, int, 0);
 MODULE_PARM_DESC(window, "gradient window size (power of two <= 256)");
-module_param(backoff_beta, uint, 0644);
+module_param(backoff_beta, uint, 0);
 MODULE_PARM_DESC(backoff_beta, "backoff beta (0-1024)");
-module_param(backoff_factor, uint, 0644);
+module_param(backoff_factor, uint, 0);
 MODULE_PARM_DESC(backoff_factor, "backoff probability scale factor");
-module_param(hystart_detect, uint, 0644);
+module_param(hystart_detect, uint, 0);
 MODULE_PARM_DESC(hystart_detect, "use Hybrid Slow start "
 		 "(0: disabled, 1: ACK train, 2: delay threshold, 3: both)");
-module_param(use_ineff, uint, 0644);
+module_param(use_ineff, uint, 0);
 MODULE_PARM_DESC(use_ineff, "use ineffectual backoff detection (threshold)");
-module_param(use_shadow, bool, 0644);
+module_param(use_shadow, bool, 0);
 MODULE_PARM_DESC(use_shadow, "use shadow window heuristic");
-module_param(use_tolerance, bool, 0644);
+module_param(use_tolerance, bool, 0);
 MODULE_PARM_DESC(use_tolerance, "use loss tolerance heuristic");
 
 struct cdg_minmax {
@@ -428,6 +428,5 @@ static void __exit tcp_cdg_unregister(void)
 
 module_init(tcp_cdg_register);
 module_exit(tcp_cdg_unregister);
-MODULE_AUTHOR("Kenneth Klette Jonassen");
+
 MODULE_LICENSE("GPL");
-MODULE_DESCRIPTION("TCP CDG");

@@ -21,6 +21,7 @@
  * - loose bi_dev comparisons, partition handling is right now
  * - completely modularize elevator setup and teardown
  *
+ * Copyright (C) 2020 Amktiao.
  */
 #include <linux/kernel.h>
 #include <linux/fs.h>

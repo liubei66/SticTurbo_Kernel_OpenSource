@@ -203,6 +203,9 @@
 #define IPA_WDI_TX_DB_RES			7
 #define IPA_WDI_MAX_RES				8
 
+/* use QMAP header reserved bit to identify tethered traffic */
+#define IPA_QMAP_TETH_BIT (1 << 30)
+
 #ifdef CONFIG_ARM64
 /* Outer caches unsupported on ARM64 platforms */
 # define outer_flush_range(x, y)
@@ -555,6 +558,7 @@ struct ipa3_hdr_proc_ctx_offset_entry {
  * @link: entry's link in global header table entries list
  * @type: header processing context type
  * @l2tp_params: L2TP parameters
+ * @generic_params: generic proc_ctx params
  * @offset_entry: entry's offset
  * @hdr: the header
  * @cookie: cookie used for validity check
@@ -568,6 +572,7 @@ struct ipa3_hdr_proc_ctx_entry {
 	u32 cookie;
 	enum ipa_hdr_proc_type type;
 	struct ipa_l2tp_hdr_proc_ctx_params l2tp_params;
+	struct ipa_eth_II_to_eth_II_ex_procparams generic_params;
 	struct ipa3_hdr_proc_ctx_offset_entry *offset_entry;
 	struct ipa3_hdr_entry *hdr;
 	u32 ref_cnt;
@@ -1447,6 +1452,7 @@ struct ipa3_char_device_context {
  * @logbuf_low: ipc log buffer for low priority messages
  * @ipa_wdi2: using wdi-2.0
  * @ipa_config_is_auto: is this AUTO use case
+ * @use_xbl_boot: use xbl loading for IPA FW
  * @use_64_bit_dma_mask: using 64bits dma mask
  * @ipa_bus_hdl: msm driver handle for the data path bus
  * @ctrl: holds the core specific operations based on
@@ -1549,6 +1555,7 @@ struct ipa3_context {
 	bool modem_cfg_emb_pipe_flt;
 	bool ipa_wdi2;
 	bool ipa_config_is_auto;
+	bool use_xbl_boot;
 	bool use_64_bit_dma_mask;
 	/* featurize if memory footprint becomes a concern */
 	struct ipa3_stats stats;
@@ -1631,6 +1638,7 @@ struct ipa3_plat_drv_res {
 	bool modem_cfg_emb_pipe_flt;
 	bool ipa_wdi2;
 	bool ipa_config_is_auto;
+	bool use_xbl_boot;
 	bool use_64_bit_dma_mask;
 	bool use_bw_vote;
 	u32 wan_rx_ring_size;
@@ -2293,6 +2301,8 @@ u8 ipa3_get_qmb_master_sel(enum ipa_client_type client);
 int ipa3_get_smmu_params(struct ipa_smmu_in_params *in,
 	struct ipa_smmu_out_params *out);
 
+bool ipa3_get_lan_rx_napi(void);
+
 /* internal functions */
 
 int ipa3_bind_api_controller(enum ipa_hw_type ipa_hw_type,
@@ -2355,8 +2365,19 @@ int __ipa3_del_rt_rule(u32 rule_hdl);
 int __ipa3_del_hdr(u32 hdr_hdl, bool by_user);
 int __ipa3_release_hdr(u32 hdr_hdl);
 int __ipa3_release_hdr_proc_ctx(u32 proc_ctx_hdl);
-int _ipa_read_ep_reg_v3_0(char *buf, int max_len, int pipe);
-int _ipa_read_ep_reg_v4_0(char *buf, int max_len, int pipe);
+
+static inline
+int _ipa_read_ep_reg_v3_0(char *buf, int max_len, int pipe)
+{
+	return 0;
+}
+
+static inline
+int _ipa_read_ep_reg_v4_0(char *buf, int max_len, int pipe)
+{
+	return 0;
+}
+
 int _ipa_read_ipahal_regs(void);
 void _ipa_enable_clks_v3_0(void);
 void _ipa_disable_clks_v3_0(void);
@@ -2586,6 +2607,7 @@ void ipa3_enable_dcd(void);
 void ipa3_disable_prefetch(enum ipa_client_type client);
 int ipa3_alloc_common_event_ring(void);
 int ipa3_allocate_dma_task_for_gsi(void);
+bool ipa3_check_idr_if_freed(void *ptr);
 void ipa3_free_dma_task_for_gsi(void);
 int ipa3_set_clock_plan_from_pm(int idx);
 void __ipa_gsi_irq_rx_scedule_poll(struct ipa3_sys_context *sys);

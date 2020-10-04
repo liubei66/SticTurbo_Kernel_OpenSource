@@ -18,7 +18,6 @@
 
 static void cpufreq_gov_performance_limits(struct cpufreq_policy *policy)
 {
-	pr_debug("setting to %u kHz\n", policy->max);
 	__cpufreq_driver_target(policy, policy->max, CPUFREQ_RELATION_H);
 }
 
@@ -54,7 +53,7 @@ struct cpufreq_governor *cpufreq_fallback_governor(void)
 }
 #endif
 
-MODULE_AUTHOR("Dominik Brodowski <linux@brodo.de>");
+MODULE_AUTHOR("Dominik Brodowski");
 MODULE_DESCRIPTION("CPUfreq policy governor 'performance'");
 MODULE_LICENSE("GPL");
 

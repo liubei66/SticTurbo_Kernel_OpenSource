@@ -12,6 +12,7 @@
  * Copyright (c) 2009     Shrikar Archak
  * Copyright (c) 2003-2011 Stony Brook University
  * Copyright (c) 2003-2011 The Research Foundation of SUNY
+ * Copyright (C) 2020 Amktiao.
  *
  * This file is dual licensed.  It may be redistributed and/or modified
  * under the terms of the Apache 2.0 License OR version 2 of the GNU
@@ -92,7 +93,7 @@ static int parse_options(struct super_block *sb, char *options, int silent,
 
 		switch (token) {
 		case Opt_debug:
-			*debug = 1;
+			*debug = 0;
 			break;
 		case Opt_fsuid:
 			if (match_int(&args[0], &option))
@@ -148,11 +149,7 @@ static int parse_options(struct super_block *sb, char *options, int silent,
 	}
 
 	if (*debug) {
-		pr_info("sdcardfs : options - debug:%d\n", *debug);
-		pr_info("sdcardfs : options - uid:%d\n",
-							opts->fs_low_uid);
-		pr_info("sdcardfs : options - gid:%d\n",
-							opts->fs_low_gid);
+		pr_info("sdcardfs : options: %d\n", *debug);
 	}
 
 	return 0;
@@ -179,7 +176,7 @@ int parse_options_remount(struct super_block *sb, char *options, int silent,
 
 		switch (token) {
 		case Opt_debug:
-			debug = 1;
+			debug = 0;
 			break;
 		case Opt_gid:
 			if (match_int(&args[0], &option))
@@ -468,6 +465,12 @@ static int __init init_sdcardfs_fs(void)
 
 	pr_info("Registering sdcardfs " SDCARDFS_VERSION "\n");
 
+	kmem_file_info_pool = KMEM_CACHE(sdcardfs_file_info, SLAB_HWCACHE_ALIGN);
+	if (!kmem_file_info_pool) {
+		err = -ENOMEM;
+		goto err;
+	}
+
 	err = sdcardfs_init_inode_cache();
 	if (err)
 		goto out;
@@ -484,6 +487,7 @@ out:
 		sdcardfs_destroy_dentry_cache();
 		packagelist_exit();
 	}
+err:
 	return err;
 }
 
@@ -493,6 +497,7 @@ static void __exit exit_sdcardfs_fs(void)
 	sdcardfs_destroy_dentry_cache();
 	packagelist_exit();
 	unregister_filesystem(&sdcardfs_fs_type);
+	kmem_cache_destroy(kmem_file_info_pool);
 	pr_info("Completed sdcardfs module unload\n");
 }
 

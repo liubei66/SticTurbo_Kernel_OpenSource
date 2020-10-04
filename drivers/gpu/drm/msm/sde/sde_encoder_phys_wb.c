@@ -1421,41 +1421,11 @@ static void sde_encoder_phys_wb_get_hw_resources(
 			hw_res->needs_cdm);
 }
 
-#ifdef CONFIG_DEBUG_FS
-/**
- * sde_encoder_phys_wb_init_debugfs - initialize writeback encoder debugfs
- * @phys_enc:		Pointer to physical encoder
- * @debugfs_root:	Pointer to virtual encoder's debugfs_root dir
- */
-static int sde_encoder_phys_wb_init_debugfs(
-		struct sde_encoder_phys *phys_enc, struct dentry *debugfs_root)
-{
-	struct sde_encoder_phys_wb *wb_enc = to_sde_encoder_phys_wb(phys_enc);
-
-	if (!phys_enc || !wb_enc->hw_wb || !debugfs_root)
-		return -EINVAL;
-
-	if (!debugfs_create_u32("wbdone_timeout", 0600,
-			debugfs_root, &wb_enc->wbdone_timeout)) {
-		SDE_ERROR("failed to create debugfs/wbdone_timeout\n");
-		return -ENOMEM;
-	}
-
-	if (!debugfs_create_u32("bypass_irqreg", 0600,
-			debugfs_root, &wb_enc->bypass_irqreg)) {
-		SDE_ERROR("failed to create debugfs/bypass_irqreg\n");
-		return -ENOMEM;
-	}
-
-	return 0;
-}
-#else
 static int sde_encoder_phys_wb_init_debugfs(
 		struct sde_encoder_phys *phys_enc, struct dentry *debugfs_root)
 {
 	return 0;
 }
-#endif
 
 static int sde_encoder_phys_wb_late_register(struct sde_encoder_phys *phys_enc,
 		struct dentry *debugfs_root)

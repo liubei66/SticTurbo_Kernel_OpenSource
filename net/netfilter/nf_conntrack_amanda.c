@@ -28,15 +28,15 @@
 static unsigned int master_timeout __read_mostly = 300;
 static char *ts_algo = "kmp";
 
-MODULE_AUTHOR("Brian J. Murrell <netfilter@interlinx.bc.ca>");
+MODULE_AUTHOR("Brian J. Murrell");
 MODULE_DESCRIPTION("Amanda connection tracking module");
 MODULE_LICENSE("GPL");
 MODULE_ALIAS("ip_conntrack_amanda");
 MODULE_ALIAS_NFCT_HELPER("amanda");
 
-module_param(master_timeout, uint, 0600);
+module_param(master_timeout, uint, 0);
 MODULE_PARM_DESC(master_timeout, "timeout for the master connection");
-module_param(ts_algo, charp, 0400);
+module_param(ts_algo, charp, 0);
 MODULE_PARM_DESC(ts_algo, "textsearch algorithm to use (default kmp)");
 
 unsigned int (*nf_nat_amanda_hook)(struct sk_buff *skb,

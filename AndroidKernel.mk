@@ -76,8 +76,13 @@ KERNEL_CFLAGS := KCFLAGS=-mno-android
 endif
 endif
 
-ifeq (global,$(MIUI_CURRENT_CUST_VARIANT))
-KERNEL_CFLAGS += CONFIG_MIUI_CUST_GLOBAL=y
+# Fei Qi De Gong Neng
+# ifeq (global,$(MIUI_CURRENT_CUST_VARIANT))
+# KERNEL_CFLAGS += CONFIG_MIUI_CUST_GLOBAL=y
+# endif
+
+ifeq (aosp,$(STICKERNEL_AOSP_EXTHMUI))
+KERNEL_CFLAGS += CONFIG_EXTHMUI_KERNEL=y
 endif
 
 mkfile_path := $(abspath $(lastword $(MAKEFILE_LIST)))

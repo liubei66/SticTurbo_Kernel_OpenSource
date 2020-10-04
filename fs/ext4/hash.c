@@ -2,6 +2,7 @@
  *  linux/fs/ext4/hash.c
  *
  * Copyright (C) 2002 by Theodore Ts'o
+ * Copyright (C) 2020 Amktiao.
  *
  * This file is released under the GPL v2.
  *

@@ -1,6 +1,7 @@
 /*
  * Copyright (c) 2016-2018, The Linux Foundation. All rights reserved.
  * Copyright (C) 2019 XiaoMi, Inc.
+ * Copyright (C) 2020 Amktiao.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -259,19 +260,6 @@ struct dsi_panel {
 	u32 dc_threshold;
 	ktime_t fod_hbm_off_time;
 	bool dc_enable;
-	/* Display count */
-	u64 boottime;
-	u64 bootRTCtime;
-	u64 bootdays;
-	u64 panel_active;
-	u64 kickoff_count;
-	u64 bl_duration;
-	u64 bl_level_integral;
-	u64 bl_highlevel_duration;
-	u64 bl_lowlevel_duration;
-	u64 hbm_duration;
-	u64 hbm_times;
-	u64 panel_dead;
 };
 
 static inline bool dsi_panel_ulps_feature_enabled(struct dsi_panel *panel)
@@ -372,6 +360,11 @@ struct dsi_panel *dsi_panel_ext_bridge_get(struct device *parent,
 
 int dsi_panel_parse_esd_reg_read_configs(struct dsi_panel *panel,
 				struct device_node *of_node);
+
+int dsi_display_read_panel(struct dsi_panel *panel,
+				struct dsi_read_config *read_config);
+
+int panel_disp_param_send_lock(struct dsi_panel *panel, int param);
 
 void dsi_panel_ext_bridge_put(struct dsi_panel *panel);
 

@@ -2,6 +2,7 @@
 /*
  * Provide kernel headers useful to build tracing programs
  * such as for running eBPF tracing tools.
+ * Copyright (C) 2020 Amktiao.
  *
  * (Borrowed code from kernel/configs.c)
  */

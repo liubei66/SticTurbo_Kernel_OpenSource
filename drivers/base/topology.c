@@ -4,6 +4,7 @@
  * Written by: Zhang Yanmin, Intel Corporation
  *
  * Copyright (C) 2006, Intel Corp.
+ * Copyright (C) 2020 Amktiao.
  *
  * All rights reserved.
  *

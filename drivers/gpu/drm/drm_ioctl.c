@@ -3,6 +3,7 @@
  *
  * Copyright 1999 Precision Insight, Inc., Cedar Park, Texas.
  * Copyright 2000 VA Linux Systems, Inc., Sunnyvale, California.
+ * Copyright (C) 2019 XiaoMi, Inc.
  * All Rights Reserved.
  *
  * Author Rickard E. (Rik) Faith <faith@valinux.com>
@@ -474,7 +475,7 @@ static int drm_version(struct drm_device *dev, void *data,
 char support_list[MAX_LIST_NUM][MAX_TASK_NAME_LEN] = {
 		"displayfeature",
 		"DisplayFeature",
-		"disp_pcc"
+		"disp_pcc",
 		"displayeffect"
 };
 
@@ -482,9 +483,9 @@ static bool drm_master_filter(char *task_name)
 {
 	unsigned int i = 0;
 	bool ret = false;
-	//pr_debug("%s task_name:%s \n", __func__, task_name);
-	for (i=0; i<MAX_LIST_NUM; i++) {
-		//pr_debug("task_name:%s support:%s i:%d size:%zu\n", task_name, support_list[i], i, strlen(support_list[i]));
+
+	for (i = 0; i < MAX_LIST_NUM; i++) {
+
 		if (!strncmp(task_name, support_list[i], strlen(support_list[i]))) {
 			ret = true;
 			break;

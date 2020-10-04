@@ -2,6 +2,7 @@
  * drivers/base/power/clock_ops.c - Generic clock manipulation PM callbacks
  *
  * Copyright (c) 2011 Rafael J. Wysocki <rjw@sisk.pl>, Renesas Electronics Corp.
+ * Copyright (C) 2020 Amktiao.
  *
  * This file is released under the GPLv2.
  */

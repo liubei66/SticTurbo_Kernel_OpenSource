@@ -3,6 +3,7 @@
  *
  * This code enables dynamic sharing of identical pages found in different
  * memory areas, even if they are not shared by fork()
+ * Copyright (C) 2020 Amktiao.
  *
  * Copyright (C) 2008-2009 Red Hat, Inc.
  * Authors:
@@ -50,56 +51,6 @@
 #define DO_NUMA(x)	do { } while (0)
 #endif
 
-/*
- * A few notes about the KSM scanning process,
- * to make it easier to understand the data structures below:
- *
- * In order to reduce excessive scanning, KSM sorts the memory pages by their
- * contents into a data structure that holds pointers to the pages' locations.
- *
- * Since the contents of the pages may change at any moment, KSM cannot just
- * insert the pages into a normal sorted tree and expect it to find anything.
- * Therefore KSM uses two data structures - the stable and the unstable tree.
- *
- * The stable tree holds pointers to all the merged pages (ksm pages), sorted
- * by their contents.  Because each such page is write-protected, searching on
- * this tree is fully assured to be working (except when pages are unmapped),
- * and therefore this tree is called the stable tree.
- *
- * In addition to the stable tree, KSM uses a second data structure called the
- * unstable tree: this tree holds pointers to pages which have been found to
- * be "unchanged for a period of time".  The unstable tree sorts these pages
- * by their contents, but since they are not write-protected, KSM cannot rely
- * upon the unstable tree to work correctly - the unstable tree is liable to
- * be corrupted as its contents are modified, and so it is called unstable.
- *
- * KSM solves this problem by several techniques:
- *
- * 1) The unstable tree is flushed every time KSM completes scanning all
- *    memory areas, and then the tree is rebuilt again from the beginning.
- * 2) KSM will only insert into the unstable tree, pages whose hash value
- *    has not changed since the previous scan of all memory areas.
- * 3) The unstable tree is a RedBlack Tree - so its balancing is based on the
- *    colors of the nodes and not on their contents, assuring that even when
- *    the tree gets "corrupted" it won't get out of balance, so scanning time
- *    remains the same (also, searching and inserting nodes in an rbtree uses
- *    the same algorithm, so we have no overhead when we flush and rebuild).
- * 4) KSM never flushes the stable tree, which means that even if it were to
- *    take 10 attempts to find a page in the unstable tree, once it is found,
- *    it is secured in the stable tree.  (When we scan a new page, we first
- *    compare it against the stable tree, and then against the unstable tree.)
- *
- * If the merge_across_nodes tunable is unset, then KSM maintains multiple
- * stable trees and multiple unstable trees: one of each for each NUMA node.
- */
-
-/**
- * struct mm_slot - ksm information per mm that is being scanned
- * @link: link to the mm_slots hash list
- * @mm_list: link into the mm_slots list, rooted in ksm_mm_head
- * @rmap_list: head for this mm_slot's singly-linked list of rmap_items
- * @mm: the mm that this information is valid for
- */
 struct mm_slot {
 	struct hlist_node link;
 	struct list_head mm_list;
@@ -107,15 +58,6 @@ struct mm_slot {
 	struct mm_struct *mm;
 };
 
-/**
- * struct ksm_scan - cursor for scanning
- * @mm_slot: the current mm_slot we are scanning
- * @address: the next address inside that to be scanned
- * @rmap_list: link to the next rmap to be scanned in the rmap_list
- * @seqnr: count of completed full scans (needed when removing unstable node)
- *
- * There is only the one ksm_scan instance of this cursor structure.
- */
 struct ksm_scan {
 	struct mm_slot *mm_slot;
 	unsigned long address;
@@ -123,15 +65,6 @@ struct ksm_scan {
 	unsigned long seqnr;
 };
 
-/**
- * struct stable_node - node of the stable rbtree
- * @node: rb node of this ksm page in the stable tree
- * @head: (overlaying parent) &migrate_nodes indicates temporarily on that list
- * @list: linked into migrate_nodes, pending placement in the proper node tree
- * @hlist: hlist head of rmap_items using this ksm page
- * @kpfn: page frame number of this ksm page (perhaps temporarily on wrong nid)
- * @nid: NUMA node id of stable tree in which linked (may not match kpfn)
- */
 struct stable_node {
 	union {
 		struct rb_node node;	/* when node of stable tree */
@@ -147,18 +80,6 @@ struct stable_node {
 #endif
 };
 
-/**
- * struct rmap_item - reverse mapping item for virtual addresses
- * @rmap_list: next rmap_item in mm_slot's singly-linked rmap_list
- * @anon_vma: pointer to anon_vma for this mm,address, when in stable tree
- * @nid: NUMA node id of unstable tree in which linked (may not match page)
- * @mm: the memory structure this rmap_item is pointing into
- * @address: the virtual address this rmap_item tracks (+ flags in low bits)
- * @oldchecksum: previous checksum of the page at that virtual address
- * @node: rb node of this rmap_item in the unstable tree
- * @head: pointer to stable_node heading this list in the stable tree
- * @hlist: link into hlist of rmap_items hanging off that stable_node
- */
 struct rmap_item {
 	struct rmap_item *rmap_list;
 	union {
@@ -219,7 +140,7 @@ static unsigned long ksm_pages_unshared;
 static unsigned long ksm_rmap_items;
 
 /* Number of pages ksmd should scan in one batch */
-static unsigned int ksm_thread_pages_to_scan = 100;
+static unsigned int ksm_thread_pages_to_scan = 80;
 
 /* Milliseconds ksmd should sleep between batches */
 static unsigned int ksm_thread_sleep_millisecs = 20;
@@ -240,7 +161,7 @@ static int ksm_nr_node_ids = 1;
 #define KSM_RUN_MERGE	1
 #define KSM_RUN_UNMERGE	2
 #define KSM_RUN_OFFLINE	4
-static unsigned long ksm_run = KSM_RUN_MERGE;
+static unsigned long ksm_run = KSM_RUN_STOP;
 static void wait_while_offlining(void);
 
 static DECLARE_WAIT_QUEUE_HEAD(ksm_thread_wait);
@@ -255,8 +176,6 @@ static int ksm_show_mem_notifier(struct notifier_block *nb,
 				unsigned long action,
 				void *data)
 {
-	pr_info("ksm_pages_sharing: %lu\n", ksm_pages_sharing);
-	pr_info("ksm_pages_shared: %lu\n", ksm_pages_shared);
 
 	return 0;
 }
@@ -317,11 +236,7 @@ static inline void free_rmap_item(struct rmap_item *rmap_item)
 
 static inline struct stable_node *alloc_stable_node(void)
 {
-	/*
-	 * The allocation can take too long with GFP_KERNEL when memory is under
-	 * pressure, which may lead to hung task warnings.  Adding __GFP_HIGH
-	 * grants access to memory reserves, helping to avoid this problem.
-	 */
+
 	return kmem_cache_alloc(stable_node_cache, GFP_KERNEL | __GFP_HIGH);
 }
 
@@ -360,34 +275,11 @@ static void insert_to_mm_slots_hash(struct mm_struct *mm,
 	hash_add(mm_slots_hash, &mm_slot->link, (unsigned long)mm);
 }
 
-/*
- * ksmd, and unmerge_and_remove_all_rmap_items(), must not touch an mm's
- * page tables after it has passed through ksm_exit() - which, if necessary,
- * takes mmap_sem briefly to serialize against them.  ksm_exit() does not set
- * a special flag: they can just back out as soon as mm_users goes to zero.
- * ksm_test_exit() is used throughout to make this test for exit: in some
- * places for correctness, in some places just to avoid unnecessary work.
- */
 static inline bool ksm_test_exit(struct mm_struct *mm)
 {
 	return atomic_read(&mm->mm_users) == 0;
 }
 
-/*
- * We use break_ksm to break COW on a ksm page: it's a stripped down
- *
- *	if (get_user_pages(addr, 1, 1, 1, &page, NULL) == 1)
- *		put_page(page);
- *
- * but taking great care only to touch a ksm page, in a VM_MERGEABLE vma,
- * in case the application has unmapped and remapped mm,addr meanwhile.
- * Could a ksm page appear anywhere else?  Actually yes, in a VM_PFNMAP
- * mmap of /dev/mem or /dev/kmem, where we would not want to touch it.
- *
- * FAULT_FLAG/FOLL_REMOTE are because we do this outside the context
- * of the process that owns 'vma'.  We also do not want to enforce
- * protection keys here anyway.
- */
 static int break_ksm(struct vm_area_struct *vma, unsigned long addr)
 {
 	struct page *page;
@@ -406,34 +298,7 @@ static int break_ksm(struct vm_area_struct *vma, unsigned long addr)
 			ret = VM_FAULT_WRITE;
 		put_page(page);
 	} while (!(ret & (VM_FAULT_WRITE | VM_FAULT_SIGBUS | VM_FAULT_SIGSEGV | VM_FAULT_OOM)));
-	/*
-	 * We must loop because handle_mm_fault() may back out if there's
-	 * any difficulty e.g. if pte accessed bit gets updated concurrently.
-	 *
-	 * VM_FAULT_WRITE is what we have been hoping for: it indicates that
-	 * COW has been broken, even if the vma does not permit VM_WRITE;
-	 * but note that a concurrent fault might break PageKsm for us.
-	 *
-	 * VM_FAULT_SIGBUS could occur if we race with truncation of the
-	 * backing file, which also invalidates anonymous pages: that's
-	 * okay, that truncation will have unmapped the PageKsm for us.
-	 *
-	 * VM_FAULT_OOM: at the time of writing (late July 2009), setting
-	 * aside mem_cgroup limits, VM_FAULT_OOM would only be set if the
-	 * current task has TIF_MEMDIE set, and will be OOM killed on return
-	 * to user; and ksmd, having no mm, would never be chosen for that.
-	 *
-	 * But if the mm is in a limited mem_cgroup, then the fault may fail
-	 * with VM_FAULT_OOM even if the current task is not TIF_MEMDIE; and
-	 * even ksmd can fail in this way - though it's usually breaking ksm
-	 * just to undo a merge it made a moment before, so unlikely to oom.
-	 *
-	 * That's a pity: we might therefore have more kernel pages allocated
-	 * than we're counting as nodes in the stable tree; but ksm_do_scan
-	 * will retry to break_cow on each pass, so should recover the page
-	 * in due course.  The important thing is to not let VM_MERGEABLE
-	 * be cleared while any such pages might remain in the area.
-	 */
+
 	return (ret & VM_FAULT_OOM) ? -ENOMEM : 0;
 }
 
@@ -457,10 +322,6 @@ static void break_cow(struct rmap_item *rmap_item)
 	unsigned long addr = rmap_item->address;
 	struct vm_area_struct *vma;
 
-	/*
-	 * It is not an accident that whenever we want to break COW
-	 * to undo, we also need to drop a reference to the anon_vma.
-	 */
 	put_anon_vma(rmap_item->anon_vma);
 
 	down_read(&mm->mmap_sem);
@@ -497,12 +358,6 @@ out:
 	return page;
 }
 
-/*
- * This helper is used for getting right index into array of tree roots.
- * When merge_across_nodes knob is set to 1, there are only two rb-trees for
- * stable and unstable pages from all nodes with roots in index 0. Otherwise,
- * every node has its own stable and unstable tree.
- */
 static inline int get_kpfn_nid(unsigned long kpfn)
 {
 	return ksm_merge_across_nodes ? 0 : NUMA(pfn_to_nid(kpfn));
@@ -530,25 +385,6 @@ static void remove_node_from_stable_tree(struct stable_node *stable_node)
 	free_stable_node(stable_node);
 }
 
-/*
- * get_ksm_page: checks if the page indicated by the stable node
- * is still its ksm page, despite having held no reference to it.
- * In which case we can trust the content of the page, and it
- * returns the gotten page; but if the page has now been zapped,
- * remove the stale node from the stable tree and return NULL.
- * But beware, the stable node's page might be being migrated.
- *
- * You would expect the stable_node to hold a reference to the ksm page.
- * But if it increments the page's count, swapping out has to wait for
- * ksmd to come around again before it can free the page, which may take
- * seconds or even minutes: much too unresponsive.  So instead we use a
- * "keyhole reference": access to the ksm page from the stable node peeps
- * out through its keyhole to see if that page still holds the right key,
- * pointing back to this stable node.  This relies on freeing a PageAnon
- * page to reset its page->mapping to NULL, and relies on no other use of
- * a page to put something that might look like our key in page->mapping.
- * is on its way to being freed; but it is an anomaly to bear in mind.
- */
 static struct page *get_ksm_page(struct stable_node *stable_node, bool lock_it)
 {
 	struct page *page;
@@ -561,33 +397,11 @@ again:
 	kpfn = READ_ONCE(stable_node->kpfn);
 	page = pfn_to_page(kpfn);
 
-	/*
-	 * page is computed from kpfn, so on most architectures reading
-	 * page->mapping is naturally ordered after reading node->kpfn,
-	 * but on Alpha we need to be more careful.
-	 */
 	smp_read_barrier_depends();
 	if (READ_ONCE(page->mapping) != expected_mapping)
 		goto stale;
 
-	/*
-	 * We cannot do anything with the page while its refcount is 0.
-	 * Usually 0 means free, or tail of a higher-order page: in which
-	 * case this node is no longer referenced, and should be freed;
-	 * however, it might mean that the page is under page_freeze_refs().
-	 * The __remove_mapping() case is easy, again the node is now stale;
-	 * but if page is swapcache in migrate_page_move_mapping(), it might
-	 * still be our page, in which case it's essential to keep the node.
-	 */
 	while (!get_page_unless_zero(page)) {
-		/*
-		 * Another check for page->mapping != expected_mapping would
-		 * work here too.  We have chosen the !PageSwapCache test to
-		 * optimize the common case, when the page is or is about to
-		 * be freed: PageSwapCache is cleared (under spin_lock_irq)
-		 * in the freeze_refs section of __remove_mapping(); but Anon
-		 * page->mapping reset to NULL later, in free_pages_prepare().
-		 */
 		if (!PageSwapCache(page))
 			goto stale;
 		cpu_relax();
@@ -609,12 +423,6 @@ again:
 	return page;
 
 stale:
-	/*
-	 * We come here from above when page->mapping or !PageSwapCache
-	 * suggests that the node is stale; but it might be under migration.
-	 * We need smp_rmb(), matching the smp_wmb() in ksm_migrate_page(),
-	 * before checking whether node->kpfn has been changed.
-	 */
 	smp_rmb();
 	if (READ_ONCE(stable_node->kpfn) != kpfn)
 		goto again;
@@ -622,10 +430,6 @@ stale:
 	return NULL;
 }
 
-/*
- * Removing rmap_item from stable or unstable tree.
- * This function will clean the information from the stable/unstable tree.
- */
 static void remove_rmap_item_from_tree(struct rmap_item *rmap_item)
 {
 	if (rmap_item->address & STABLE_FLAG) {
@@ -651,13 +455,7 @@ static void remove_rmap_item_from_tree(struct rmap_item *rmap_item)
 
 	} else if (rmap_item->address & UNSTABLE_FLAG) {
 		unsigned char age;
-		/*
-		 * Usually ksmd can and must skip the rb_erase, because
-		 * root_unstable_tree was already reset to RB_ROOT.
-		 * But be careful when an mm is exiting: do the rb_erase
-		 * if this rmap_item was inserted by this scan, rather
-		 * than left over from before.
-		 */
+
 		age = (unsigned char)(ksm_scan.seqnr - rmap_item->address);
 		BUG_ON(age > 1);
 		if (!age)
@@ -681,19 +479,6 @@ static void remove_trailing_rmap_items(struct mm_slot *mm_slot,
 	}
 }
 
-/*
- * Though it's very tempting to unmerge rmap_items from stable tree rather
- * than check every pte of a given vma, the locking doesn't quite work for
- * that - an rmap_item is assigned to the stable tree after inserting ksm
- * page and upping mmap_sem.  Nor does it fit with the way we skip dup'ing
- * rmap_items from parent to child at fork time (so as not to waste time
- * if exit comes before the next scan reaches it).
- *
- * Similarly, although we'd like to remove rmap_items (so updating counts
- * and freeing memory) when unmerging an area, it's easier to leave that
- * to the next pass of ksmd - consider, for example, how ksmd might be
- * in cmp_and_merge_page on one of the rmap_items we would be removing.
- */
 static int unmerge_ksm_pages(struct vm_area_struct *vma,
 			     unsigned long start, unsigned long end)
 {
@@ -712,9 +497,6 @@ static int unmerge_ksm_pages(struct vm_area_struct *vma,
 }
 
 #ifdef CONFIG_SYSFS
-/*
- * Only called through the sysfs control interface:
- */
 static int remove_stable_node(struct stable_node *stable_node)
 {
 	struct page *page;
@@ -722,27 +504,11 @@ static int remove_stable_node(struct stable_node *stable_node)
 
 	page = get_ksm_page(stable_node, true);
 	if (!page) {
-		/*
-		 * get_ksm_page did remove_node_from_stable_tree itself.
-		 */
 		return 0;
 	}
 
-	if (WARN_ON_ONCE(page_mapped(page))) {
-		/*
-		 * This should not happen: but if it does, just refuse to let
-		 * merge_across_nodes be switched - there is no need to panic.
-		 */
-		err = -EBUSY;
-	} else {
-		/*
-		 * The stable node did not yet appear stale to get_ksm_page(),
-		 * since that allows for an unmapped ksm page to be recognized
-		 * right up until it is freed; but the node is safe to remove.
-		 * This page might be in a pagevec waiting to be freed,
-		 * or it might be PageSwapCache (perhaps under writeback),
-		 * or it might have been removed from swapcache a moment ago.
-		 */
+	err = -EBUSY;
+	if (!page_mapped(page)) {
 		set_page_stable_node(page, NULL);
 		remove_node_from_stable_tree(stable_node);
 		err = 0;
@@ -823,7 +589,6 @@ static int unmerge_and_remove_all_rmap_items(void)
 			spin_unlock(&ksm_mmlist_lock);
 	}
 
-	/* Clean up stable nodes, but don't worry if some are still busy */
 	remove_all_stable_nodes();
 	ksm_scan.seqnr = 0;
 	return 0;
@@ -895,20 +660,9 @@ static int write_protect_page(struct vm_area_struct *vma, struct page *page,
 
 		swapped = PageSwapCache(page);
 		flush_cache_page(vma, addr, page_to_pfn(page));
-		/*
-		 * Ok this is tricky, when get_user_pages_fast() run it doesn't
-		 * take any lock, therefore the check that we are going to make
-		 * with the pagecount against the mapcount is racey and
-		 * O_DIRECT can happen right after the check.
-		 * So we clear the pte and flush the tlb before the check
-		 * this assure us that no O_DIRECT can happen after the check
-		 * or in the middle of the check.
-		 */
+
 		entry = ptep_clear_flush_notify(vma, addr, ptep);
-		/*
-		 * Check that no O_DIRECT or similar I/O is in progress on the
-		 * page
-		 */
+
 		if (page_mapcount(page) + 1 + swapped != page_count(page)) {
 			set_pte_at(mm, addr, ptep, entry);
 			goto out_unlock;
@@ -929,15 +683,6 @@ out:
 	return err;
 }
 
-/**
- * replace_page - replace page in vma by new ksm page
- * @vma:      vma that holds the pte pointing to page
- * @page:     the page we are replacing by kpage
- * @kpage:    the ksm page we replace page by
- * @orig_pte: the original value of the pte
- *
- * Returns 0 on success, -EFAULT on failure.
- */
 static int replace_page(struct vm_area_struct *vma, struct page *page,
 			struct page *kpage, pte_t orig_pte)
 {
@@ -988,15 +733,6 @@ out:
 	return err;
 }
 
-/*
- * try_to_merge_one_page - take two pages and merge them into one
- * @vma: the vma that holds the pte pointing to page
- * @page: the PageAnon page that we want to replace with kpage
- * @kpage: the PageKsm page that we want to map instead of page,
- *         or NULL the first time when we want to use page as kpage.
- *
- * This function returns 0 if the pages were merged, -EFAULT otherwise.
- */
 static int try_to_merge_one_page(struct vm_area_struct *vma,
 				 struct page *page, struct page *kpage)
 {
@@ -1009,13 +745,6 @@ static int try_to_merge_one_page(struct vm_area_struct *vma,
 	if (!PageAnon(page))
 		goto out;
 
-	/*
-	 * We need the page lock to read a stable PageSwapCache in
-	 * write_protect_page().  We use trylock_page() instead of
-	 * lock_page() because we don't want to wait here - we
-	 * prefer to continue scanning and merging different pages,
-	 * then come back to this page when it is unlocked.
-	 */
 	if (!trylock_page(page))
 		goto out;
 
@@ -1024,25 +753,10 @@ static int try_to_merge_one_page(struct vm_area_struct *vma,
 			goto out_unlock;
 	}
 
-	/*
-	 * If this anonymous page is mapped only here, its pte may need
-	 * to be write-protected.  If it's mapped elsewhere, all of its
-	 * ptes are necessarily already write-protected.  But in either
-	 * case, we need to lock and check page_count is not raised.
-	 */
 	if (write_protect_page(vma, page, &orig_pte) == 0) {
 		if (!kpage) {
-			/*
-			 * While we hold page lock, upgrade page from
-			 * PageAnon+anon_vma to PageKsm+NULL stable_node:
-			 * stable_tree_insert() will update stable_node.
-			 */
 			set_page_stable_node(page, NULL);
 			mark_page_accessed(page);
-			/*
-			 * Page reclaim just frees a clean page with no dirty
-			 * ptes: make sure that the ksm page would be swapped.
-			 */
 			if (!PageDirty(page))
 				SetPageDirty(page);
 			err = 0;
@@ -1066,12 +780,6 @@ out:
 	return err;
 }
 
-/*
- * try_to_merge_with_ksm_page - like try_to_merge_two_pages,
- * but no new kernel page is allocated: kpage must already be a ksm page.
- *
- * This function returns 0 if the pages were merged, -EFAULT otherwise.
- */
 static int try_to_merge_with_ksm_page(struct rmap_item *rmap_item,
 				      struct page *page, struct page *kpage)
 {
@@ -1130,15 +838,6 @@ static struct page *try_to_merge_two_pages(struct rmap_item *rmap_item,
 	return err ? NULL : page;
 }
 
-/*
- * stable_tree_search - search for page inside the stable tree
- *
- * This function checks if there is a page inside the stable tree
- * with identical content to the page that we are scanning right now.
- *
- * This function returns the stable tree node of identical content if found,
- * NULL otherwise.
- */
 static struct page *stable_tree_search(struct page *page)
 {
 	int nid;
@@ -1169,15 +868,6 @@ again:
 		stable_node = rb_entry(*new, struct stable_node, node);
 		tree_page = get_ksm_page(stable_node, false);
 		if (!tree_page) {
-			/*
-			 * If we walked over a stale stable_node,
-			 * get_ksm_page() will call rb_erase() and it
-			 * may rebalance the tree from under us. So
-			 * restart the search from scratch. Returning
-			 * NULL would be safe too, but we'd generate
-			 * false negative insertions just because some
-			 * stable_node was stale.
-			 */
 			goto again;
 		}
 
@@ -1190,13 +880,6 @@ again:
 		else if (ret > 0)
 			new = &parent->rb_right;
 		else {
-			/*
-			 * Lock and unlock the stable_node's page (which
-			 * might already have been migrated) so that page
-			 * migration is sure to notice its raised count.
-			 * It would be more elegant to return stable_node
-			 * than kpage, but that involves more changes.
-			 */
 			tree_page = get_ksm_page(stable_node, true);
 			if (tree_page) {
 				unlock_page(tree_page);
@@ -1207,10 +890,6 @@ again:
 				}
 				return tree_page;
 			}
-			/*
-			 * There is now a place for page_node, but the tree may
-			 * have been rebalanced, so re-evaluate parent and new.
-			 */
 			if (page_node)
 				goto again;
 			return NULL;
@@ -1242,13 +921,6 @@ replace:
 	return page;
 }
 
-/*
- * stable_tree_insert - insert stable tree node pointing to new ksm page
- * into the stable tree.
- *
- * This function returns the stable tree node just allocated on success,
- * NULL otherwise.
- */
 static struct stable_node *stable_tree_insert(struct page *kpage)
 {
 	int nid;
@@ -1273,15 +945,6 @@ again:
 		stable_node = rb_entry(*new, struct stable_node, node);
 		tree_page = get_ksm_page(stable_node, false);
 		if (!tree_page) {
-			/*
-			 * If we walked over a stale stable_node,
-			 * get_ksm_page() will call rb_erase() and it
-			 * may rebalance the tree from under us. So
-			 * restart the search from scratch. Returning
-			 * NULL would be safe too, but we'd generate
-			 * false negative insertions just because some
-			 * stable_node was stale.
-			 */
 			goto again;
 		}
 
@@ -1294,11 +957,6 @@ again:
 		else if (ret > 0)
 			new = &parent->rb_right;
 		else {
-			/*
-			 * It is not a bug that stable_tree_search() didn't
-			 * find this node: because at that time our page was
-			 * not yet write-protected, so may have changed since.
-			 */
 			return NULL;
 		}
 	}
@@ -1317,20 +975,6 @@ again:
 	return stable_node;
 }
 
-/*
- * unstable_tree_search_insert - search for identical page,
- * else insert rmap_item into the unstable tree.
- *
- * This function searches for a page in the unstable tree identical to the
- * page currently being scanned; and if no identical page is found in the
- * tree, we insert rmap_item as a new object into the unstable tree.
- *
- * This function returns pointer to rmap_item found to be identical
- * to the currently scanned page, NULL otherwise.
- *
- * This function does both searching and inserting, because they share
- * the same walking algorithm in an rbtree.
- */
 static
 struct rmap_item *unstable_tree_search_insert(struct rmap_item *rmap_item,
 					      struct page *page,
@@ -1375,11 +1019,6 @@ struct rmap_item *unstable_tree_search_insert(struct rmap_item *rmap_item,
 			new = &parent->rb_right;
 		} else if (!ksm_merge_across_nodes &&
 			   page_to_nid(tree_page) != nid) {
-			/*
-			 * If tree_page has been migrated to another NUMA node,
-			 * it will be flushed out and put in the right unstable
-			 * tree next time: only merge with it when across_nodes.
-			 */
 			put_page(tree_page);
 			return NULL;
 		} else {
@@ -1398,11 +1037,6 @@ struct rmap_item *unstable_tree_search_insert(struct rmap_item *rmap_item,
 	return NULL;
 }
 
-/*
- * stable_tree_append - add another rmap_item to the linked list of
- * rmap_items hanging off a given node of the stable tree, all sharing
- * the same ksm page.
- */
 static void stable_tree_append(struct rmap_item *rmap_item,
 			       struct stable_node *stable_node)
 {
@@ -1416,15 +1050,6 @@ static void stable_tree_append(struct rmap_item *rmap_item,
 		ksm_pages_shared++;
 }
 
-/*
- * cmp_and_merge_page - first see if page can be merged into the stable tree;
- * if not, compare checksum to previous and if it's the same, see if page can
- * be inserted into the unstable tree, or merged with a page already there and
- * both transferred to the stable tree.
- *
- * @page: the page that we are searching identical page to.
- * @rmap_item: the reverse mapping into the virtual address of this page
- */
 static void cmp_and_merge_page(struct page *page, struct rmap_item *rmap_item)
 {
 	struct rmap_item *tree_rmap_item;
@@ -1762,8 +1387,6 @@ static signed long __sched deferred_schedule_timeout(signed long timeout)
 
 	__set_current_state(TASK_INTERRUPTIBLE);
 	if (timeout < 0) {
-		pr_err("schedule_timeout: wrong timeout value %lx\n",
-							timeout);
 		__set_current_state(TASK_RUNNING);
 		goto out;
 	}
@@ -2416,7 +2039,6 @@ static int __init ksm_init(void)
 
 	ksm_thread = kthread_run(ksm_scan_thread, NULL, "ksmd");
 	if (IS_ERR(ksm_thread)) {
-		pr_err("ksm: creating kthread failed\n");
 		err = PTR_ERR(ksm_thread);
 		goto out_free;
 	}
@@ -2424,7 +2046,6 @@ static int __init ksm_init(void)
 #ifdef CONFIG_SYSFS
 	err = sysfs_create_group(mm_kobj, &ksm_attr_group);
 	if (err) {
-		pr_err("ksm: register sysfs failed\n");
 		kthread_stop(ksm_thread);
 		goto out_free;
 	}

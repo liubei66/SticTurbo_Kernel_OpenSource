@@ -1,7 +1,7 @@
 /*
  * QTI CE device driver.
  *
- * Copyright (c) 2010-2018, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2010-2019, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -60,13 +60,13 @@ static DEFINE_MUTEX(send_cmd_lock);
 static DEFINE_MUTEX(qcedev_sent_bw_req);
 static DEFINE_MUTEX(hash_access_lock);
 
-MODULE_DEVICE_TABLE(of, qcedev_match);
-
 static const struct of_device_id qcedev_match[] = {
 	{	.compatible = "qcom,qcedev"},
 	{	.compatible = "qcom,qcedev,context-bank"},
 	{}
 };
+
+MODULE_DEVICE_TABLE(of, qcedev_match);
 
 static int qcedev_control_clocks(struct qcedev_control *podev, bool enable)
 {
@@ -233,9 +233,6 @@ struct qcedev_stat {
 };
 
 static struct qcedev_stat _qcedev_stat;
-static struct dentry *_debug_dent;
-static char _debug_read_buf[DEBUG_MAX_RW_BUF];
-static int _debug_qcedev;
 
 static struct qcedev_control *qcedev_minor_to_control(unsigned int n)
 {
@@ -1668,12 +1665,16 @@ static inline long qcedev_ioctl(struct file *file,
 	int err = 0;
 	struct qcedev_handle *handle;
 	struct qcedev_control *podev;
-	struct qcedev_async_req qcedev_areq;
+	struct qcedev_async_req *qcedev_areq;
 	struct qcedev_stat *pstat;
+
+	qcedev_areq = kzalloc(sizeof(struct qcedev_async_req), GFP_KERNEL);
+	if (!qcedev_areq)
+		return -ENOMEM;
 
 	handle =  file->private_data;
 	podev =  handle->cntl;
-	qcedev_areq.handle = handle;
+	qcedev_areq->handle = handle;
 	if (podev == NULL || podev->magic != QCEDEV_MAGIC) {
 		pr_err("%s: invalid handle %pK\n",
 			__func__, podev);
@@ -1684,27 +1685,27 @@ static inline long qcedev_ioctl(struct file *file,
 	if (_IOC_TYPE(cmd) != QCEDEV_IOC_MAGIC)
 		return -ENOTTY;
 
-	init_completion(&qcedev_areq.complete);
+	init_completion(&qcedev_areq->complete);
 	pstat = &_qcedev_stat;
 
 	switch (cmd) {
 	case QCEDEV_IOCTL_ENC_REQ:
 	case QCEDEV_IOCTL_DEC_REQ:
-		if (copy_from_user(&qcedev_areq.cipher_op_req,
+		if (copy_from_user(&qcedev_areq->cipher_op_req,
 				(void __user *)arg,
 				sizeof(struct qcedev_cipher_op_req)))
 			return -EFAULT;
-		qcedev_areq.op_type = QCEDEV_CRYPTO_OPER_CIPHER;
+		qcedev_areq->op_type = QCEDEV_CRYPTO_OPER_CIPHER;
 
-		if (qcedev_check_cipher_params(&qcedev_areq.cipher_op_req,
+		if (qcedev_check_cipher_params(&qcedev_areq->cipher_op_req,
 				podev))
 			return -EINVAL;
 
-		err = qcedev_vbuf_ablk_cipher(&qcedev_areq, handle);
+		err = qcedev_vbuf_ablk_cipher(qcedev_areq, handle);
 		if (err)
 			return err;
 		if (copy_to_user((void __user *)arg,
-					&qcedev_areq.cipher_op_req,
+					&qcedev_areq->cipher_op_req,
 					sizeof(struct qcedev_cipher_op_req)))
 			return -EFAULT;
 		break;
@@ -1713,23 +1714,23 @@ static inline long qcedev_ioctl(struct file *file,
 		{
 		struct scatterlist sg_src;
 
-		if (copy_from_user(&qcedev_areq.sha_op_req,
+		if (copy_from_user(&qcedev_areq->sha_op_req,
 					(void __user *)arg,
 					sizeof(struct qcedev_sha_op_req)))
 			return -EFAULT;
 		mutex_lock(&hash_access_lock);
-		if (qcedev_check_sha_params(&qcedev_areq.sha_op_req, podev)) {
+		if (qcedev_check_sha_params(&qcedev_areq->sha_op_req, podev)) {
 			mutex_unlock(&hash_access_lock);
 			return -EINVAL;
 		}
-		qcedev_areq.op_type = QCEDEV_CRYPTO_OPER_SHA;
-		err = qcedev_hash_init(&qcedev_areq, handle, &sg_src);
+		qcedev_areq->op_type = QCEDEV_CRYPTO_OPER_SHA;
+		err = qcedev_hash_init(qcedev_areq, handle, &sg_src);
 		if (err) {
 			mutex_unlock(&hash_access_lock);
 			return err;
 		}
 		mutex_unlock(&hash_access_lock);
-		if (copy_to_user((void __user *)arg, &qcedev_areq.sha_op_req,
+		if (copy_to_user((void __user *)arg, &qcedev_areq->sha_op_req,
 					sizeof(struct qcedev_sha_op_req)))
 			return -EFAULT;
 		}
@@ -1742,19 +1743,19 @@ static inline long qcedev_ioctl(struct file *file,
 		{
 		struct scatterlist sg_src;
 
-		if (copy_from_user(&qcedev_areq.sha_op_req,
+		if (copy_from_user(&qcedev_areq->sha_op_req,
 					(void __user *)arg,
 					sizeof(struct qcedev_sha_op_req)))
 			return -EFAULT;
 		mutex_lock(&hash_access_lock);
-		if (qcedev_check_sha_params(&qcedev_areq.sha_op_req, podev)) {
+		if (qcedev_check_sha_params(&qcedev_areq->sha_op_req, podev)) {
 			mutex_unlock(&hash_access_lock);
 			return -EINVAL;
 		}
-		qcedev_areq.op_type = QCEDEV_CRYPTO_OPER_SHA;
+		qcedev_areq->op_type = QCEDEV_CRYPTO_OPER_SHA;
 
-		if (qcedev_areq.sha_op_req.alg == QCEDEV_ALG_AES_CMAC) {
-			err = qcedev_hash_cmac(&qcedev_areq, handle, &sg_src);
+		if (qcedev_areq->sha_op_req.alg == QCEDEV_ALG_AES_CMAC) {
+			err = qcedev_hash_cmac(qcedev_areq, handle, &sg_src);
 			if (err) {
 				mutex_unlock(&hash_access_lock);
 				return err;
@@ -1765,7 +1766,7 @@ static inline long qcedev_ioctl(struct file *file,
 				mutex_unlock(&hash_access_lock);
 				return -EINVAL;
 			}
-			err = qcedev_hash_update(&qcedev_areq, handle, &sg_src);
+			err = qcedev_hash_update(qcedev_areq, handle, &sg_src);
 			if (err) {
 				mutex_unlock(&hash_access_lock);
 				return err;
@@ -1778,11 +1779,11 @@ static inline long qcedev_ioctl(struct file *file,
 			mutex_unlock(&hash_access_lock);
 			return -EINVAL;
 		}
-		memcpy(&qcedev_areq.sha_op_req.digest[0],
+		memcpy(&qcedev_areq->sha_op_req.digest[0],
 				&handle->sha_ctxt.digest[0],
 				handle->sha_ctxt.diglen);
 		mutex_unlock(&hash_access_lock);
-		if (copy_to_user((void __user *)arg, &qcedev_areq.sha_op_req,
+		if (copy_to_user((void __user *)arg, &qcedev_areq->sha_op_req,
 					sizeof(struct qcedev_sha_op_req)))
 			return -EFAULT;
 		}
@@ -1794,17 +1795,17 @@ static inline long qcedev_ioctl(struct file *file,
 			pr_err("%s Init was not called\n", __func__);
 			return -EINVAL;
 		}
-		if (copy_from_user(&qcedev_areq.sha_op_req,
+		if (copy_from_user(&qcedev_areq->sha_op_req,
 					(void __user *)arg,
 					sizeof(struct qcedev_sha_op_req)))
 			return -EFAULT;
 		mutex_lock(&hash_access_lock);
-		if (qcedev_check_sha_params(&qcedev_areq.sha_op_req, podev)) {
+		if (qcedev_check_sha_params(&qcedev_areq->sha_op_req, podev)) {
 			mutex_unlock(&hash_access_lock);
 			return -EINVAL;
 		}
-		qcedev_areq.op_type = QCEDEV_CRYPTO_OPER_SHA;
-		err = qcedev_hash_final(&qcedev_areq, handle);
+		qcedev_areq->op_type = QCEDEV_CRYPTO_OPER_SHA;
+		err = qcedev_hash_final(qcedev_areq, handle);
 		if (err) {
 			mutex_unlock(&hash_access_lock);
 			return err;
@@ -1815,12 +1816,12 @@ static inline long qcedev_ioctl(struct file *file,
 			mutex_unlock(&hash_access_lock);
 			return -EINVAL;
 		}
-		qcedev_areq.sha_op_req.diglen = handle->sha_ctxt.diglen;
-		memcpy(&qcedev_areq.sha_op_req.digest[0],
+		qcedev_areq->sha_op_req.diglen = handle->sha_ctxt.diglen;
+		memcpy(&qcedev_areq->sha_op_req.digest[0],
 				&handle->sha_ctxt.digest[0],
 				handle->sha_ctxt.diglen);
 		mutex_unlock(&hash_access_lock);
-		if (copy_to_user((void __user *)arg, &qcedev_areq.sha_op_req,
+		if (copy_to_user((void __user *)arg, &qcedev_areq->sha_op_req,
 					sizeof(struct qcedev_sha_op_req)))
 			return -EFAULT;
 		handle->sha_ctxt.init_done = false;
@@ -1830,23 +1831,23 @@ static inline long qcedev_ioctl(struct file *file,
 		{
 		struct scatterlist sg_src;
 
-		if (copy_from_user(&qcedev_areq.sha_op_req,
+		if (copy_from_user(&qcedev_areq->sha_op_req,
 					(void __user *)arg,
 					sizeof(struct qcedev_sha_op_req)))
 			return -EFAULT;
 		mutex_lock(&hash_access_lock);
-		if (qcedev_check_sha_params(&qcedev_areq.sha_op_req, podev)) {
+		if (qcedev_check_sha_params(&qcedev_areq->sha_op_req, podev)) {
 			mutex_unlock(&hash_access_lock);
 			return -EINVAL;
 		}
-		qcedev_areq.op_type = QCEDEV_CRYPTO_OPER_SHA;
-		qcedev_hash_init(&qcedev_areq, handle, &sg_src);
-		err = qcedev_hash_update(&qcedev_areq, handle, &sg_src);
+		qcedev_areq->op_type = QCEDEV_CRYPTO_OPER_SHA;
+		qcedev_hash_init(qcedev_areq, handle, &sg_src);
+		err = qcedev_hash_update(qcedev_areq, handle, &sg_src);
 		if (err) {
 			mutex_unlock(&hash_access_lock);
 			return err;
 		}
-		err = qcedev_hash_final(&qcedev_areq, handle);
+		err = qcedev_hash_final(qcedev_areq, handle);
 		if (err) {
 			mutex_unlock(&hash_access_lock);
 			return err;
@@ -1857,12 +1858,12 @@ static inline long qcedev_ioctl(struct file *file,
 			mutex_unlock(&hash_access_lock);
 			return -EINVAL;
 		}
-		qcedev_areq.sha_op_req.diglen =	handle->sha_ctxt.diglen;
-		memcpy(&qcedev_areq.sha_op_req.digest[0],
+		qcedev_areq->sha_op_req.diglen =	handle->sha_ctxt.diglen;
+		memcpy(&qcedev_areq->sha_op_req.digest[0],
 				&handle->sha_ctxt.digest[0],
 				handle->sha_ctxt.diglen);
 		mutex_unlock(&hash_access_lock);
-		if (copy_to_user((void __user *)arg, &qcedev_areq.sha_op_req,
+		if (copy_to_user((void __user *)arg, &qcedev_areq->sha_op_req,
 					sizeof(struct qcedev_sha_op_req)))
 			return -EFAULT;
 		}
@@ -2030,11 +2031,14 @@ err:
 	podev->mem_client = NULL;
 
 	misc_deregister(&podev->miscdevice);
+	if (msm_bus_scale_client_update_request(podev->bus_scale_handle, 1))
+		pr_err("%s Unable to set high bandwidth\n", __func__);
 exit_qce_close:
 	if (handle)
 		qce_close(handle);
 exit_scale_busbandwidth:
-	msm_bus_scale_client_update_request(podev->bus_scale_handle, 0);
+	if (msm_bus_scale_client_update_request(podev->bus_scale_handle, 0))
+		pr_err("%s Unable to set low bandwidth\n", __func__);
 exit_unregister_bus_scale:
 	if (podev->platform_support.bus_scale_table != NULL)
 		msm_bus_scale_unregister_client(podev->bus_scale_handle);
@@ -2064,8 +2068,14 @@ static int qcedev_remove(struct platform_device *pdev)
 	podev = platform_get_drvdata(pdev);
 	if (!podev)
 		return 0;
+	if (msm_bus_scale_client_update_request(podev->bus_scale_handle, 1))
+		pr_err("%s Unable to set high bandwidth\n", __func__);
+
 	if (podev->qce)
 		qce_close(podev->qce);
+
+	if (msm_bus_scale_client_update_request(podev->bus_scale_handle, 0))
+		pr_err("%s Unable to set low bandwidth\n", __func__);
 
 	if (podev->platform_support.bus_scale_table != NULL)
 		msm_bus_scale_unregister_client(podev->bus_scale_handle);
@@ -2132,109 +2142,13 @@ static struct platform_driver qcedev_plat_driver = {
 	},
 };
 
-static int _disp_stats(int id)
-{
-	struct qcedev_stat *pstat;
-	int len = 0;
-
-	pstat = &_qcedev_stat;
-	len = scnprintf(_debug_read_buf, DEBUG_MAX_RW_BUF - 1,
-			"\nQTI QCE dev driver %d Statistics:\n",
-				id + 1);
-
-	len += scnprintf(_debug_read_buf + len, DEBUG_MAX_RW_BUF - len - 1,
-			"   Encryption operation success       : %d\n",
-					pstat->qcedev_enc_success);
-	len += scnprintf(_debug_read_buf + len, DEBUG_MAX_RW_BUF - len - 1,
-			"   Encryption operation fail   : %d\n",
-					pstat->qcedev_enc_fail);
-	len += scnprintf(_debug_read_buf + len, DEBUG_MAX_RW_BUF - len - 1,
-			"   Decryption operation success     : %d\n",
-					pstat->qcedev_dec_success);
-
-	len += scnprintf(_debug_read_buf + len, DEBUG_MAX_RW_BUF - len - 1,
-			"   Encryption operation fail          : %d\n",
-					pstat->qcedev_dec_fail);
-
-	return len;
-}
-
-static int _debug_stats_open(struct inode *inode, struct file *file)
-{
-	file->private_data = inode->i_private;
-	return 0;
-}
-
-static ssize_t _debug_stats_read(struct file *file, char __user *buf,
-			size_t count, loff_t *ppos)
-{
-	ssize_t rc = -EINVAL;
-	int qcedev = *((int *) file->private_data);
-	int len;
-
-	len = _disp_stats(qcedev);
-
-	if (len <= count)
-		rc = simple_read_from_buffer((void __user *) buf, len,
-			ppos, (void *) _debug_read_buf, len);
-	return rc;
-}
-
-static ssize_t _debug_stats_write(struct file *file, const char __user *buf,
-			size_t count, loff_t *ppos)
-{
-	memset((char *)&_qcedev_stat, 0, sizeof(struct qcedev_stat));
-	return count;
-};
-
-static const struct file_operations _debug_stats_ops = {
-	.open =         _debug_stats_open,
-	.read =         _debug_stats_read,
-	.write =        _debug_stats_write,
-};
-
-static int _qcedev_debug_init(void)
-{
-	int rc;
-	char name[DEBUG_MAX_FNAME];
-	struct dentry *dent;
-
-	_debug_dent = debugfs_create_dir("qcedev", NULL);
-	if (IS_ERR(_debug_dent)) {
-		pr_err("qcedev debugfs_create_dir fail, error %ld\n",
-				PTR_ERR(_debug_dent));
-		return PTR_ERR(_debug_dent);
-	}
-
-	snprintf(name, DEBUG_MAX_FNAME-1, "stats-%d", 1);
-	_debug_qcedev = 0;
-	dent = debugfs_create_file(name, 0644, _debug_dent,
-			&_debug_qcedev, &_debug_stats_ops);
-	if (dent == NULL) {
-		pr_err("qcedev debugfs_create_file fail, error %ld\n",
-				PTR_ERR(dent));
-		rc = PTR_ERR(dent);
-		goto err;
-	}
-	return 0;
-err:
-	debugfs_remove_recursive(_debug_dent);
-	return rc;
-}
-
 static int qcedev_init(void)
 {
-	int rc;
-
-	rc = _qcedev_debug_init();
-	if (rc)
-		return rc;
 	return platform_driver_register(&qcedev_plat_driver);
 }
 
 static void qcedev_exit(void)
 {
-	debugfs_remove_recursive(_debug_dent);
 	platform_driver_unregister(&qcedev_plat_driver);
 }
 

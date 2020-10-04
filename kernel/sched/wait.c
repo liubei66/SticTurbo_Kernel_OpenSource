@@ -2,6 +2,7 @@
  * Generic waiting primitives.
  *
  * (C) 2004 Nadia Yvette Chambers, Oracle
+ * Copyright (C) 2020 Amktiao.
  */
 #include <linux/init.h>
 #include <linux/export.h>

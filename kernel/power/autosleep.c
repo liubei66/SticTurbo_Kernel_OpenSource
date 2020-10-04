@@ -4,6 +4,7 @@
  * Opportunistic sleep support.
  *
  * Copyright (C) 2012 Rafael J. Wysocki <rjw@sisk.pl>
+ * Copyright (C) 2020 Amktiao.
  */
 
 #include <linux/device.h>

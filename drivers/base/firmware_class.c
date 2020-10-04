@@ -2,6 +2,7 @@
  * firmware_class.c - Multi purpose firmware loading support
  *
  * Copyright (c) 2003 Manuel Estrada Sainz
+ * Copyright (C) 2020 Amktiao.
  *
  * Please see Documentation/firmware_class/ for more information.
  *
@@ -392,9 +393,6 @@ static void fw_set_page_data(struct firmware_buf *buf, struct firmware *fw)
 	fw->size = buf->size;
 	fw->data = buf->data;
 
-	pr_debug("%s: fw-%s buf=%p data=%p size=%u\n",
-		 __func__, buf->fw_id, buf, buf->data,
-		 (unsigned int)buf->size);
 }
 
 #ifdef CONFIG_PM_SLEEP

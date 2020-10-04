@@ -19,7 +19,7 @@
 #define COMPRESSION_RATIO_MAX 5
 
 static bool debug;
-module_param(debug, bool, 0644);
+module_param(debug, bool, 0);
 
 enum governor_mode {
 	GOVERNOR_DDR,
@@ -894,7 +894,7 @@ static unsigned long __calculate(struct vidc_bus_vote_data *d,
 }
 
 
-static int __get_target_freq(struct devfreq *dev, unsigned long *freq)
+static int __get_target_freq(struct devfreq *dev, unsigned long *freq, u32 *flag)
 {
 	unsigned long ab_kbps = 0, c = 0;
 	struct devfreq_dev_status stats = {0};

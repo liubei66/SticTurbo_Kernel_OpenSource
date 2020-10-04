@@ -2,6 +2,7 @@
  * Interface for controlling IO bandwidth on a request queue
  *
  * Copyright (C) 2010 Vivek Goyal <vgoyal@redhat.com>
+ * Copyright (C) 2020 Amktiao.
  */
 
 #include <linux/module.h>
@@ -207,22 +208,7 @@ static struct throtl_data *sq_to_td(struct throtl_service_queue *sq)
  * The messages are prefixed with "throtl BLKG_NAME" if @sq belongs to a
  * throtl_grp; otherwise, just "throtl".
  */
-#define throtl_log(sq, fmt, args...)	do {				\
-	struct throtl_grp *__tg = sq_to_tg((sq));			\
-	struct throtl_data *__td = sq_to_td((sq));			\
-									\
-	(void)__td;							\
-	if (likely(!blk_trace_note_message_enabled(__td->queue)))	\
-		break;							\
-	if ((__tg)) {							\
-		char __pbuf[128];					\
-									\
-		blkg_path(tg_to_blkg(__tg), __pbuf, sizeof(__pbuf));	\
-		blk_add_trace_msg(__td->queue, "throtl %s " fmt, __pbuf, ##args); \
-	} else {							\
-		blk_add_trace_msg(__td->queue, "throtl " fmt, ##args);	\
-	}								\
-} while (0)
+#define throtl_log(sq, fmt, args...)
 
 static void throtl_qnode_init(struct throtl_qnode *qn, struct throtl_grp *tg)
 {

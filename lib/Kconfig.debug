@@ -206,21 +206,6 @@ config ENABLE_MUST_CHECK
 	  suppress the "warning: ignoring return value of 'foo', declared with
 	  attribute warn_unused_result" messages.
 
-config FIRE_WATCHDOG
-        bool "Provide watchdog trigger"
-        default n
-        depends on PRINTK && QCOM_WATCHDOG_V2
-        help
-          Provide a way to trigger watchdog for debugging purpose.
-
-config DUMP_ALL_STACKS
-        bool "Show all task stack information in logbuf on panic"
-        default n
-        depends on PRINTK && QCOM_WATCHDOG_V2
-        help
-          Selecting this option for debugging purpose to dump all task stack
-          under watchdog disable condition.
-
 config FRAME_WARN
 	int "Warn for stack frames larger than (needs gcc 4.4)"
 	range 0 8192
@@ -296,6 +281,7 @@ config PAGE_OWNER_ENABLE_DEFAULT
 
 config DEBUG_FS
 	bool "Debug Filesystem"
+	default n
 	help
 	  debugfs is a virtual file system that kernel developers use to put
 	  debugging files into.  Enable this option to be able to read and
@@ -319,6 +305,20 @@ config HEADERS_CHECK
 	  relevant for userspace, say 'Y', and check the headers
 	  exported to $(INSTALL_HDR_PATH) (usually 'usr/include' in
 	  your build tree), to make sure they're suitable.
+
+config OPTIMIZE_INLINING
+	bool "Allow compiler to uninline functions marked 'inline'"
+	help
+	  This option determines if the kernel forces gcc to inline the functions
+	  developers have marked 'inline'. Doing so takes away freedom from gcc to
+	  do what it thinks is best, which is desirable for the gcc 3.x series of
+	  compilers. The gcc 4.x series have a rewritten inlining algorithm and
+	  enabling this option will generate a smaller kernel there. Hopefully
+	  this algorithm is so good that allowing gcc 4.x and above to make the
+	  decision will become the default in the future. Until then this option
+	  is there to test gcc for this.
+
+	  If unsure, say N.
 
 config DEBUG_SECTION_MISMATCH
 	bool "Enable full Section mismatch analysis"
@@ -547,8 +547,7 @@ config HAVE_DEBUG_KMEMLEAK
 
 config DEBUG_KMEMLEAK
 	bool "Kernel memory leak detector"
-	depends on DEBUG_KERNEL && HAVE_DEBUG_KMEMLEAK
-	select DEBUG_FS
+	depends on HAVE_DEBUG_KMEMLEAK
 	select STACKTRACE if STACKTRACE_SUPPORT
 	select KALLSYMS
 	select CRC32
@@ -572,7 +571,7 @@ config DEBUG_KMEMLEAK_EARLY_LOG_SIZE
 	int "Maximum kmemleak early log entries"
 	depends on DEBUG_KMEMLEAK
 	range 200 40000
-	default 400
+	default 16000
 	help
 	  Kmemleak must track all the memory allocations to avoid
 	  reporting false positives. Since memory may be allocated or
@@ -732,19 +731,6 @@ config DEBUG_STACKOVERFLOW
 source "lib/Kconfig.kmemcheck"
 
 source "lib/Kconfig.kasan"
-
-config DEBUG_REFCOUNT
-	bool "Verbose refcount checks"
-	help
-	  Say Y here if you want reference counters (refcount_t and kref) to
-	  generate WARNs on dubious usage. Without this refcount_t will still
-	  be a saturating counter and avoid Use-After-Free by turning it into
-	  a resource leak Denial-Of-Service.
-
-	  Use of this option will increase kernel text size but will alert the
-	  admin of potential abuse.
-
-	  If in doubt, say "N".
 
 endmenu # "Memory Debugging"
 
@@ -981,7 +967,7 @@ config PANIC_TIMEOUT
 
 config SCHED_DEBUG
 	bool "Collect scheduler debugging info"
-	depends on DEBUG_KERNEL && PROC_FS
+	depends on PROC_FS
 	default y
 	help
 	  If you say Y here, the /proc/sched_debug file will be provided
@@ -1013,7 +999,7 @@ config PANIC_ON_RT_THROTTLING
 
 config SCHEDSTATS
 	bool "Collect scheduler statistics"
-	depends on DEBUG_KERNEL && PROC_FS
+	depends on PROC_FS
 	select SCHED_INFO
 	help
 	  If you say Y here, additional code will be inserted into the
@@ -1026,7 +1012,6 @@ config SCHEDSTATS
 
 config SCHED_STACK_END_CHECK
 	bool "Detect stack corruption on calls to schedule()"
-	depends on DEBUG_KERNEL
 	default n
 	help
 	  This option checks for a stack overrun on calls to schedule().
@@ -1313,9 +1298,9 @@ config HAVE_DEBUG_BUGVERBOSE
 	bool
 
 config DEBUG_BUGVERBOSE
-	bool "Verbose BUG() reporting (adds 70K)" if DEBUG_KERNEL && EXPERT
+	bool "Verbose BUG() reporting (adds 70K)" if EXPERT
 	depends on BUG && (GENERIC_BUG || HAVE_DEBUG_BUGVERBOSE)
-	default y
+	default n
 	help
 	  Say Y here to make BUG() panics output the file name and line number
 	  of the BUG call as well as the EIP and oops trace.  This aids
