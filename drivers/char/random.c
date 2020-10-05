@@ -780,13 +780,6 @@ static struct crng_state **crng_node_pool __read_mostly;
 
 static void invalidate_batched_entropy(void);
 
-static bool trust_cpu __ro_after_init = IS_ENABLED(CONFIG_RANDOM_TRUST_CPU);
-static int __init parse_trust_cpu(char *arg)
-{
-	return kstrtobool(arg, &trust_cpu);
-}
-early_param("random.trust_cpu", parse_trust_cpu);
-
 static void crng_initialize(struct crng_state *crng)
 {
 	int		i;
@@ -807,10 +800,12 @@ static void crng_initialize(struct crng_state *crng)
 		}
 		crng->state[i] ^= rv;
 	}
-	if (trust_cpu && arch_init) {
+#ifdef CONFIG_RANDOM_TRUST_CPU
+	if (arch_init) {
 		crng_init = 2;
 		pr_notice("random: crng done (trusting CPU's manufacturer)\n");
 	}
+#endif
 	crng->init_time = jiffies - CRNG_RESEED_INTERVAL - 1;
 }
 
