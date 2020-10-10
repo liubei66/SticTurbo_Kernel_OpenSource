@@ -715,7 +715,7 @@ int tas2559_set_VBoost(struct tas2559_priv *pTAS2559, int vboost, bool bPowerOn)
 	}
 
 	if (bPowerOn) {
-		dev_info(pTAS2559->dev, "%s, will load VBoost state next time before power on\n", __func__);
+		dev_dbg(pTAS2559->dev, "%s, will load VBoost state next time before power on\n", __func__);
 		pTAS2559->mbLoadVBoostPrePowerUp = true;
 		pTAS2559->mnVBoostNewState = vboost;
 		goto end;
@@ -1304,7 +1304,7 @@ int tas2559_set_sampling_rate(struct tas2559_priv *pTAS2559, unsigned int nSampl
 	pConfiguration = &(pTAS2559->mpFirmware->mpConfigurations[pTAS2559->mnCurrentConfiguration]);
 
 	if (pConfiguration->mnSamplingRate == nSamplingRate) {
-		dev_info(pTAS2559->dev, "Sampling rate for current configuration matches: %d\n",
+		dev_dbg(pTAS2559->dev, "Sampling rate for current configuration matches: %d\n",
 			 nSamplingRate);
 		nResult = 0;
 		goto end;
@@ -1318,7 +1318,7 @@ int tas2559_set_sampling_rate(struct tas2559_priv *pTAS2559, unsigned int nSampl
 
 		if ((pConfiguration->mnSamplingRate == nSamplingRate)
 		    && (pConfiguration->mnProgram == pTAS2559->mnCurrentProgram)) {
-			dev_info(pTAS2559->dev,
+			dev_dbg(pTAS2559->dev,
 				 "Found configuration: %s, with compatible sampling rate %d\n",
 				 pConfiguration->mpName, nSamplingRate);
 			nResult = tas2559_load_configuration(pTAS2559, nConfiguration, false);
@@ -1336,14 +1336,14 @@ end:
 
 static void fw_print_header(struct tas2559_priv *pTAS2559, struct TFirmware *pFirmware)
 {
-	dev_info(pTAS2559->dev, "FW Size       = %d", pFirmware->mnFWSize);
-	dev_info(pTAS2559->dev, "Checksum      = 0x%04X", pFirmware->mnChecksum);
-	dev_info(pTAS2559->dev, "PPC Version   = 0x%04X", pFirmware->mnPPCVersion);
-	dev_info(pTAS2559->dev, "FW  Version    = 0x%04X", pFirmware->mnFWVersion);
-	dev_info(pTAS2559->dev, "Driver Version= 0x%04X", pFirmware->mnDriverVersion);
-	dev_info(pTAS2559->dev, "Timestamp     = %d", pFirmware->mnTimeStamp);
-	dev_info(pTAS2559->dev, "DDC Name      = %s", pFirmware->mpDDCName);
-	dev_info(pTAS2559->dev, "Description   = %s", pFirmware->mpDescription);
+	dev_dbg(pTAS2559->dev, "FW Size       = %d", pFirmware->mnFWSize);
+	dev_dbg(pTAS2559->dev, "Checksum      = 0x%04X", pFirmware->mnChecksum);
+	dev_dbg(pTAS2559->dev, "PPC Version   = 0x%04X", pFirmware->mnPPCVersion);
+	dev_dbg(pTAS2559->dev, "FW  Version    = 0x%04X", pFirmware->mnFWVersion);
+	dev_dbg(pTAS2559->dev, "Driver Version= 0x%04X", pFirmware->mnDriverVersion);
+	dev_dbg(pTAS2559->dev, "Timestamp     = %d", pFirmware->mnTimeStamp);
+	dev_dbg(pTAS2559->dev, "DDC Name      = %s", pFirmware->mpDDCName);
+	dev_dbg(pTAS2559->dev, "Description   = %s", pFirmware->mpDescription);
 }
 
 static inline unsigned int fw_convert_number(unsigned char *pData)
@@ -2377,7 +2377,7 @@ static int tas2559_load_configuration(struct tas2559_priv *pTAS2559,
 	if ((!pTAS2559->mbLoadConfigurationPrePowerUp)
 	    && (nConfiguration == pTAS2559->mnCurrentConfiguration)
 	    && (!bLoadSame)) {
-		dev_info(pTAS2559->dev, "Configuration %d is already loaded\n",
+		dev_dbg(pTAS2559->dev, "Configuration %d is already loaded\n",
 			 nConfiguration);
 		nResult = 0;
 		goto end;
@@ -2567,7 +2567,7 @@ static int tas2559_load_calibration(struct tas2559_priv *pTAS2559,	char *pFileNa
 	if (nResult)
 		dev_err(pTAS2559->dev, "TAS2559 calibration file is corrupt\n");
 	else
-		dev_info(pTAS2559->dev, "TAS2559 calibration: %d calibrations\n",
+		dev_dbg(pTAS2559->dev, "TAS2559 calibration: %d calibrations\n",
 			 pTAS2559->mpCalFirmware->mnCalibrations);
 
 end:
@@ -2624,7 +2624,7 @@ void tas2559_fw_ready(const struct firmware *pFW, void *pContext)
 	}
 
 	if (nProgram >= pTAS2559->mpFirmware->mnPrograms) {
-		dev_info(pTAS2559->dev,
+		dev_dbg(pTAS2559->dev,
 			 "no previous program, set to default\n");
 		nProgram = 0;
 	}
@@ -2680,10 +2680,10 @@ int tas2559_set_program(struct tas2559_priv *pTAS2559,
 			if (pTAS2559->mpFirmware->mpConfigurations[nConfiguration].mnProgram == nProgram) {
 				if (nSampleRate == 0) {
 					bFound = true;
-					dev_info(pTAS2559->dev, "find default configuration %d\n", nConfiguration);
+					dev_dbg(pTAS2559->dev, "find default configuration %d\n", nConfiguration);
 				} else if (nSampleRate == pTAS2559->mpFirmware->mpConfigurations[nConfiguration].mnSamplingRate) {
 					bFound = true;
-					dev_info(pTAS2559->dev, "find matching configuration %d\n", nConfiguration);
+					dev_dbg(pTAS2559->dev, "find matching configuration %d\n", nConfiguration);
 				} else {
 					nConfiguration++;
 				}
@@ -2712,7 +2712,7 @@ int tas2559_set_program(struct tas2559_priv *pTAS2559,
 	pProgram = &(pTAS2559->mpFirmware->mpPrograms[nProgram]);
 
 	if (pTAS2559->mbPowerUp) {
-		dev_info(pTAS2559->dev,
+		dev_dbg(pTAS2559->dev,
 			 "device powered up, power down to load program %d (%s)\n",
 			 nProgram, pProgram->mpName);
 
@@ -2757,7 +2757,7 @@ int tas2559_set_program(struct tas2559_priv *pTAS2559,
 	tas2559_update_edge(pTAS2559, DevBoth);
 
 	if (pTAS2559->mbPowerUp) {
-		dev_info(pTAS2559->dev, "%s, load VBoost before power on %d\n", __func__, pTAS2559->mnVBoostState);
+		dev_dbg(pTAS2559->dev, "%s, load VBoost before power on %d\n", __func__, pTAS2559->mnVBoostState);
 		nResult = tas2559_set_VBoost(pTAS2559, pTAS2559->mnVBoostState, false);
 		if (nResult < 0)
 			goto end;
@@ -2824,7 +2824,7 @@ int tas2559_set_calibration(struct tas2559_priv *pTAS2559, int nCalibration)
 	}
 
 	if (nCalibration == 0x00FF) {
-		dev_info(pTAS2559->dev, "load new calibration file %s\n", TAS2559_CAL_NAME);
+		dev_dbg(pTAS2559->dev, "load new calibration file %s\n", TAS2559_CAL_NAME);
 		nResult = tas2559_load_calibration(pTAS2559, TAS2559_CAL_NAME);
 
 		if (nResult < 0) {
