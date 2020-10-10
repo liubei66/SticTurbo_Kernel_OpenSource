@@ -1431,7 +1431,7 @@ static int gtp_proc_init(struct kobject *sysfs_node_parent) {
 	sprintf(driver_path, "/sys%s",
 			kobject_get_path(sysfs_node_parent, GFP_KERNEL));
 
-	proc_entry_ts = proc_symlink("touchscreen", NULL, driver_path);
+	proc_entry_ts = proc_symlink("touchpanel", NULL, driver_path);
 	if (!proc_entry_ts) {
 		ret = -ENOMEM;
 		goto free_driver_path;
