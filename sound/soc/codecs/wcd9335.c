@@ -135,8 +135,6 @@
 
 #define CALCULATE_VOUT_D(req_mv) (((req_mv - 650) * 10) / 25)
 
-static int cpe_debug_mode;
-
 #define TASHA_MAX_MICBIAS 4
 #define DAPM_MICBIAS1_STANDALONE "MIC BIAS1 Standalone"
 #define DAPM_MICBIAS2_STANDALONE "MIC BIAS2 Standalone"
@@ -144,6 +142,9 @@ static int cpe_debug_mode;
 #define DAPM_MICBIAS4_STANDALONE "MIC BIAS4 Standalone"
 
 #define DAPM_LDO_H_STANDALONE "LDO_H"
+
+static int cpe_debug_mode = 0;
+
 module_param(cpe_debug_mode, int,
 	     S_IRUGO | S_IWUSR | S_IWGRP);
 MODULE_PARM_DESC(cpe_debug_mode, "boot cpe in debug mode");
