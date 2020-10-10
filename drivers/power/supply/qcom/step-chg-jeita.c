@@ -341,7 +341,7 @@ static int handle_jeita(struct step_chg_info *chip)
 	if (fv_uv > 0)
 		vote(chip->fv_votable, JEITA_VOTER, true, fv_uv);
 
-	pr_info("%s = %d FCC = %duA FV = %duV\n",
+	pr_debug("%s = %d FCC = %duA FV = %duV\n",
 		step_chg_config.prop_name, pval.intval, fcc_ua, fv_uv);
 
 update_time:
@@ -440,7 +440,7 @@ int qcom_soft_jeita_fcc_init(int critical_low_fcc, int cool_fcc, int normal_cool
 		jeita_fcc_config.fcc_cfg[3].value = normal_fcc;
 		jeita_fcc_config.fcc_cfg[4].value = warm_fcc;
 
-		pr_info("jeita_fcc_config.fcc_cfg[0].value: %d "
+		pr_debug("jeita_fcc_config.fcc_cfg[0].value: %d "
 				"jeita_fcc_config.fcc_cfg[1].value: %d "
 				"jeita_fcc_config.fcc_cfg[2].value: %d "
 				"jeita_fcc_config.fcc_cfg[3].value: %d "
