@@ -743,7 +743,6 @@ int rmnet_unassociate_network_device(struct net_device *dev)
 
 	/* Explicitly release the reference from the device */
 	dev_put(dev);
-	trace_rmnet_unassociate(dev);
 	return RMNET_CONFIG_OK;
 }
 
@@ -887,7 +886,6 @@ int rmnet_associate_network_device(struct net_device *dev)
 
 	/* Explicitly hold a reference to the device */
 	dev_hold(dev);
-	trace_rmnet_associate(dev);
 	return RMNET_CONFIG_OK;
 }
 
@@ -1193,7 +1191,6 @@ static void rmnet_force_unassociate_device(struct net_device *dev)
 		return;
 	}
 
-	trace_rmnet_unregister_cb_clear_vnds(dev);
 	vnd_work = kmalloc(sizeof(*vnd_work), GFP_KERNEL);
 	if (!vnd_work) {
 		LOGH("%s", "Out of Memory");
@@ -1262,7 +1259,6 @@ static void rmnet_force_unassociate_device(struct net_device *dev)
 	}
 
 	/* Clear the mappings on the phys ep */
-	trace_rmnet_unregister_cb_clear_lepcs(dev);
 	rmnet_unset_logical_endpoint_config(dev, RMNET_LOCAL_LOGICAL_ENDPOINT);
 	for (i = 0; i < RMNET_DATA_MAX_LOGICAL_EP; i++)
 		rmnet_unset_logical_endpoint_config(dev, i);
@@ -1290,14 +1286,11 @@ int rmnet_config_notify_cb(struct notifier_block *nb,
 	switch (event) {
 	case NETDEV_UNREGISTER_FINAL:
 	case NETDEV_UNREGISTER:
-		trace_rmnet_unregister_cb_entry(dev);
 		LOGH("Kernel is trying to unregister %s", dev->name);
 		rmnet_force_unassociate_device(dev);
-		trace_rmnet_unregister_cb_exit(dev);
 		break;
 
 	default:
-		trace_rmnet_unregister_cb_unhandled(dev);
 		LOGD("Unhandeled event [%lu]", event);
 		break;
 	}

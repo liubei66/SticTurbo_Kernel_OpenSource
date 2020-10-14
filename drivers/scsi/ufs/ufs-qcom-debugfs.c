@@ -98,11 +98,6 @@ static int ufs_qcom_dbg_testbus_cfg_show(struct seq_file *file, void *data)
 	seq_printf(file , "Current configuration: major=%d, minor=%d\n\n",
 			host->testbus.select_major, host->testbus.select_minor);
 
-	/* Print usage */
-	seq_puts(file,
-		"To change the test-bus configuration, write 'MAJ,MIN' where:\n"
-		"MAJ - major select\n"
-		"MIN - minor select\n\n");
 	return 0;
 }
 
@@ -119,7 +114,6 @@ static ssize_t ufs_qcom_dbg_testbus_cfg_write(struct file *file,
 	int minor;
 	unsigned long flags;
 	struct ufs_hba *hba = host->hba;
-
 
 	ret = simple_write_to_buffer(configuration,
 		TESTBUS_CFG_BUFF_LINE_SIZE - 1,

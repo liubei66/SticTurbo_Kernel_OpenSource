@@ -37,8 +37,6 @@ void cfg80211_rx_assoc_resp(struct net_device *dev, struct cfg80211_bss *bss,
 		len - offsetof(struct ieee80211_mgmt, u.assoc_resp.variable);
 	cr.timeout_reason = NL80211_TIMEOUT_UNSPECIFIED;
 
-	trace_cfg80211_send_rx_assoc(dev, bss);
-
 	/*
 	 * This is a bit of a hack, we don't notify userspace of
 	 * a (re-)association reply if we tried to send a reassoc
@@ -111,8 +109,6 @@ void cfg80211_rx_mlme_mgmt(struct net_device *dev, const u8 *buf, size_t len)
 
 	ASSERT_WDEV_LOCK(wdev);
 
-	trace_cfg80211_rx_mlme_mgmt(dev, buf, len);
-
 	if (WARN_ON(len < 2))
 		return;
 
@@ -131,8 +127,6 @@ void cfg80211_auth_timeout(struct net_device *dev, const u8 *addr)
 	struct wiphy *wiphy = wdev->wiphy;
 	struct cfg80211_registered_device *rdev = wiphy_to_rdev(wiphy);
 
-	trace_cfg80211_send_auth_timeout(dev, addr);
-
 	nl80211_send_auth_timeout(rdev, dev, addr, GFP_KERNEL);
 	cfg80211_sme_auth_timeout(wdev);
 }
@@ -143,8 +137,6 @@ void cfg80211_assoc_timeout(struct net_device *dev, struct cfg80211_bss *bss)
 	struct wireless_dev *wdev = dev->ieee80211_ptr;
 	struct wiphy *wiphy = wdev->wiphy;
 	struct cfg80211_registered_device *rdev = wiphy_to_rdev(wiphy);
-
-	trace_cfg80211_send_assoc_timeout(dev, bss->bssid);
 
 	nl80211_send_assoc_timeout(rdev, dev, bss->bssid, GFP_KERNEL);
 	cfg80211_sme_assoc_timeout(wdev);
@@ -172,8 +164,6 @@ void cfg80211_tx_mlme_mgmt(struct net_device *dev, const u8 *buf, size_t len)
 	struct ieee80211_mgmt *mgmt = (void *)buf;
 
 	ASSERT_WDEV_LOCK(wdev);
-
-	trace_cfg80211_tx_mlme_mgmt(dev, buf, len);
 
 	if (WARN_ON(len < 2))
 		return;
@@ -207,7 +197,6 @@ void cfg80211_michael_mic_failure(struct net_device *dev, const u8 *addr,
 	}
 #endif
 
-	trace_cfg80211_michael_mic_failure(dev, addr, key_type, key_id, tsc);
 	nl80211_michael_mic_failure(rdev, dev, addr, key_type, key_id, tsc, gfp);
 }
 EXPORT_SYMBOL(cfg80211_michael_mic_failure);
@@ -707,11 +696,9 @@ bool cfg80211_rx_mgmt(struct wireless_dev *wdev, int freq, int sig_mbm,
 		cpu_to_le16(IEEE80211_FCTL_FTYPE | IEEE80211_FCTL_STYPE);
 	u16 stype;
 
-	trace_cfg80211_rx_mgmt(wdev, freq, sig_mbm);
 	stype = (le16_to_cpu(mgmt->frame_control) & IEEE80211_FCTL_STYPE) >> 4;
 
 	if (!(stypes->rx & BIT(stype))) {
-		trace_cfg80211_return_bool(false);
 		return false;
 	}
 
@@ -744,7 +731,6 @@ bool cfg80211_rx_mgmt(struct wireless_dev *wdev, int freq, int sig_mbm,
 
 	spin_unlock_bh(&wdev->mgmt_registrations_lock);
 
-	trace_cfg80211_return_bool(result);
 	return result;
 }
 EXPORT_SYMBOL(cfg80211_rx_mgmt);
@@ -816,8 +802,6 @@ void cfg80211_radar_event(struct wiphy *wiphy,
 	struct cfg80211_registered_device *rdev = wiphy_to_rdev(wiphy);
 	unsigned long timeout;
 
-	trace_cfg80211_radar_event(wiphy, chandef);
-
 	/* only set the chandef supplied channel to unavailable, in
 	 * case the radar is detected on only one of multiple channels
 	 * spanned by the chandef.
@@ -840,8 +824,6 @@ void cfg80211_cac_event(struct net_device *netdev,
 	struct wiphy *wiphy = wdev->wiphy;
 	struct cfg80211_registered_device *rdev = wiphy_to_rdev(wiphy);
 	unsigned long timeout;
-
-	trace_cfg80211_cac_event(netdev, event);
 
 	if (WARN_ON(!wdev->cac_started))
 		return;

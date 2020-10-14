@@ -37,6 +37,7 @@
  *	  5) Netlink interface to user-space.
  *	  6) Support low-overhead kernel-based filtering to minimize the
  *	     information that must be passed to user-space.
+ * Copyright (C) 2020 Amktiao.
  *
  * Example user-space utilities: http://people.redhat.com/sgrubb/audit/
  */

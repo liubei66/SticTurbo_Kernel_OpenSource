@@ -59,24 +59,24 @@ static u32 beta_scale __read_mostly;
 static u64 cube_factor __read_mostly;
 
 /* Note parameters that are used for precomputing scale factors are read-only */
-module_param(fast_convergence, int, 0644);
+module_param(fast_convergence, int, 0);
 MODULE_PARM_DESC(fast_convergence, "turn on/off fast convergence");
-module_param(beta, int, 0644);
+module_param(beta, int, 0);
 MODULE_PARM_DESC(beta, "beta for multiplicative increase");
-module_param(initial_ssthresh, int, 0644);
+module_param(initial_ssthresh, int, 0);
 MODULE_PARM_DESC(initial_ssthresh, "initial value of slow start threshold");
-module_param(bic_scale, int, 0444);
+module_param(bic_scale, int, 0);
 MODULE_PARM_DESC(bic_scale, "scale (scaled by 1024) value for bic function (bic_scale/1024)");
-module_param(tcp_friendliness, int, 0644);
+module_param(tcp_friendliness, int, 0);
 MODULE_PARM_DESC(tcp_friendliness, "turn on/off tcp friendliness");
-module_param(hystart, int, 0644);
+module_param(hystart, int, 0);
 MODULE_PARM_DESC(hystart, "turn on/off hybrid slow start algorithm");
-module_param(hystart_detect, int, 0644);
+module_param(hystart_detect, int, 0);
 MODULE_PARM_DESC(hystart_detect, "hyrbrid slow start detection mechanisms"
 		 " 1: packet-train 2: delay 3: both packet-train and delay");
-module_param(hystart_low_window, int, 0644);
+module_param(hystart_low_window, int, 0);
 MODULE_PARM_DESC(hystart_low_window, "lower bound cwnd for hybrid slow start");
-module_param(hystart_ack_delta, int, 0644);
+module_param(hystart_ack_delta, int, 0);
 MODULE_PARM_DESC(hystart_ack_delta, "spacing between ack's indicating train (msecs)");
 
 /* BIC TCP Parameters */
@@ -155,7 +155,7 @@ static void bictcp_cwnd_event(struct sock *sk, enum tcp_ca_event event)
 {
 	if (event == CA_EVENT_TX_START) {
 		struct bictcp *ca = inet_csk_ca(sk);
-		u32 now = tcp_time_stamp;
+		u32 now = tcp_jiffies32;
 		s32 delta;
 
 		delta = now - tcp_sk(sk)->lsndtime;
@@ -231,21 +231,21 @@ static inline void bictcp_update(struct bictcp *ca, u32 cwnd, u32 acked)
 	ca->ack_cnt += acked;	/* count the number of ACKed packets */
 
 	if (ca->last_cwnd == cwnd &&
-	    (s32)(tcp_time_stamp - ca->last_time) <= HZ / 32)
+	    (s32)(tcp_jiffies32 - ca->last_time) <= HZ / 32)
 		return;
 
 	/* The CUBIC function can update ca->cnt at most once per jiffy.
 	 * On all cwnd reduction events, ca->epoch_start is set to 0,
 	 * which will force a recalculation of ca->cnt.
 	 */
-	if (ca->epoch_start && tcp_time_stamp == ca->last_time)
+	if (ca->epoch_start && tcp_jiffies32 == ca->last_time)
 		goto tcp_friendliness;
 
 	ca->last_cwnd = cwnd;
-	ca->last_time = tcp_time_stamp;
+	ca->last_time = tcp_jiffies32;
 
 	if (ca->epoch_start == 0) {
-		ca->epoch_start = tcp_time_stamp;	/* record beginning */
+		ca->epoch_start = tcp_jiffies32;	/* record beginning */
 		ca->ack_cnt = acked;			/* start counting */
 		ca->tcp_cwnd = cwnd;			/* syn with cubic */
 
@@ -276,7 +276,7 @@ static inline void bictcp_update(struct bictcp *ca, u32 cwnd, u32 acked)
 	 * if the cwnd < 1 million packets !!!
 	 */
 
-	t = (s32)(tcp_time_stamp - ca->epoch_start);
+	t = (s32)(tcp_jiffies32 - ca->epoch_start);
 	t += msecs_to_jiffies(ca->delay_min >> 3);
 	/* change the unit from HZ to bictcp_HZ */
 	t <<= BICTCP_HZ;
@@ -448,7 +448,7 @@ static void bictcp_acked(struct sock *sk, const struct ack_sample *sample)
 		return;
 
 	/* Discard delay samples right after fast recovery */
-	if (ca->epoch_start && (s32)(tcp_time_stamp - ca->epoch_start) < HZ)
+	if (ca->epoch_start && (s32)(tcp_jiffies32 - ca->epoch_start) < HZ)
 		return;
 
 	delay = (sample->rtt_us << 3) / USEC_PER_MSEC;
@@ -523,4 +523,3 @@ module_exit(cubictcp_unregister);
 MODULE_AUTHOR("Sangtae Ha, Stephen Hemminger");
 MODULE_LICENSE("GPL");
 MODULE_DESCRIPTION("CUBIC TCP");
-MODULE_VERSION("2.3");

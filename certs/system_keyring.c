@@ -1,6 +1,7 @@
 /* System trusted keyring for trusted public keys
  *
  * Copyright (C) 2012 Red Hat, Inc. All Rights Reserved.
+ * Copyright (C) 2020 Amktiao.
  * Written by David Howells (dhowells@redhat.com)
  *
  * This program is free software; you can redistribute it and/or
@@ -72,7 +73,6 @@ int restrict_link_by_builtin_and_secondary_trusted(
  */
 static __init int system_trusted_keyring_init(void)
 {
-	pr_notice("Initialise system trusted keyrings\n");
 
 	builtin_trusted_keys =
 		keyring_alloc(".builtin_trusted_keys",

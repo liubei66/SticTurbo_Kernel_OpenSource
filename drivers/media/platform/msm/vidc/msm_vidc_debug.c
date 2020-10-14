@@ -16,14 +16,14 @@
 #include "msm_vidc_debug.h"
 #include "vidc_hfi_api.h"
 
-int msm_vidc_debug = VIDC_ERR | VIDC_WARN;
+int msm_vidc_debug = 0;
 EXPORT_SYMBOL(msm_vidc_debug);
 
-int msm_vidc_debug_out = VIDC_OUT_PRINTK;
+int msm_vidc_debug_out = 0;
 EXPORT_SYMBOL(msm_vidc_debug_out);
 
-int msm_vidc_fw_debug = 0x18;
-int msm_vidc_fw_debug_mode = 1;
+int msm_vidc_fw_debug = 0;
+int msm_vidc_fw_debug_mode = 0;
 int msm_vidc_fw_low_power_mode = 1;
 bool msm_vidc_fw_coverage = !true;
 bool msm_vidc_sys_idle_indicator = !true;
@@ -86,7 +86,6 @@ static ssize_t core_info_read(struct file *file, char __user *buf,
 
 	cur += write_str(cur, end - cur, "===============================\n");
 	cur += write_str(cur, end - cur, "CORE %d: %pK\n", core->id, core);
-	cur += write_str(cur, end - cur, "===============================\n");
 	cur += write_str(cur, end - cur, "Core state: %d\n", core->state);
 	rc = call_hfi_op(hdev, get_fw_info, hdev->hfi_device_data, &fw_info);
 	if (rc) {
@@ -224,7 +223,7 @@ failed_create_dir:
 struct dentry *msm_vidc_debugfs_init_core(struct msm_vidc_core *core,
 		struct dentry *parent)
 {
-	struct dentry *dir = NULL;
+	struct dentry *dir;
 	char debugfs_name[MAX_DEBUGFS_NAME];
 
 	if (!core) {
@@ -234,21 +233,22 @@ struct dentry *msm_vidc_debugfs_init_core(struct msm_vidc_core *core,
 
 	snprintf(debugfs_name, MAX_DEBUGFS_NAME, "core%d", core->id);
 	dir = debugfs_create_dir(debugfs_name, parent);
-	if (!dir) {
-		dprintk(VIDC_ERR, "Failed to create debugfs for msm_vidc\n");
+	if (IS_ERR_OR_NULL(dir)) {
 		goto failed_create_dir;
 	}
-	if (!debugfs_create_file("info", 0444, dir, core, &core_info_fops)) {
+	if (IS_ERR_OR_NULL(debugfs_create_file("info", 0444, dir, core, &core_info_fops))) {
 		dprintk(VIDC_ERR, "debugfs_create_file: fail\n");
-		goto failed_create_dir;
+		goto failed_create_file;
 	}
-	if (!debugfs_create_file("trigger_ssr", 0200,
-			dir, core, &ssr_fops)) {
+	if (IS_ERR_OR_NULL(debugfs_create_file("trigger_ssr", 0200,
+			dir, core, &ssr_fops))) {
 		dprintk(VIDC_ERR, "debugfs_create_file: fail\n");
-		goto failed_create_dir;
+		goto failed_create_file;
 	}
+failed_create_file:
+	debugfs_remove_recursive(dir);
 failed_create_dir:
-	return dir;
+	return NULL;
 }
 
 static int inst_info_open(struct inode *inode, struct file *file)
@@ -390,7 +390,7 @@ static ssize_t inst_info_read(struct file *file, char __user *buf,
 		if (i < MAX_PORT_NUM - 1)
 			cur += write_str(cur, end - cur, "\n");
 	}
-	cur += write_str(cur, end - cur, "-------------------------------\n");
+	cur += write_str(cur, end - cur, "-------------\n");
 	for (i = SESSION_MSG_START; i < SESSION_MSG_END; i++) {
 		cur += write_str(cur, end - cur, "completions[%d]: %s\n", i,
 		completion_done(&inst->completions[SESSION_MSG_INDEX(i)]) ?
@@ -427,7 +427,7 @@ static const struct file_operations inst_info_fops = {
 struct dentry *msm_vidc_debugfs_init_inst(struct msm_vidc_inst *inst,
 		struct dentry *parent)
 {
-	struct dentry *dir = NULL, *info = NULL;
+	struct dentry *dir, *info;
 	char debugfs_name[MAX_DEBUGFS_NAME];
 	struct core_inst_pair *idata = NULL;
 
@@ -447,15 +447,13 @@ struct dentry *msm_vidc_debugfs_init_inst(struct msm_vidc_inst *inst,
 	idata->inst = inst;
 
 	dir = debugfs_create_dir(debugfs_name, parent);
-	if (!dir) {
-		dprintk(VIDC_ERR, "Failed to create debugfs for msm_vidc\n");
+	if (IS_ERR_OR_NULL(dir)) {
 		goto failed_create_dir;
 	}
 
 	info = debugfs_create_file("info", 0444, dir,
 			idata, &inst_info_fops);
-	if (!info) {
-		dprintk(VIDC_ERR, "debugfs_create_file: fail\n");
+	if (IS_ERR_OR_NULL(info)) {
 		goto failed_create_file;
 	}
 
@@ -465,11 +463,10 @@ struct dentry *msm_vidc_debugfs_init_inst(struct msm_vidc_inst *inst,
 
 failed_create_file:
 	debugfs_remove_recursive(dir);
-	dir = NULL;
 failed_create_dir:
 	kfree(idata);
 exit:
-	return dir;
+	return NULL;
 }
 
 void msm_vidc_debugfs_deinit_inst(struct msm_vidc_inst *inst)

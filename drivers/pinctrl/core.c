@@ -1678,7 +1678,7 @@ static void pinctrl_init_device_debugfs(struct pinctrl_dev *pctldev)
 	pctldev->device_root = device_root;
 
 	if (IS_ERR(device_root) || !device_root) {
-		pr_warn("failed to create debugfs directory for %s\n",
+		pr_warn("failed debugfs directory for %s\n",
 			dev_name(pctldev->dev));
 		return;
 	}

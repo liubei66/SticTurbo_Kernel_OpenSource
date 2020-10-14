@@ -1,5 +1,4 @@
 /* Copyright (c) 2011-2014 PLUMgrid, http://plumgrid.com
- * Copyright (C) 2019 XiaoMi, Inc.
  *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of version 2 of the GNU General Public
@@ -68,8 +67,7 @@ void *bpf_map_area_alloc(size_t size)
 			return area;
 	}
 
-	return __vmalloc(size, GFP_KERNEL | __GFP_HIGHMEM | flags,
-			 PAGE_KERNEL);
+	return __vmalloc(size, GFP_KERNEL | flags, PAGE_KERNEL);
 }
 
 void bpf_map_area_free(void *area)
@@ -895,6 +893,9 @@ static int bpf_obj_get(const union bpf_attr *attr)
 
 #define BPF_PROG_ATTACH_LAST_FIELD attach_flags
 
+#define BPF_F_ATTACH_MASK \
+	(BPF_F_ALLOW_OVERRIDE | BPF_F_ALLOW_MULTI)
+
 static int bpf_prog_attach(const union bpf_attr *attr)
 {
 	struct bpf_prog *prog;
@@ -907,7 +908,7 @@ static int bpf_prog_attach(const union bpf_attr *attr)
 	if (CHECK_ATTR(BPF_PROG_ATTACH))
 		return -EINVAL;
 
-	if (attr->attach_flags & ~BPF_F_ALLOW_OVERRIDE)
+	if (attr->attach_flags & ~BPF_F_ATTACH_MASK)
 		return -EINVAL;
 
 	switch (attr->attach_type) {
@@ -924,8 +925,8 @@ static int bpf_prog_attach(const union bpf_attr *attr)
 			return PTR_ERR(cgrp);
 		}
 
-		ret = cgroup_bpf_update(cgrp, prog, attr->attach_type,
-					attr->attach_flags & BPF_F_ALLOW_OVERRIDE);
+		ret = cgroup_bpf_attach(cgrp, prog, attr->attach_type,
+					attr->attach_flags);
 		if (ret)
 			bpf_prog_put(prog);
 		cgroup_put(cgrp);
@@ -942,6 +943,8 @@ static int bpf_prog_attach(const union bpf_attr *attr)
 
 static int bpf_prog_detach(const union bpf_attr *attr)
 {
+	enum bpf_prog_type ptype;
+	struct bpf_prog *prog;
 	struct cgroup *cgrp;
 	int ret;
 
@@ -954,46 +957,28 @@ static int bpf_prog_detach(const union bpf_attr *attr)
 	switch (attr->attach_type) {
 	case BPF_CGROUP_INET_INGRESS:
 	case BPF_CGROUP_INET_EGRESS:
-		cgrp = cgroup_get_from_fd(attr->target_fd);
-		if (IS_ERR(cgrp))
-			return PTR_ERR(cgrp);
-
-		ret = cgroup_bpf_update(cgrp, NULL, attr->attach_type, false);
-		cgroup_put(cgrp);
+		ptype = BPF_PROG_TYPE_CGROUP_SKB;
 		break;
 
 	default:
 		return -EINVAL;
 	}
 
+	cgrp = cgroup_get_from_fd(attr->target_fd);
+	if (IS_ERR(cgrp))
+		return PTR_ERR(cgrp);
+
+	prog = bpf_prog_get_type(attr->attach_bpf_fd, ptype);
+	if (IS_ERR(prog))
+		prog = NULL;
+
+	ret = cgroup_bpf_detach(cgrp, prog, attr->attach_type, 0);
+	if (prog)
+		bpf_prog_put(prog);
+	cgroup_put(cgrp);
 	return ret;
 }
 #endif /* CONFIG_CGROUP_BPF */
-
-static int bpf_get_comm_hash(union bpf_attr *attr)
-{
-	void __user *uhash = u64_to_ptr(attr->hash);
-	int pid = attr->pid;
-	struct task_struct *p_task = NULL;
-	const char *str;
-	int c;
-	u64 hash = 5381;
-
-	rcu_read_lock();
-	p_task = find_task_by_pid_ns(pid, &init_pid_ns);
-	if (p_task) {
-		get_task_struct(p_task);
-		str = p_task->comm;
-		while ((c = *str++))
-			hash = ((hash << 5) + hash) + c;
-		put_task_struct(p_task);
-	}
-	rcu_read_unlock();
-
-	if (copy_to_user(uhash, &hash, sizeof(hash)) != 0)
-		return -EFAULT;
-	return 0;
-}
 
 SYSCALL_DEFINE3(bpf, int, cmd, union bpf_attr __user *, uattr, unsigned int, size)
 {
@@ -1074,9 +1059,7 @@ SYSCALL_DEFINE3(bpf, int, cmd, union bpf_attr __user *, uattr, unsigned int, siz
 		err = bpf_prog_detach(&attr);
 		break;
 #endif
-	case BPF_GET_COMM_HASH:
-		err = bpf_get_comm_hash(&attr);
-		break;
+
 	default:
 		err = -EINVAL;
 		break;

@@ -44,8 +44,11 @@
 #define GSI_CTRL_DTR (1 << 0)
 
 #define GSI_NUM_IN_RNDIS_BUFFERS 50
+#define GSI_NUM_IN_RMNET_BUFFERS 50
 #define GSI_NUM_IN_BUFFERS 15
 #define GSI_IN_BUFF_SIZE 2048
+#define GSI_IN_RMNET_BUFF_SIZE 31744
+#define GSI_IN_RNDIS_BUFF_SIZE 16384
 #define GSI_NUM_OUT_BUFFERS 14
 #define GSI_OUT_AGGR_SIZE 24576
 
@@ -264,7 +267,7 @@ struct gsi_data_port {
 
 struct f_gsi {
 	struct usb_function function;
-	enum usb_prot_id prot_id;
+	int prot_id;
 	int ctrl_id;
 	int data_id;
 	u32 vendorID;

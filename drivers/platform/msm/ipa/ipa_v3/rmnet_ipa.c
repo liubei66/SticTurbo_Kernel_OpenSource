@@ -1108,9 +1108,9 @@ static int ipa3_wwan_change_mtu(struct net_device *dev, int new_mtu)
  * later
  * -EFAULT: Error while transmitting the skb
  */
-static int ipa3_wwan_xmit(struct sk_buff *skb, struct net_device *dev)
+static netdev_tx_t ipa3_wwan_xmit(struct sk_buff *skb, struct net_device *dev)
 {
-	int ret = 0;
+	netdev_tx_t ret = NETDEV_TX_OK;
 	bool qmap_check;
 	struct ipa3_wwan_private *wwan_ptr = netdev_priv(dev);
 
@@ -1705,21 +1705,11 @@ static int ipa3_wwan_ioctl(struct net_device *dev, struct ifreq *ifr, int cmd)
 			mux_channel[rmnet_index].vchannel_name[
 				IFNAMSIZ - 1] = '\0';
 
-			IPAWANDBG("cashe device[%s:%d] in IPA_wan[%d]\n",
-				mux_channel[rmnet_index].vchannel_name,
-				mux_channel[rmnet_index].mux_id,
-				rmnet_index);
 			/* check if UL filter rules coming*/
 			if (rmnet_ipa3_ctx->num_q6_rules != 0) {
-				IPAWANERR("dev(%s) register to IPA\n",
-					extend_ioctl_data.u.rmnet_mux_val.
-					vchannel_name);
 				rc = ipa3_wwan_register_to_ipa(
 						rmnet_ipa3_ctx->rmnet_index);
 				if (rc < 0) {
-					IPAWANERR("device %s reg IPA failed\n",
-						extend_ioctl_data.u.
-						rmnet_mux_val.vchannel_name);
 					mutex_unlock(&rmnet_ipa3_ctx->
 						add_mux_channel_lock);
 					return -ENODEV;
@@ -1727,9 +1717,6 @@ static int ipa3_wwan_ioctl(struct net_device *dev, struct ifreq *ifr, int cmd)
 				mux_channel[rmnet_index].mux_channel_set = true;
 				mux_channel[rmnet_index].ul_flt_reg = true;
 			} else {
-				IPAWANDBG("dev(%s) haven't registered to IPA\n",
-					extend_ioctl_data.u.
-					rmnet_mux_val.vchannel_name);
 				mux_channel[rmnet_index].mux_channel_set = true;
 				mux_channel[rmnet_index].ul_flt_reg = false;
 			}
@@ -2844,7 +2831,8 @@ static void tethering_stats_poll_queue(struct work_struct *work)
 
 	/* Schedule again only if there's an active polling interval */
 	if (ipa3_rmnet_ctx.polling_interval != 0)
-		schedule_delayed_work(&ipa_tether_stats_poll_wakequeue_work,
+		queue_delayed_work(system_power_efficient_wq, 
+			&ipa_tether_stats_poll_wakequeue_work,
 			msecs_to_jiffies(ipa3_rmnet_ctx.polling_interval*1000));
 }
 
@@ -2938,7 +2926,8 @@ int rmnet_ipa3_poll_tethering_stats(struct wan_ioctl_poll_tethering_stats *data)
 		return 0;
 	}
 
-	schedule_delayed_work(&ipa_tether_stats_poll_wakequeue_work, 0);
+	queue_delayed_work(system_power_efficient_wq, 
+						&ipa_tether_stats_poll_wakequeue_work, 0);
 	return 0;
 }
 

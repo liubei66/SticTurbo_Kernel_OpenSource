@@ -1,7 +1,6 @@
 config ZRAM
 	tristate "Compressed RAM block device support"
 	depends on BLOCK && SYSFS && ZSMALLOC && CRYPTO
-	select CRYPTO_LZO
 	default n
 	help
 	  Creates virtual block devices called /dev/zramX (X = 0, 1, ...).
@@ -31,7 +30,7 @@ config ZRAM_WRITEBACK
 
 config ZRAM_MEMORY_TRACKING
 	bool "Track zRam block status"
-	depends on ZRAM && DEBUG_FS
+	depends on ZRAM
 	help
 	  With this feature, admin can track the state of allocated blocks
 	  of zRAM. Admin could see the information via

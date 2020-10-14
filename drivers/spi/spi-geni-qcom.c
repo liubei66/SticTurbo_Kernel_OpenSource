@@ -1,6 +1,5 @@
 /*
  * Copyright (c) 2017-2018, The Linux Foundation. All rights reserved.
- * Copyright (C) 2019 XiaoMi, Inc.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -61,7 +60,7 @@
 #define CS_DEMUX_OUTPUT_SEL	(GENMASK(3, 0))
 
 /* SE_SPI_TX_TRANS_CFG register fields */
-#define CS_TOGGLE		(BIT(1))
+#define CS_TOGGLE		(BIT(0))
 
 /* SE_SPI_WORD_LEN register fields */
 #define WORD_LEN_MSK		(GENMASK(9, 0))
@@ -194,9 +193,6 @@ static int get_spi_clk_cfg(u32 speed_hz, struct spi_geni_master *mas,
 	}
 
 	res_freq = (sclk_freq / (*clk_div));
-
-	dev_dbg(mas->dev, "%s: req %u resultant %lu sclk %lu, idx %d, div %d\n",
-		__func__, speed_hz, res_freq, sclk_freq, *clk_idx, *clk_div);
 
 	ret = clk_set_rate(rsc->se_clk, sclk_freq);
 	if (ret)
@@ -1105,7 +1101,6 @@ static int spi_geni_transfer_one(struct spi_master *spi,
 				geni_se_rx_dma_unprep(mas->wrapper_dev,
 					xfer->rx_dma, xfer->len);
 		}
-		mas->cur_xfer = NULL;
 	} else {
 		mas->num_tx_eot = 0;
 		mas->num_rx_eot = 0;

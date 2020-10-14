@@ -23,6 +23,8 @@
 #include "msm_vidc_debug.h"
 #include "msm_vidc_clocks.h"
 
+static struct kmem_cache *kmem_buf_pool;
+
 #define IS_ALREADY_IN_STATE(__p, __d) (\
 	(__p >= __d)\
 )
@@ -663,6 +665,12 @@ int msm_comm_ctrl_init(struct msm_vidc_inst *inst,
 		return -EINVAL;
 	}
 
+	kmem_buf_pool = KMEM_CACHE(msm_vidc_buffer, SLAB_HWCACHE_ALIGN);
+	if (!kmem_buf_pool) {
+		dprintk(VIDC_ERR, "%s - failed to allocate kmem pool\n", __func__);
+		return -ENOMEM;
+	}
+
 	inst->ctrls = kcalloc(num_ctrls, sizeof(struct v4l2_ctrl *),
 				GFP_KERNEL);
 	if (!inst->ctrls) {
@@ -759,6 +767,7 @@ int msm_comm_ctrl_deinit(struct msm_vidc_inst *inst)
 	kfree(inst->ctrls);
 	kfree(inst->cluster);
 	v4l2_ctrl_handler_free(&inst->ctrl_handler);
+	kmem_cache_destroy(kmem_buf_pool);
 
 	return 0;
 }
@@ -3864,10 +3873,11 @@ exit:
 				"Failed to move from state: %d to %d\n",
 				inst->state, state);
 		msm_comm_kill_session(inst);
-	} else {
-		trace_msm_vidc_common_state_change((void *)inst,
-				inst->state, state);
 	}
+//    else {
+//		trace_msm_vidc_common_state_change((void *)inst,
+//				inst->state, state);
+//	}
 	return rc;
 }
 
@@ -5531,6 +5541,7 @@ int msm_vidc_check_scaling_supported(struct msm_vidc_inst *inst)
 {
 	u32 x_min, x_max, y_min, y_max;
 	u32 input_height, input_width, output_height, output_width;
+	u32 rotation;
 
 	if (is_heic_encode_session(inst)) {
 		dprintk(VIDC_DBG, "Skip downscale check for HEIC\n");
@@ -5569,6 +5580,20 @@ int msm_vidc_check_scaling_supported(struct msm_vidc_inst *inst)
 		dprintk(VIDC_DBG, "%s: supported WxH = %dx%d\n",
 			__func__, input_width, input_height);
 		return 0;
+	}
+
+	rotation =  msm_comm_g_ctrl_for_id(inst,
+					V4L2_CID_MPEG_VIDC_VIDEO_ROTATION);
+
+	if ((output_width != output_height) &&
+		(rotation == V4L2_CID_MPEG_VIDC_VIDEO_ROTATION_90 ||
+		rotation == V4L2_CID_MPEG_VIDC_VIDEO_ROTATION_270)) {
+
+		output_width = inst->prop.height[CAPTURE_PORT];
+		output_height = inst->prop.width[CAPTURE_PORT];
+		dprintk(VIDC_DBG,
+			"Rotation=%u Swapped Output W=%u H=%u to check scaling",
+			rotation, output_width, output_height);
 	}
 
 	x_min = (1<<16)/inst->capability.scale_x.min;
@@ -5616,6 +5641,7 @@ int msm_vidc_check_session_supported(struct msm_vidc_inst *inst)
 	struct hfi_device *hdev;
 	struct msm_vidc_core *core;
 	u32 output_height, output_width, input_height, input_width;
+	u32 rotation;
 
 	if (!inst || !inst->core || !inst->core->device) {
 		dprintk(VIDC_WARN, "%s: Invalid parameter\n", __func__);
@@ -5654,8 +5680,22 @@ int msm_vidc_check_session_supported(struct msm_vidc_inst *inst)
 		rc = -ENOTSUPP;
 	}
 
+	rotation =  msm_comm_g_ctrl_for_id(inst,
+					V4L2_CID_MPEG_VIDC_VIDEO_ROTATION);
+
 	output_height = ALIGN(inst->prop.height[CAPTURE_PORT], 16);
 	output_width = ALIGN(inst->prop.width[CAPTURE_PORT], 16);
+
+	if ((output_width != output_height) &&
+		(rotation == V4L2_CID_MPEG_VIDC_VIDEO_ROTATION_90 ||
+		rotation == V4L2_CID_MPEG_VIDC_VIDEO_ROTATION_270)) {
+
+		output_width = ALIGN(inst->prop.height[CAPTURE_PORT], 16);
+		output_height = ALIGN(inst->prop.width[CAPTURE_PORT], 16);
+		dprintk(VIDC_DBG,
+			"Rotation=%u Swapped Output W=%u H=%u to check capability",
+			rotation, output_width, output_height);
+	}
 
 	if (!rc) {
 		if (output_width < capability->width.min ||
@@ -6238,6 +6278,10 @@ u32 get_frame_size_p010(int plane, u32 height, u32 width)
 	return VENUS_BUFFER_SIZE(COLOR_FMT_P010, width, height);
 }
 
+u32 get_frame_size_nv12_512(int plane, u32 height, u32 width)
+{
+	return VENUS_BUFFER_SIZE(COLOR_FMT_NV12_512, width, height);
+}
 
 void print_vidc_buffer(u32 tag, const char *str, struct msm_vidc_inst *inst,
 		struct msm_vidc_buffer *mbuf)
@@ -6557,7 +6601,7 @@ struct msm_vidc_buffer *msm_comm_get_vidc_buffer(struct msm_vidc_inst *inst,
 
 	if (!found) {
 		/* this is new vb2_buffer */
-		mbuf = kzalloc(sizeof(struct msm_vidc_buffer), GFP_KERNEL);
+		mbuf = kmem_cache_zalloc(kmem_buf_pool, GFP_KERNEL);
 		if (!mbuf) {
 			dprintk(VIDC_ERR, "%s: alloc msm_vidc_buffer failed\n",
 				__func__);
@@ -6809,7 +6853,7 @@ static void kref_free_mbuf(struct kref *kref)
 	struct msm_vidc_buffer *mbuf = container_of(kref,
 			struct msm_vidc_buffer, kref);
 
-	kfree(mbuf);
+	kmem_cache_free(kmem_buf_pool, mbuf);
 }
 
 void kref_put_mbuf(struct msm_vidc_buffer *mbuf)

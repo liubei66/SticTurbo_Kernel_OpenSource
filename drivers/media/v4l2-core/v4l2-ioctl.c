@@ -1038,10 +1038,6 @@ static int v4l_querycap(const struct v4l2_ioctl_ops *ops,
 	 * Drivers MUST fill in device_caps, so check for this and
 	 * warn if it was forgotten.
 	 */
-	WARN(!(cap->capabilities & V4L2_CAP_DEVICE_CAPS) ||
-		!cap->device_caps, "Bad caps for driver %s, %x %x",
-		cap->driver, cap->capabilities, cap->device_caps);
-	cap->device_caps |= V4L2_CAP_EXT_PIX_FORMAT;
 
 	return ret;
 }
@@ -1329,6 +1325,8 @@ static void v4l_fill_fmtdesc(struct v4l2_fmtdesc *fmt)
 					descr = "Y/CbCr 4:2:0 TP10 UBWC"; break;
 	case V4L2_PIX_FMT_NV12_P010_UBWC:
 					descr = "Y/CbCr 4:2:0 P010 UBWC"; break;
+	case V4L2_PIX_FMT_NV12_512:
+				descr = "Y/CbCr 4:2:0 (512 align)"; break;
 
 	default:
 		/* Compressed formats */

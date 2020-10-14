@@ -39,7 +39,7 @@ static u32 dither_matrix[DITHER_MATRIX_SZ] = {
 	15, 7, 13, 5, 3, 11, 1, 9, 12, 4, 14, 6, 0, 8, 2, 10
 };
 
-struct sde_connector *primary_c_conn;
+struct sde_connector *primary_c_conn = NULL;
 
 static const struct drm_prop_enum_list e_topology_name[] = {
 	{SDE_RM_TOPOLOGY_NONE,	"sde_none"},
@@ -453,7 +453,7 @@ void sde_connector_schedule_status_work(struct drm_connector *connector,
 				c_conn->esd_status_interval :
 					STATUS_CHECK_INTERVAL_MS;
 			/* Schedule ESD status check */
-			schedule_delayed_work(&c_conn->status_work,
+			queue_delayed_work(system_power_efficient_wq, &c_conn->status_work,
 				msecs_to_jiffies(interval));
 			c_conn->esd_status_check = true;
 		} else {
@@ -1560,6 +1560,9 @@ static ssize_t _sde_debugfs_conn_cmd_tx_sts_read(struct file *file,
 		return 0;
 	}
 
+	if (blen > count)
+		blen = count;
+
 	if (copy_to_user(buf, buffer, blen)) {
 		SDE_ERROR("copy to user buffer failed\n");
 		return -EFAULT;
@@ -1652,57 +1655,10 @@ static const struct file_operations conn_cmd_tx_fops = {
 	.write =	_sde_debugfs_conn_cmd_tx_write,
 };
 
-#ifdef CONFIG_DEBUG_FS
-/**
- * sde_connector_init_debugfs - initialize connector debugfs
- * @connector: Pointer to drm connector
- */
-static int sde_connector_init_debugfs(struct drm_connector *connector)
-{
-	struct sde_connector *sde_connector;
-	struct msm_display_info info;
-
-	if (!connector || !connector->debugfs_entry) {
-		SDE_ERROR("invalid connector\n");
-		return -EINVAL;
-	}
-
-	sde_connector = to_sde_connector(connector);
-
-	sde_connector_get_info(connector, &info);
-	if (sde_connector->ops.check_status &&
-		(info.capabilities & MSM_DISPLAY_ESD_ENABLED)) {
-		debugfs_create_u32("force_panel_dead", 0600,
-				connector->debugfs_entry,
-				&sde_connector->force_panel_dead);
-		debugfs_create_u32("esd_status_interval", 0600,
-				connector->debugfs_entry,
-				&sde_connector->esd_status_interval);
-	}
-
-	if (!debugfs_create_bool("fb_kmap", 0600, connector->debugfs_entry,
-			&sde_connector->fb_kmap)) {
-		SDE_ERROR("failed to create connector fb_kmap\n");
-		return -ENOMEM;
-	}
-
-	if (sde_connector->ops.cmd_transfer) {
-		if (!debugfs_create_file("tx_cmd", 0600,
-			connector->debugfs_entry,
-			connector, &conn_cmd_tx_fops)) {
-			SDE_ERROR("failed to create connector cmd_tx\n");
-			return -ENOMEM;
-		}
-	}
-
-	return 0;
-}
-#else
 static int sde_connector_init_debugfs(struct drm_connector *connector)
 {
 	return 0;
 }
-#endif
 
 static int sde_connector_late_register(struct drm_connector *connector)
 {
@@ -1921,7 +1877,7 @@ static void sde_connector_check_status_work(struct work_struct *work)
 		/* If debugfs property is not set then take default value */
 		interval = conn->esd_status_interval ?
 			conn->esd_status_interval : STATUS_CHECK_INTERVAL_MS;
-		schedule_delayed_work(&conn->status_work,
+		queue_delayed_work(system_power_efficient_wq, &conn->status_work,
 			msecs_to_jiffies(interval));
 		return;
 	}

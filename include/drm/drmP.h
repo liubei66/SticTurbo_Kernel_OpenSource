@@ -2,6 +2,7 @@
  * Internal Header for the Direct Rendering Manager
  *
  * Copyright 1999 Precision Insight, Inc., Cedar Park, Texas.
+ * Copyright (C) 2018 XiaoMi, Inc.
  * Copyright 2000 VA Linux Systems, Inc., Sunnyvale, California.
  * Copyright (c) 2009-2010, Code Aurora Forum.
  * All rights reserved.
@@ -903,9 +904,9 @@ struct drm_device {
 	/*@} */
 	int switch_power_state;
 	int doze_state;
-	bool fp_quickon;
 	int pre_state;
 	int doze_brightness;
+	int hbm_status;
 };
 
 #include <drm/drm_irq.h>

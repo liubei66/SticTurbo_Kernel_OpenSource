@@ -2,7 +2,6 @@
  * Functions for working with the Flattened Device Tree data format
  *
  * Copyright 2009 Benjamin Herrenschmidt, IBM Corp
- * Copyright (C) 2019 XiaoMi, Inc.
  * benh@kernel.crashing.org
  *
  * This program is free software; you can redistribute it and/or
@@ -608,10 +607,10 @@ static int __init __reserved_mem_reserve_reg(unsigned long node,
 
 		if (size &&
 		    early_init_dt_reserve_memory_arch(base, size, nomap) == 0)
-			pr_debug("Reserved memory: reserved region for node '%s': base %pa, size %ld MiB\n",
+			pr_debug("Reserved memory: reserved region '%s': base %pa, size %ld MiB\n",
 				uname, &base, (unsigned long)size / SZ_1M);
 		else
-			pr_info("Reserved memory: failed to reserve memory for node '%s': base %pa, size %ld MiB\n",
+			pr_debug("Reserved memory: failed to reserve memory '%s': base %pa, size %ld MiB\n",
 				uname, &base, (unsigned long)size / SZ_1M);
 
 		len -= t_len;
@@ -887,23 +886,6 @@ const void * __init of_flat_dt_match_machine(const void *default_match,
 	return best_data;
 }
 
-void __init early_init_dt_check_for_powerup_reason(unsigned long node)
-{
-	unsigned long pu_reason;
-	int len;
-	const __be32 *prop;
-
-	pr_debug("Looking for powerup reason properties...\n");
-
-	prop = of_get_flat_dt_prop(node, "pureason", &len);
-	if (!prop)
-		return;
-	pu_reason = of_read_ulong(prop, len/4);
-	early_init_dt_setup_pureason_arch(pu_reason);
-
-	pr_debug("Powerup reason %d\n", (int)pu_reason);
-}
-
 #ifdef CONFIG_BLK_DEV_INITRD
 #ifndef __early_init_dt_declare_initrd
 static void __early_init_dt_declare_initrd(unsigned long start,
@@ -1146,9 +1128,6 @@ int __init early_init_dt_scan_chosen(unsigned long node, const char *uname,
 
 	pr_debug("Command line is: %s\n", (char*)data);
 
-	early_init_dt_check_for_powerup_reason(node);
-
-	/* break now */
 	return 1;
 }
 

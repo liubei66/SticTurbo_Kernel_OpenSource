@@ -41,6 +41,8 @@
 
 #define CREATE_TRACE_POINTS
 #include <trace/events/lmh.h>
+#undef CREATE_TRACE_POINTS
+#include <trace/events/power.h>
 
 #define LIMITS_DCVSH                0x10
 #define LIMITS_PROFILE_CHANGE       0x01
@@ -178,9 +180,13 @@ static unsigned long limits_mitigation_notify(struct limits_dcvs_hw *hw)
 	max_limit = FREQ_HZ_TO_KHZ(freq_val);
 
 	sched_update_cpu_freq_min_max(&hw->core_map, 0, max_limit);
+
 	pr_debug("CPU:%d max limit:%lu\n", cpumask_first(&hw->core_map),
 			max_limit);
 	trace_lmh_dcvs_freq(cpumask_first(&hw->core_map), max_limit);
+	trace_clock_set_rate(hw->sensor_name,
+			max_limit,
+			cpumask_first(&hw->core_map));
 
 notify_exit:
 	hw->hw_freq_limit = max_limit;
@@ -528,14 +534,8 @@ static int thermal_adjust_notify(struct notifier_block *nb, unsigned long val,
 		if (!hw)
 			break;
 
-		pr_debug("CPU%u policy max before thermal adjust: %u kHz\n",
-			 cpu, policy->max);
-		pr_debug("CPU%u boost max: %lu kHz\n", cpu, hw->hw_freq_limit);
-
 		cpufreq_verify_within_limits(policy, 0, hw->hw_freq_limit);
 
-		pr_debug("CPU%u policy max after boost: %u kHz\n",
-			 cpu, policy->max);
 		break;
 	}
 
@@ -703,6 +703,7 @@ static int limits_dcvs_probe(struct platform_device *pdev)
 	hw->lmh_freq_attr.attr.name = "lmh_freq_limit";
 	hw->lmh_freq_attr.show = lmh_freq_limit_show;
 	hw->lmh_freq_attr.attr.mode = 0444;
+	sysfs_attr_init(&hw->lmh_freq_attr.attr);
 	device_create_file(&pdev->dev, &hw->lmh_freq_attr);
 
 probe_exit:
@@ -717,6 +718,7 @@ probe_exit:
 	if (ret < 0)
 		goto unregister_sensor;
 	ret = 0;
+
 	return ret;
 
 unregister_sensor:

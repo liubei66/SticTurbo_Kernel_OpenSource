@@ -24,11 +24,11 @@
 #include <media/v4l2-event.h>
 
 MODULE_DESCRIPTION("Mem to mem device framework for videobuf");
-MODULE_AUTHOR("Pawel Osciak, <pawel@osciak.com>");
+MODULE_AUTHOR("Pawel Osciak");
 MODULE_LICENSE("GPL");
 
 static bool debug;
-module_param(debug, bool, 0644);
+module_param(debug, bool, 0);
 
 #define dprintk(fmt, arg...)						\
 	do {								\

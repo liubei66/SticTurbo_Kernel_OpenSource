@@ -34,7 +34,7 @@
 };
 
 &pcie1 {
-	status = "disable";
+	status = "disabled";
 };
 
 &soc {
@@ -98,9 +98,7 @@
 };
 
 &pcie0 {
-	vreg-pcie-supply = <&pcie_vcc_eldo>;
-	qcom,vreg-pcie-voltage-level = <3300000 3300000 24000>;
-	status = "ok";
+	status = "disabled";
 };
 
 &pcie1 {
@@ -331,4 +329,8 @@
 			};
 		};
 	};
+};
+
+&qcom_seecom {
+	/delete-property/ qcom,commonlib64-loaded-by-uefi;
 };

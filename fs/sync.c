@@ -7,6 +7,7 @@
 #include <linux/fs.h>
 #include <linux/slab.h>
 #include <linux/export.h>
+#include <linux/module.h>
 #include <linux/namei.h>
 #include <linux/sched.h>
 #include <linux/writeback.h>
@@ -15,8 +16,10 @@
 #include <linux/pagemap.h>
 #include <linux/quotaops.h>
 #include <linux/backing-dev.h>
-#include <linux/mi_io.h>
 #include "internal.h"
+
+bool fsync_enabled = true;
+module_param(fsync_enabled, bool, 0644);
 
 #define VALID_FLAGS (SYNC_FILE_RANGE_WAIT_BEFORE|SYNC_FILE_RANGE_WRITE| \
 			SYNC_FILE_RANGE_WAIT_AFTER)
@@ -154,10 +157,14 @@ void emergency_sync(void)
  */
 SYSCALL_DEFINE1(syncfs, int, fd)
 {
-	struct fd f = fdget(fd);
+	struct fd f;
 	struct super_block *sb;
 	int ret;
 
+	if (!fsync_enabled)
+		return 0;
+
+	f = fdget(fd);
 	if (!f.file)
 		return -EBADF;
 	sb = f.file->f_path.dentry->d_sb;
@@ -183,32 +190,23 @@ SYSCALL_DEFINE1(syncfs, int, fd)
  */
 int vfs_fsync_range(struct file *file, loff_t start, loff_t end, int datasync)
 {
-	struct inode *inode = file->f_mapping->host;
-	char path_buf[512] = {'\0'};
-	unsigned long start_time;
-	unsigned int  delta;
-	int ret;
+	struct inode *inode;
 
+	if (!fsync_enabled)
+		return 0;
+
+	inode = file->f_mapping->host;
 	if (!file->f_op->fsync)
 		return -EINVAL;
+
 	if (!datasync && (inode->i_state & I_DIRTY_TIME)) {
 		spin_lock(&inode->i_lock);
 		inode->i_state &= ~I_DIRTY_TIME;
 		spin_unlock(&inode->i_lock);
 		mark_inode_dirty_sync(inode);
 	}
-	start_time = jiffies;
-	ret = file->f_op->fsync(file, start, end, datasync);
-	if (IO_SHOW_LOG) {
-		delta = jiffies_to_msecs(jiffies - start_time);
-		if (delta > IO_SYSCALL_LEVEL)
-			pr_info("Slow IO Sync: %d(%s) prio(%d|%d) file(%s) time(%dms)\n",
-				current->pid, current->comm,
-				current->policy, current->prio,
-				d_path(&file->f_path, path_buf, sizeof(path_buf)),
-				delta);
-	}
-	return ret;
+
+	return file->f_op->fsync(file, start, end, datasync);
 }
 EXPORT_SYMBOL(vfs_fsync_range);
 
@@ -228,9 +226,13 @@ EXPORT_SYMBOL(vfs_fsync);
 
 static int do_fsync(unsigned int fd, int datasync)
 {
-	struct fd f = fdget(fd);
+	struct fd f;
 	int ret = -EBADF;
 
+	if (!fsync_enabled)
+		return 0;
+
+	f = fdget(fd);
 	if (f.file) {
 		ret = vfs_fsync(f.file, datasync);
 		fdput(f);
@@ -304,6 +306,9 @@ SYSCALL_DEFINE4(sync_file_range, int, fd, loff_t, offset, loff_t, nbytes,
 	struct address_space *mapping;
 	loff_t endbyte;			/* inclusive */
 	umode_t i_mode;
+
+	if (!fsync_enabled)
+		return 0;
 
 	ret = -EINVAL;
 	if (flags & ~VALID_FLAGS)

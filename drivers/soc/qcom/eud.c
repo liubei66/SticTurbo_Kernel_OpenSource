@@ -185,7 +185,7 @@ static const struct kernel_param_ops eud_param_ops = {
 	.get = param_get_int,
 };
 
-module_param_cb(enable, &eud_param_ops, &enable, 0644);
+module_param_cb(enable, &eud_param_ops, &enable, 0);
 
 static bool is_batt_available(struct eud_chip *chip)
 {

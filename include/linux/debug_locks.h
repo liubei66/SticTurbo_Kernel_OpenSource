@@ -7,19 +7,18 @@
 
 struct task_struct;
 
-extern int debug_locks;
-extern int debug_locks_silent;
-
+static const int debug_locks;
+static const int debug_locks_silent;
 
 static inline int __debug_locks_off(void)
 {
-	return xchg(&debug_locks, 0);
+	return 0;
 }
 
-/*
- * Generic 'turn off all lock debugging' function:
- */
-extern int debug_locks_off(void);
+static inline int debug_locks_off(void)
+{
+	return 0;
+}
 
 #define DEBUG_LOCKS_WARN_ON(c)						\
 ({									\

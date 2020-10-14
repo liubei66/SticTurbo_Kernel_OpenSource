@@ -151,7 +151,6 @@ struct seemp_logk_blk {
 	struct blk_payload payload;
 } __packed;
 
-
 extern unsigned int kmalloc_flag;
 
 struct seemp_source_mask {

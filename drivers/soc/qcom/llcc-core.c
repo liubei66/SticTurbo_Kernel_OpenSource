@@ -42,7 +42,7 @@
 #endif
 
 static int enable_ecc_intr = ENABLE_ECC_INTR;
-module_param(enable_ecc_intr, int, 0444);
+module_param(enable_ecc_intr, int, 0);
 
 static void qcom_llcc_core_setup(struct regmap *llcc_regmap, uint32_t b_off)
 {

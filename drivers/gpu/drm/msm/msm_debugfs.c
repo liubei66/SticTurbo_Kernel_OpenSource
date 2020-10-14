@@ -165,4 +165,3 @@ void msm_debugfs_cleanup(struct drm_minor *minor)
 	msm_perf_debugfs_cleanup(minor);
 }
 #endif
-

@@ -336,7 +336,6 @@ static void debugfs_init(void)
 	mutex_init(&dbg_buf_lock);
 	dir_ent = debugfs_create_dir("rmt_storage", NULL);
 	if (IS_ERR(dir_ent)) {
-		pr_err("Failed to create debug_fs directory\n");
 		return;
 	}
 

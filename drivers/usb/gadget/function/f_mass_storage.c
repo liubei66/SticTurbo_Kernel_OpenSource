@@ -224,9 +224,6 @@
 
 #include "configfs.h"
 
-
-/*------------------------------------------------------------------------*/
-
 #define FSG_DRIVER_DESC		"Mass Storage Function"
 #define FSG_DRIVER_VERSION	"2009/09/11"
 

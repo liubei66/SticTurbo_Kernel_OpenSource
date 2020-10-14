@@ -320,9 +320,9 @@ struct channel_ctx {
 
 static struct glink_core_if core_impl;
 static void *log_ctx;
-static unsigned int glink_debug_mask = QCOM_GLINK_INFO;
+static unsigned int glink_debug_mask;
 module_param_named(debug_mask, glink_debug_mask,
-		   uint, S_IRUGO | S_IWUSR | S_IWGRP);
+		   uint, 0);
 
 static unsigned int glink_pm_qos;
 module_param_named(pm_qos_enable, glink_pm_qos,
@@ -330,6 +330,9 @@ module_param_named(pm_qos_enable, glink_pm_qos,
 
 
 static LIST_HEAD(transport_list);
+
+static struct kmem_cache *kmem_rx_pool;
+static struct kmem_cache *kmem_tx_pool;
 
 /*
  * Used while notifying the clients about link state events. Since the clients
@@ -1252,7 +1255,7 @@ int ch_pop_remote_rx_intent(struct channel_ctx *ctx, size_t size,
 		*riid_ptr = best_intent->id;
 		*intent_size = best_intent->intent_size;
 		*cookie = best_intent->cookie;
-		kfree(best_intent);
+		kmem_cache_free(kmem_rx_pool, best_intent);
 		spin_unlock_irqrestore(
 			&ctx->rmt_rx_intent_lst_lock_lhc2, flags);
 		return 0;
@@ -1291,7 +1294,7 @@ void ch_push_remote_rx_intent(struct channel_ctx *ctx, size_t size,
 
 	gfp_flag = (ctx->transport_ptr->capabilities & GCAP_AUTO_QUEUE_RX_INT) ?
 							GFP_ATOMIC : GFP_KERNEL;
-	intent = kzalloc(sizeof(struct glink_core_rx_intent), gfp_flag);
+	intent = kmem_cache_zalloc(kmem_rx_pool, gfp_flag);
 	if (!intent) {
 		GLINK_ERR_CH(ctx,
 			"%s: R[%u]:%zu Memory allocation for intent failed\n",
@@ -1345,8 +1348,7 @@ struct glink_core_rx_intent *ch_push_local_rx_intent(struct channel_ctx *ctx,
 			return NULL;
 		}
 
-		intent = kzalloc(sizeof(struct glink_core_rx_intent),
-								GFP_KERNEL);
+		intent = kmem_cache_zalloc(kmem_rx_pool, GFP_KERNEL);
 		if (!intent) {
 			GLINK_ERR_CH(ctx,
 			"%s: Memory Allocation for local rx_intent failed",
@@ -1458,8 +1460,7 @@ struct glink_core_rx_intent *ch_get_dummy_rx_intent(struct channel_ctx *ctx,
 
 	intent = ch_get_free_local_rx_intent(ctx);
 	if (!intent) {
-		intent = kzalloc(sizeof(struct glink_core_rx_intent),
-								GFP_ATOMIC);
+		intent = kmem_cache_zalloc(kmem_rx_pool, GFP_ATOMIC);
 		if (!intent) {
 			GLINK_ERR_CH(ctx,
 			"%s: Memory Allocation for local rx_intent failed",
@@ -1708,7 +1709,7 @@ void ch_purge_intent_lists(struct channel_ctx *ctx)
 		ctx->transport_ptr->ops->deallocate_rx_intent(
 					ctx->transport_ptr->ops, ptr_intent);
 		list_del(&ptr_intent->list);
-		kfree(ptr_intent);
+		kmem_cache_free(kmem_rx_pool, ptr_intent);
 	}
 
 	if (!list_empty(&ctx->local_rx_intent_ntfy_list))
@@ -1725,7 +1726,7 @@ void ch_purge_intent_lists(struct channel_ctx *ctx)
 	list_for_each_entry_safe(ptr_intent, tmp_intent,
 				&ctx->local_rx_intent_free_list, list) {
 		list_del(&ptr_intent->list);
-		kfree(ptr_intent);
+		kmem_cache_free(kmem_rx_pool, ptr_intent);
 	}
 	ctx->max_used_liid = 0;
 	spin_unlock_irqrestore(&ctx->local_rx_intent_lst_lock_lhc1, flags);
@@ -1734,7 +1735,7 @@ void ch_purge_intent_lists(struct channel_ctx *ctx)
 	list_for_each_entry_safe(ptr_intent, tmp_intent,
 			&ctx->rmt_rx_intent_list, list) {
 		list_del(&ptr_intent->list);
-		kfree(ptr_intent);
+		kmem_cache_free(kmem_rx_pool, ptr_intent);
 	}
 	spin_unlock_irqrestore(&ctx->rmt_rx_intent_lst_lock_lhc2, flags);
 }
@@ -2005,10 +2006,6 @@ check_ctx:
 	}
 	spin_unlock_irqrestore(&xprt_ctx->xprt_ctx_lock_lhb1, flags);
 	rwref_write_put(&xprt_ctx->xprt_state_lhb0);
-	mutex_lock(&xprt_ctx->xprt_dbgfs_lock_lhb4);
-	if (ctx != NULL)
-		glink_debugfs_add_channel(ctx, xprt_ctx);
-	mutex_unlock(&xprt_ctx->xprt_dbgfs_lock_lhb4);
 	return ctx;
 }
 
@@ -2811,9 +2808,6 @@ static bool glink_delete_ch_from_list(struct channel_ctx *ctx, bool add_flcid)
 			flags);
 	if (add_flcid)
 		glink_add_free_lcid_list(ctx);
-	mutex_lock(&ctx->transport_ptr->xprt_dbgfs_lock_lhb4);
-	glink_debugfs_remove_channel(ctx, ctx->transport_ptr);
-	mutex_unlock(&ctx->transport_ptr->xprt_dbgfs_lock_lhb4);
 	rwref_put(&ctx->ch_state_lhb2);
 	return ret;
 }
@@ -2935,7 +2929,7 @@ static void glink_tx_pkt_release(struct rwref_lock *tx_pkt_ref)
 		list_del_init(&tx_info->list_done);
 	if (!list_empty(&tx_info->list_node))
 		list_del_init(&tx_info->list_node);
-	kfree(tx_info);
+	kmem_cache_free(kmem_tx_pool, tx_info);
 }
 
 /**
@@ -2979,7 +2973,7 @@ static int glink_tx_common(void *handle, void *pkt_priv,
 		return ret;
 
 	rwref_read_get_atomic(&ctx->ch_state_lhb2, is_atomic);
-	tx_info = kzalloc(sizeof(struct glink_core_tx_pkt),
+	tx_info = kmem_cache_zalloc(kmem_tx_pool,
 				is_atomic ? GFP_ATOMIC : GFP_KERNEL);
 	if (!tx_info) {
 		GLINK_ERR_CH(ctx, "%s: No memory for allocation\n", __func__);
@@ -3139,7 +3133,7 @@ glink_tx_common_err:
 	rwref_read_put(&ctx->ch_state_lhb2);
 glink_tx_common_err_2:
 	glink_put_ch_ctx(ctx);
-	kfree(tx_info);
+	kmem_cache_free(kmem_tx_pool, tx_info);
 	return ret;
 }
 
@@ -3816,8 +3810,6 @@ void glink_xprt_ctx_release(struct rwref_lock *xprt_st_lock)
 				xprt_ctx->edge);
 	xprt_rm_dbgfs.curr_name = xprt_ctx->name;
 	xprt_rm_dbgfs.par_name = "xprt";
-	glink_debugfs_remove_recur(&xprt_rm_dbgfs);
-	GLINK_INFO("%s: xprt debugfs removec\n", __func__);
 	rwref_put(&xprt_ctx->edge_ctx->edge_ref_lock_lhd1);
 	kthread_stop(xprt_ctx->tx_task);
 	xprt_ctx->tx_task = NULL;
@@ -4065,7 +4057,9 @@ int glink_core_register_transport(struct glink_transport_if *if_ptr,
 	size_t len;
 	uint16_t id;
 	int ret;
+#ifdef CONFIG_IPC_LOGGING
 	char log_name[GLINK_NAME_SIZE*2+2] = {0};
+#endif
 
 	if (!if_ptr || !cfg || !cfg->name || !cfg->edge)
 		return -EINVAL;
@@ -4165,14 +4159,14 @@ int glink_core_register_transport(struct glink_transport_if *if_ptr,
 	mutex_lock(&transport_list_lock_lha0);
 	list_add_tail(&xprt_ptr->list_node, &transport_list);
 	mutex_unlock(&transport_list_lock_lha0);
-	glink_debugfs_add_xprt(xprt_ptr);
+#ifdef CONFIG_IPC_LOGGING
 	snprintf(log_name, sizeof(log_name), "%s_%s",
 			xprt_ptr->edge, xprt_ptr->name);
 	xprt_ptr->log_ctx = ipc_log_context_create(NUM_LOG_PAGES, log_name, 0);
 	if (!xprt_ptr->log_ctx)
 		GLINK_ERR("%s: unable to create log context for [%s:%s]\n",
 				__func__, xprt_ptr->edge, xprt_ptr->name);
-
+#endif
 	return 0;
 }
 EXPORT_SYMBOL(glink_core_register_transport);
@@ -4839,9 +4833,6 @@ static bool ch_migrate(struct channel_ctx *l_ctx, struct channel_ctx *r_ctx)
 	list_del_init(&l_ctx->port_list_node);
 	spin_unlock_irqrestore(&l_ctx->transport_ptr->xprt_ctx_lock_lhb1,
 									flags);
-	mutex_lock(&l_ctx->transport_ptr->xprt_dbgfs_lock_lhb4);
-	glink_debugfs_remove_channel(l_ctx, l_ctx->transport_ptr);
-	mutex_unlock(&l_ctx->transport_ptr->xprt_dbgfs_lock_lhb4);
 
 	memcpy(ctx_clone, l_ctx, sizeof(*ctx_clone));
 	ctx_clone->local_xprt_req = 0;
@@ -4914,10 +4905,6 @@ static bool ch_migrate(struct channel_ctx *l_ctx, struct channel_ctx *r_ctx)
 		list_add_tail(&l_ctx->port_list_node, &xprt->channels);
 		spin_unlock_irqrestore(&xprt->xprt_ctx_lock_lhb1, flags);
 	}
-
-	mutex_lock(&xprt->xprt_dbgfs_lock_lhb4);
-	glink_debugfs_add_channel(l_ctx, xprt);
-	mutex_unlock(&xprt->xprt_dbgfs_lock_lhb4);
 
 	mutex_lock(&transport_list_lock_lha0);
 	list_for_each_entry(xprt, &transport_list, list_node)
@@ -5472,7 +5459,7 @@ static void xprt_schedule_tx(struct glink_core_xprt_ctx *xprt_ptr,
 
 	if (unlikely(xprt_ptr->local_state == GLINK_XPRT_DOWN)) {
 		GLINK_ERR_CH(ch_ptr, "%s: Error XPRT is down\n", __func__);
-		kfree(tx_info);
+		kmem_cache_free(kmem_tx_pool, tx_info);
 		return;
 	}
 
@@ -5481,7 +5468,7 @@ static void xprt_schedule_tx(struct glink_core_xprt_ctx *xprt_ptr,
 		spin_unlock_irqrestore(&xprt_ptr->tx_ready_lock_lhb3, flags);
 		GLINK_ERR_CH(ch_ptr, "%s: Channel closed before tx\n",
 			     __func__);
-		kfree(tx_info);
+		kmem_cache_free(kmem_tx_pool, tx_info);
 		return;
 	}
 	if (list_empty(&ch_ptr->tx_ready_list_node))
@@ -5522,7 +5509,7 @@ static int xprt_single_threaded_tx(struct glink_core_xprt_ctx *xprt_ptr,
 	if (ret < 0 || tx_info->size_remaining) {
 		GLINK_ERR_CH(ch_ptr, "%s: Error %d writing data\n",
 			     __func__, ret);
-		kfree(tx_info);
+		kmem_cache_free(kmem_tx_pool, tx_info);
 	} else {
 		list_add_tail(&tx_info->list_done,
 			      &ch_ptr->tx_pending_remote_done);
@@ -5832,7 +5819,7 @@ static void glink_pm_qos_unvote(struct glink_core_xprt_ctx *xprt_ptr)
 	xprt_ptr->tx_path_activity = false;
 	if (xprt_ptr->qos_req_active) {
 		GLINK_PERF("%s: qos unvote\n", __func__);
-		schedule_delayed_work(&xprt_ptr->pm_qos_work,
+		queue_delayed_work(system_power_efficient_wq, &xprt_ptr->pm_qos_work,
 				msecs_to_jiffies(GLINK_PM_QOS_HOLDOFF_MS));
 	}
 }
@@ -6016,21 +6003,6 @@ char *glink_get_xprt_edge_name(struct glink_core_xprt_ctx *xprt_ctx)
 EXPORT_SYMBOL(glink_get_xprt_edge_name);
 
 /**
- * glink_get_xprt_state() - get the state of the transport
- * @xprt_ctx:	pointer to the transport context.
- *
- * Return: Name of the transport state, NULL in case of invalid input
- */
-const char *glink_get_xprt_state(struct glink_core_xprt_ctx *xprt_ctx)
-{
-	if (xprt_ctx == NULL)
-		return NULL;
-
-	return glink_get_xprt_state_string(xprt_ctx->local_state);
-}
-EXPORT_SYMBOL(glink_get_xprt_state);
-
-/**
  * glink_get_xprt_version_features() - get the version and feature set
  *					of local transport in glink
  * @xprt_ctx:	pointer to the transport context.
@@ -6176,21 +6148,6 @@ int glink_get_ch_rcid(struct channel_ctx *ch_ctx)
 	return ch_ctx->rcid;
 }
 EXPORT_SYMBOL(glink_get_ch_rcid);
-
-/**
- * glink_get_ch_lstate() - get the local channel state
- * @ch_ctx:	pointer to the channel context.
- *
- * Return: Name of the local channel state, NUll in case of invalid input
- */
-const char *glink_get_ch_lstate(struct channel_ctx *ch_ctx)
-{
-	if (ch_ctx == NULL)
-		return NULL;
-
-	return glink_get_ch_state_string(ch_ctx->local_open_state);
-}
-EXPORT_SYMBOL(glink_get_ch_lstate);
 
 /**
  * glink_get_ch_rstate() - get the remote channel state
@@ -6362,10 +6319,14 @@ EXPORT_SYMBOL(glink_get_xprt_log_ctx);
 
 static int glink_init(void)
 {
+#ifdef CONFIG_IPC_LOGGING
 	log_ctx = ipc_log_context_create(NUM_LOG_PAGES, "glink", 0);
 	if (!log_ctx)
 		GLINK_ERR("%s: unable to create log context\n", __func__);
-	glink_debugfs_init();
+#endif
+
+	kmem_rx_pool = KMEM_CACHE(glink_core_rx_intent, SLAB_HWCACHE_ALIGN | SLAB_PANIC);
+	kmem_tx_pool = KMEM_CACHE(glink_core_tx_pkt, SLAB_HWCACHE_ALIGN | SLAB_PANIC);
 
 	return 0;
 }

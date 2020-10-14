@@ -358,32 +358,6 @@ int drm_gem_cma_mmap(struct file *filp, struct vm_area_struct *vma)
 }
 EXPORT_SYMBOL_GPL(drm_gem_cma_mmap);
 
-#ifdef CONFIG_DEBUG_FS
-/**
- * drm_gem_cma_describe - describe a CMA GEM object for debugfs
- * @cma_obj: CMA GEM object
- * @m: debugfs file handle
- *
- * This function can be used to dump a human-readable representation of the
- * CMA GEM object into a synthetic file.
- */
-void drm_gem_cma_describe(struct drm_gem_cma_object *cma_obj,
-			  struct seq_file *m)
-{
-	struct drm_gem_object *obj = &cma_obj->base;
-	uint64_t off;
-
-	off = drm_vma_node_start(&obj->vma_node);
-
-	seq_printf(m, "%2d (%2d) %08llx %pad %p %zu",
-			obj->name, obj->refcount.refcount.counter,
-			off, &cma_obj->paddr, cma_obj->vaddr, obj->size);
-
-	seq_printf(m, "\n");
-}
-EXPORT_SYMBOL_GPL(drm_gem_cma_describe);
-#endif
-
 /**
  * drm_gem_cma_prime_get_sg_table - provide a scatter/gather table of pinned
  *     pages for a CMA GEM object
