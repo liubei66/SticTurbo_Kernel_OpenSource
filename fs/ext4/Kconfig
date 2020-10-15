@@ -136,3 +136,13 @@ config EXT4_IO_WEITE
 	Enable ext4 file system super block function to improve disk read and write performance
 
 	If you are not sure, please hit n to close.
+	
+config EXT4_AFSYNC
+	bool "EXT4 ASYNC_FSYNC"
+	depends on EXT4_FS
+	default y
+	help
+	  Adjust the Fsync file system strategy according to the process
+
+	  If you are not sure, please hit n to close.
+
