@@ -697,7 +697,6 @@ static int qpnp_rtc_resume(struct device *dev)
 	struct qpnp_rtc *rtc_dd = dev_get_drvdata(dev);
 
 	if (alarm_fired == true) {
-		pr_info("Alarm event generated during suspend\n");
 		log_wakeup_reason(rtc_dd->rtc_alarm_irq);
 	}
 

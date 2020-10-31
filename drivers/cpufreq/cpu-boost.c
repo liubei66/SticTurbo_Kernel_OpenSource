@@ -155,7 +155,6 @@ module_param_cb(input_boost_freq, &param_ops_input_boost_freq, NULL, 0644);
 
 module_param_cb(powerkey_input_boost_freq, &param_ops_input_boost_freq, NULL, 0644);
 
-
 /*
  * The CPUFREQ_ADJUST notifier is used to override the current policy min to
  * make sure policy min >= boost_min. The cpufreq framework then does the job
@@ -229,7 +228,7 @@ static void do_input_boost_rem(struct work_struct *work)
 	if (sched_boost_active) {
 		ret = sched_set_boost(0);
 		if (ret)
-			pr_err("cpu-boost: HMP boost disable failed\n");
+			pr_debug("cpu-boost: HMP boost disable failed\n");
 		sched_boost_active = false;
 	}
 }
@@ -259,7 +258,7 @@ static void do_input_boost(struct work_struct *work)
 	if (sched_boost_on_input) {
 		ret = sched_set_boost(1);
 		if (ret)
-			pr_err("cpu-boost: HMP boost enable failed\n");
+			pr_debug("cpu-boost: HMP boost enable failed\n");
 		else
 			sched_boost_active = true;
 	}
@@ -293,7 +292,7 @@ static void do_powerkey_input_boost(struct work_struct *work)
 	if (sched_boost_on_powerkey_input) {
 		ret = sched_set_boost(1);
 		if (ret)
-			pr_err("cpu-boost: HMP boost enable failed\n");
+			pr_debug("cpu-boost: HMP boost enable failed\n");
 		else
 			sched_boost_active = true;
 	}

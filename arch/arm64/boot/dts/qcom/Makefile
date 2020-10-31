@@ -217,7 +217,6 @@ dtb-$(CONFIG_ARCH_SDM660) += sdm660-sim.dtb \
 	sdm660-mtp.dtb \
 	sdm660-qrd.dtb \
 	sdm660-rcm.dtb \
-	sdm660-rumi.dtb \
 	sdm636-cdp.dtb \
 	sdm636-mtp.dtb \
 	sdm636-qrd.dtb \

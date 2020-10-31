@@ -1,6 +1,9 @@
 /*
  * random.c -- A strong random number generator
  *
+ * Copyright (C) 2017 Jason A. Donenfeld <Jason@zx2c4.com>. All
+ * Rights Reserved.
+ *
  * Copyright Matt Mackall <mpm@selenic.com>, 2003, 2004, 2005
  *
  * Copyright Theodore Ts'o, 1994, 1995, 1996, 1997, 1998, 1999.  All
@@ -757,6 +760,8 @@ static int credit_entropy_bits_safe(struct entropy_store *r, int nbits)
 
 static DECLARE_WAIT_QUEUE_HEAD(crng_init_wait);
 
+static void invalidate_batched_entropy(void);
+
 static void crng_initialize(struct crng_state *crng)
 {
 	int		i;
@@ -793,12 +798,13 @@ static int crng_fast_load(const char *cp, size_t len)
 		p[crng_init_cnt % CHACHA20_KEY_SIZE] ^= *cp;
 		cp++; crng_init_cnt++; len--;
 	}
+	spin_unlock_irqrestore(&primary_crng.lock, flags);
 	if (crng_init_cnt >= CRNG_INIT_CNT_THRESH) {
+		invalidate_batched_entropy();
 		crng_init = 1;
 		wake_up_interruptible(&crng_init_wait);
 		pr_notice("random: fast init done\n");
 	}
-	spin_unlock_irqrestore(&primary_crng.lock, flags);
 	return 1;
 }
 
@@ -827,13 +833,14 @@ static void crng_reseed(struct crng_state *crng, struct entropy_store *r)
 	}
 	memzero_explicit(&buf, sizeof(buf));
 	crng->init_time = jiffies;
+	spin_unlock_irqrestore(&primary_crng.lock, flags);
 	if (crng == &primary_crng && crng_init < 2) {
+		invalidate_batched_entropy();
 		crng_init = 2;
 		process_random_ready_list();
 		wake_up_interruptible(&crng_init_wait);
 		pr_notice("random: crng init done\n");
 	}
-	spin_unlock_irqrestore(&primary_crng.lock, flags);
 }
 
 static inline void crng_wait_ready(void)
@@ -1978,16 +1985,14 @@ struct ctl_table random_table[] = {
 };
 #endif 	/* CONFIG_SYSCTL */
 
-static u32 random_int_secret[MD5_MESSAGE_BYTES / 4] ____cacheline_aligned;
-
-int random_int_secret_init(void)
-{
-	get_random_bytes(random_int_secret, sizeof(random_int_secret));
-	return 0;
-}
-
-static DEFINE_PER_CPU(__u32 [MD5_DIGEST_WORDS], get_random_int_hash)
-		__aligned(sizeof(unsigned long));
+struct batched_entropy {
+	union {
+		u64 entropy_u64[CHACHA20_BLOCK_SIZE / sizeof(u64)];
+		u32 entropy_u32[CHACHA20_BLOCK_SIZE / sizeof(u32)];
+	};
+	unsigned int position;
+};
+static rwlock_t batched_entropy_reset_lock = __RW_LOCK_UNLOCKED(batched_entropy_reset_lock);
 
 /*
  * Get a random word for internal kernel use only. Similar to urandom but
@@ -1995,40 +2000,77 @@ static DEFINE_PER_CPU(__u32 [MD5_DIGEST_WORDS], get_random_int_hash)
  * value is not cryptographically secure but for several uses the cost of
  * depleting entropy is too high
  */
-unsigned int get_random_int(void)
+static DEFINE_PER_CPU(struct batched_entropy, batched_entropy_u64);
+u64 get_random_u64(void)
 {
-	__u32 *hash;
-	unsigned int ret;
+	u64 ret;
+	bool use_lock;
+	unsigned long flags = 0;
+	struct batched_entropy *batch;
 
-	hash = get_cpu_var(get_random_int_hash);
+	use_lock = READ_ONCE(crng_init) < 2;
+	batch = &get_cpu_var(batched_entropy_u64);
+	if (use_lock)
+		read_lock_irqsave(&batched_entropy_reset_lock, flags);
 
-	hash[0] += current->pid + jiffies + random_get_entropy();
-	md5_transform(hash, random_int_secret);
-	ret = hash[0];
-	put_cpu_var(get_random_int_hash);
+	if (batch->position % ARRAY_SIZE(batch->entropy_u64) == 0) {
+		extract_crng((u8 *)batch->entropy_u64);
+		batch->position = 0;
+	}
+
+	ret = batch->entropy_u64[batch->position++];
+	if (use_lock)
+		read_unlock_irqrestore(&batched_entropy_reset_lock, flags);
+
+	put_cpu_var(batched_entropy_u64);
 
 	return ret;
 }
-EXPORT_SYMBOL(get_random_int);
+EXPORT_SYMBOL(get_random_u64);
 
 /*
  * Same as get_random_int(), but returns unsigned long.
  */
-unsigned long get_random_long(void)
+static DEFINE_PER_CPU(struct batched_entropy, batched_entropy_u32);
+u32 get_random_u32(void)
 {
-	__u32 *hash;
-	unsigned long ret;
+	u32 ret;
+	bool use_lock;
+	unsigned long flags = 0;
+	struct batched_entropy *batch;
 
-	hash = get_cpu_var(get_random_int_hash);
+	use_lock = READ_ONCE(crng_init) < 2;
+	batch = &get_cpu_var(batched_entropy_u32);
+	if (use_lock)
+		read_lock_irqsave(&batched_entropy_reset_lock, flags);
 
-	hash[0] += current->pid + jiffies + random_get_entropy();
-	md5_transform(hash, random_int_secret);
-	ret = *(unsigned long *)hash;
-	put_cpu_var(get_random_int_hash);
+	if (batch->position % ARRAY_SIZE(batch->entropy_u32) == 0) {
+		extract_crng((u8 *)batch->entropy_u32);
+		batch->position = 0;
+	}
+
+	ret = batch->entropy_u32[batch->position++];
+	if (use_lock)
+		read_unlock_irqrestore(&batched_entropy_reset_lock, flags);
+
+	put_cpu_var(batched_entropy_u32);
 
 	return ret;
 }
-EXPORT_SYMBOL(get_random_long);
+EXPORT_SYMBOL(get_random_u32);
+
+static void invalidate_batched_entropy(void)
+{
+	int cpu;
+	unsigned long flags;
+
+	write_lock_irqsave(&batched_entropy_reset_lock, flags);
+	for_each_possible_cpu (cpu) {
+		per_cpu_ptr(&batched_entropy_u32, cpu)->position = 0;
+		per_cpu_ptr(&batched_entropy_u64, cpu)->position = 0;
+	}
+	write_unlock_irqrestore(&batched_entropy_reset_lock, flags);
+}
 
 /*
  * randomize_range() returns a start address such that

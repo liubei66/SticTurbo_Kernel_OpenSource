@@ -682,6 +682,13 @@ static ssize_t devkmsg_write(struct kiocb *iocb, struct iov_iter *from)
 			line = endp;
 		}
 	}
+	
+/* add: healthd dmesg */
+	if (strncmp("healthd", line, 7) == 0) {
+	        kfree(buf);
+		return len;
+	}
+/* end: healthd dmesg */
 
 	printk_emit(facility, level, NULL, 0, "%s", line);
 	kfree(buf);

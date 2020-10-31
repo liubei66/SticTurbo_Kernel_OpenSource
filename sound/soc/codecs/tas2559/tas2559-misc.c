@@ -341,10 +341,8 @@ static ssize_t tas2559_file_write(struct file *file, const char *buf, size_t cou
 
 	p_kBuf = kzalloc(count, GFP_KERNEL);
 
-	if (p_kBuf == NULL) {
-		dev_err(pTAS2559->dev, "write no mem\n");
+	if (p_kBuf == NULL)
 		goto err;
-	}
 
 	ret = copy_from_user(p_kBuf, buf, count);
 
@@ -401,12 +399,6 @@ static ssize_t tas2559_file_write(struct file *file, const char *buf, size_t cou
 
 		break;
 
-	case TIAUDIO_CMD_DEBUG_ON: {
-		if (count == 2)
-			g_logEnable = p_kBuf[1];
-
-		pTAS2559->mnDBGCmd = 0;
-	}
 	break;
 
 	case TIAUDIO_CMD_PROGRAM: {
